@@ -1,0 +1,209 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 Ronny Krueger
+ */
+/* server/web.css -- AMIVCS WebUI stylesheet. Deliberately its own
+ * file with its own palette, not shared with AmiCloud's server/web.css
+ * (ADR 09's separation requirement) -- purple/amber accents instead of
+ * AmiCloud's red/teal, so the two products stay visually distinct even
+ * if ever viewed side by side. */
+
+:root {
+    --bg:      #1b1a2e;
+    --surface: #211f3b;
+    --card:    #2a2750;
+    --accent:  #a76bf0;
+    --amber:   #e0a84e;
+    --text:    #e6e2f5;
+    --muted:   #8b86a8;
+    --border:  #35315c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+a { color: var(--amber); text-decoration: none; }
+a:hover { color: var(--accent); text-decoration: underline; }
+
+.c-ami { color: var(--accent); }
+.c-vcs { color: var(--amber); }
+
+/* ── Login ────────────────────────────────────────────────────────────── */
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 8rem;
+}
+
+.login-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2.5rem 2rem;
+    width: 100%;
+    max-width: 340px;
+}
+
+.login-box h1 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.login-box label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+}
+
+.login-box input[type="text"],
+.login-box input[type="password"] {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+.login-box button {
+    width: 100%;
+    padding: 0.6rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #16142a;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.login-box button:hover { background: var(--amber); }
+
+.msg-error {
+    background: #4a2340;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.msg-info {
+    background: #233a3a;
+    border: 1px solid var(--amber);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* ── Chrome ───────────────────────────────────────────────────────────── */
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1.5rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.topbar .brand { font-size: 1.3rem; font-weight: 700; }
+
+.userinfo { font-size: 0.9rem; color: var(--muted); display: flex; align-items: center; gap: 0.8rem; }
+
+.btn-logout {
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 0.25rem 0.6rem;
+}
+.btn-logout:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+
+main { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem; }
+
+main h2 { margin: 1rem 0 0.8rem; }
+main h3 { margin: 1.5rem 0 0.6rem; color: var(--muted); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.breadcrumb { font-size: 0.9rem; color: var(--muted); margin-bottom: 0.5rem; }
+.breadcrumb .sep { margin: 0 0.3rem; }
+
+/* ── Tables ───────────────────────────────────────────────────────────── */
+.repotable, .historytable {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.repotable thead th, .historytable thead th {
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.repotable tbody tr:hover, .historytable tbody tr:hover { background: var(--card); }
+
+.repotable td, .historytable td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+
+.col-meta { color: var(--muted); white-space: nowrap; }
+.col-graph { width: 1%; white-space: nowrap; }
+.empty { text-align: center; color: var(--muted); padding: 1.5rem 0; }
+
+.deco {
+    display: inline-block;
+    background: var(--card);
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    border-radius: 4px;
+    padding: 0 0.35rem;
+    font-size: 0.8rem;
+    margin-right: 0.3rem;
+}
+
+/* ── Branch list ──────────────────────────────────────────────────────── */
+.branchlist { list-style: none; }
+.branchlist li {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+}
+.branch-oid { color: var(--muted); font-family: monospace; }
+
+/* ── Commit graph ─────────────────────────────────────────────────────── */
+.graph-svg { display: block; }
+.graph-line { stroke: var(--muted); stroke-width: 2; }
+.graph-dot { fill: var(--accent); }
+
+.pagefooter {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    padding: 2rem 0 1rem;
+}

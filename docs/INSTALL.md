@@ -1,0 +1,283 @@
+# AmiVCS installieren
+
+- [1. Amiga](#1-amiga)
+  - [Voraussetzungen](#voraussetzungen)
+  - [Installation mit dem Install-Skript](#installation-mit-dem-install-skript)
+  - [Manuelle Installation](#manuelle-installation)
+  - [Konfiguration](#konfiguration-amiga)
+  - [Deinstallation](#deinstallation)
+- [2. PC (macOS, Linux, Windows)](#2-pc-macos-linux-windows)
+- [3. AmiVCS-Server einrichten](#3-amivcs-server-einrichten)
+
+Wie die Programme gebaut werden, steht in [BUILD.md](BUILD.md). Die
+Bedienung beschreibt das Handbuch
+([HTML](user/AmiVCS-Handbuch.html) bzw. [AmigaGuide](user/AmiVCS.guide)).
+
+Für rein lokale Versionsverwaltung (`init`, `add`, `commit`, `log`,
+`branch`, `switch`, `merge` …) wird **kein Server** gebraucht. Server
+und Zugangsdaten sind nur für `clone`, `push` und `pull` nötig.
+
+## 1. Amiga
+
+### Voraussetzungen
+
+| Was | Wofür |
+|---|---|
+| AmigaOS 3.x, 68000 oder besser | alle Programme (übersetzt für 68000, keine FPU nötig) |
+| TCP/IP-Stack mit `bsdsocket.library` (z. B. Roadshow, AmiTCP, Miami) | `amivcs clone`/`push`/`pull`; **`amivcs-gui` braucht ihn schon beim Start** |
+| AmiSSL 5 (`amisslmaster.library`) | wie oben; alle Serververbindungen laufen über HTTPS |
+| MUI 3.8 oder neuer (`muimaster.library` ≥ 19) | nur `amivcs-gui` |
+| – | `AMIVCSPrefs` braucht nur Intuition/GadTools |
+
+Hinweise:
+
+- `amivcs` (Kommandozeile) öffnet Netzwerk und AmiSSL erst bei `clone`,
+  `push` oder `pull`. Alle anderen Befehle laufen ohne TCP/IP-Stack.
+- `amivcs-gui` initialisiert Netzwerk und AmiSSL beim Programmstart.
+  Fehlt eines davon, beendet es sich sofort (ohne Fenster). Den Grund
+  zeigt ein Start mit `amivcs-gui -v` im Shell-Fenster.
+- Stack: Alle drei Programme fordern selbst 64 KB Stack an (vbcc-Variable
+  `__stack`, der Startcode legt bei Bedarf einen größeren Stack an).
+  Ein `Stack`-Befehl vorher ist nicht nötig.
+- Auf dem Amiga sind nur `https://`-Serveradressen möglich.
+
+### Installation mit dem Install-Skript
+
+Das Archiv `AmiVCS.lha` (bzw. die Schublade aus `make dist-amiga`)
+enthält:
+
+```
+AmiVCS/
+  Install-AmiVCS     Installationsskript
+  Uninstall-AmiVCS   Deinstallationsskript
+  ReadMe             Kurzbeschreibung
+  LICENSE            GPLv3
+  C/                 amivcs, amivcs-gui, AMIVCSPrefs
+  Docs/              AmiVCS.guide
+  Examples/          amivcs.cfg.example
+```
+
+Auspacken und im Shell-Fenster:
+
+```
+lha x AmiVCS.lha RAM:
+CD RAM:AmiVCS
+Execute Install-AmiVCS
+```
+
+Das Skript fragt jeden Teil einzeln ab (Antwort `y` oder `n`) und
+
+- kopiert `amivcs` und `amivcs-gui` nach `C:`,
+- kopiert `AMIVCSPrefs` nach `SYS:Prefs/`,
+- kopiert `AmiVCS.guide` nach `HELP:` – nur, wenn der Assign `HELP:`
+  existiert,
+- prüft, ob `muimaster.library` und `amisslmaster.library` in `LIBS:`
+  liegen, und warnt sonst,
+- bietet an, `AMIVCSPrefs` zu starten, falls noch keine
+  `ENVARC:amivcs.cfg` existiert.
+
+Eine vorhandene Konfiguration wird **nie** überschrieben.
+
+### Manuelle Installation
+
+| Datei aus der Schublade | Ziel | Bemerkung |
+|---|---|---|
+| `C/amivcs` | `C:` | Kommandozeile |
+| `C/amivcs-gui` | `C:` (oder beliebige Schublade) | MUI-Oberfläche |
+| `C/AMIVCSPrefs` | `SYS:Prefs/` | Einstellungs-Editor |
+| `Docs/AmiVCS.guide` | `HELP:` oder beliebig | Handbuch |
+| `Examples/amivcs.cfg.example` | als Vorlage für `ENVARC:amivcs.cfg` | nur für clone/push/pull |
+
+```
+Copy C/amivcs C:
+Copy C/amivcs-gui C:
+Copy C/AMIVCSPrefs SYS:Prefs/
+Copy Docs/AmiVCS.guide HELP:
+```
+
+Es werden keine Icons mitgeliefert. `AMIVCSPrefs` lässt sich im Shell
+mit `SYS:Prefs/AMIVCSPrefs` starten; auf der Workbench ist es nur
+sichtbar, wenn im Fenster „Alle Dateien anzeigen“ eingeschaltet ist. Für `amivcs-gui` kann ein
+eigenes Projekt-Icon angelegt werden; es versteht die Merkmale
+(Tooltypes) `REPO=<pfad>` (zu öffnendes Repository) und `DEBUG`.
+
+Kein DOS-Treiber, kein Mounten: AmiVCS enthält keinen Handler.
+
+<a id="konfiguration-amiga"></a>
+### Konfiguration
+
+Die Konfigurationsdatei heißt `amivcs.cfg` und ist von AmiCloud völlig
+unabhängig. Sie wird gesucht:
+
+| Programm | Suchreihenfolge |
+|---|---|
+| `amivcs` | `-c <datei>`, sonst `ENV:amivcs.cfg`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
+| `amivcs-gui` | `ENV:amivcs.cfg`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
+| `AMIVCSPrefs` | liest `ENV:amivcs.cfg`, sonst `ENVARC:amivcs.cfg` |
+
+`AMIVCSPrefs` schreibt mit **Benutzen** nur `ENV:amivcs.cfg` (gilt bis
+zum Neustart), mit **Speichern** `ENVARC:amivcs.cfg` **und**
+`ENV:amivcs.cfg`, mit **Abbrechen** nichts. Wer die Datei von Hand
+anlegt, kopiert sie nach `ENVARC:` (dauerhaft) und `ENV:` (sofort
+wirksam):
+
+```
+Copy Examples/amivcs.cfg.example ENVARC:amivcs.cfg
+Ed ENVARC:amivcs.cfg
+Copy ENVARC:amivcs.cfg ENV:
+```
+
+Inhalt und alle Schlüssel: [config-examples/README.md](../config-examples/README.md).
+
+### Deinstallation
+
+Aus der Schublade:
+
+```
+Execute Uninstall-AmiVCS
+```
+
+Das Skript löscht `C:amivcs`, `C:amivcs-gui`, `SYS:Prefs/AMIVCSPrefs`
+und `HELP:AmiVCS.guide` und fragt, ob auch `ENV:amivcs.cfg` und
+`ENVARC:amivcs.cfg` entfernt werden sollen. Von Hand:
+
+```
+Delete C:amivcs C:amivcs-gui SYS:Prefs/AMIVCSPrefs HELP:AmiVCS.guide
+Delete ENV:amivcs.cfg ENVARC:amivcs.cfg
+```
+
+Repositories (Verzeichnisse mit einem Unterverzeichnis `.amivcs`)
+bleiben dabei selbstverständlich erhalten.
+
+## 2. PC (macOS, Linux, Windows)
+
+Nach `make pc` (und ggf. `make qt`):
+
+```sh
+sudo make install                    # nach /usr/local/bin
+make install PREFIX=$HOME/.local     # oder ins eigene Verzeichnis
+make install DESTDIR=/tmp/paket      # für Paketbau
+```
+
+`make install` kopiert alle Programme aus `bin/pc/` (`amivcs`,
+`amivcs-gui`). Alternativ die Dateien einfach von Hand an einen Ort im
+`PATH` kopieren.
+
+Konfiguration:
+
+| Programm | Datei |
+|---|---|
+| `amivcs` (macOS/Linux) | `-c <datei>`, sonst `~/.amivcsrc` |
+| `amivcs` (Windows-Build) | `-c <datei>`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
+| `amivcs-gui` (Qt) | `~/.amivcsrc` (unter Windows `%USERPROFILE%\.amivcsrc`) |
+
+Das Format ist dasselbe wie auf dem Amiga (siehe
+[config-examples/amivcs.cfg.example](../config-examples/amivcs.cfg.example)).
+Die Datei enthält ein Passwort, also am besten `chmod 600 ~/.amivcsrc`.
+
+## 3. AmiVCS-Server einrichten
+
+Der Server (`server/`) ist ein reiner Objekt- und Ref-Speicher: Er nimmt
+Objekte entgegen, liefert sie aus und aktualisiert Branch-Zeiger per
+Compare-and-Swap. Er hat eine **eigene** Datenbank, ein eigenes
+Speicherverzeichnis und eigene Benutzerkonten – unabhängig von einem
+AmiCloud-Server auf derselben Maschine.
+
+Voraussetzungen:
+
+- Webserver mit PHP ≥ 7.4 (Erweiterung `pdo_mysql`), getestet mit Apache
+- MariaDB oder MySQL
+- eine eigene (Sub-)Domain mit HTTPS-Zertifikat, z. B. per Let's Encrypt.
+  Der Server lehnt Klartext-HTTP ab, und `web.php` leitet auf
+  `/web.php` um – die Dateien gehören daher in die **Wurzel eines eigenen
+  vHosts**, nicht in ein Unterverzeichnis.
+
+Beispiel für AlmaLinux/RHEL mit Apache und dem Platzhalter
+`amivcs.example.com` (unter Debian/Ubuntu heißt der Dienst `apache2`, der
+Benutzer `www-data`, die vHost-Datei liegt unter `/etc/apache2/sites-available/`):
+
+```sh
+# 1. DNS: A-Record amivcs.example.com -> IP des Servers
+
+# 2. vHost /etc/httpd/conf.d/amivcs.conf:
+#    <VirtualHost *:80>
+#        ServerName   amivcs.example.com
+#        DocumentRoot /var/www/amivcs
+#        DirectoryIndex disabled
+#        <Directory /var/www/amivcs>
+#            Options None
+#            AllowOverride All
+#            Require all granted
+#        </Directory>
+#    </VirtualHost>
+#    AllowOverride All ist nötig: die .htaccess-Dateien sperren
+#    config.php, config.php.example und includes/.
+
+# 3. HTTPS-Zertifikat (certbot legt den HTTPS-vHost und die Umleitung an):
+sudo certbot --apache -d amivcs.example.com
+
+# 4. Dateien und Speicherverzeichnis (außerhalb des Web-Roots!).
+#    "server/." kopiert auch die .htaccess-Dateien mit ("server/*" nicht):
+sudo mkdir -p /var/www/amivcs /var/amivcs-storage
+sudo cp -r server/. /var/www/amivcs/
+sudo cp /var/www/amivcs/config.php.example /var/www/amivcs/config.php
+sudo nano /var/www/amivcs/config.php        # DB-Zugang, Speicherpfad
+sudo chown -R apache:apache /var/www/amivcs /var/amivcs-storage
+sudo chmod 750 /var/amivcs-storage
+
+# 5. Datenbank "amivcs" samt Tabellen anlegen, DB-Benutzer einrichten:
+sudo mysql < /var/www/amivcs/sql/schema.sql
+sudo mysql -e "CREATE USER 'amivcs'@'localhost' IDENTIFIED BY 'geheim';
+  GRANT SELECT, INSERT, UPDATE, DELETE ON amivcs.* TO 'amivcs'@'localhost';"
+
+# 6. Ersten AmiVCS-Benutzer anlegen (es gibt keine Admin-Oberfläche):
+php -r "echo password_hash('geheim', PASSWORD_BCRYPT), PHP_EOL;"
+sudo mysql amivcs -e \
+  "INSERT INTO users (username, pass_hash) VALUES ('bob', '\$2y\$10\$...');"
+#    ('\$2y\$10\$...' durch die Ausgabe des php-Befehls ersetzen)
+
+sudo systemctl reload httpd
+```
+
+`config.php` – alle Einstellungen:
+
+| Konstante | Bedeutung |
+|---|---|
+| `AMIVCS_DB_HOST`, `AMIVCS_DB_NAME`, `AMIVCS_DB_USER`, `AMIVCS_DB_PASS` | Zugang zur Datenbank (Standard-Name `amivcs`, wie in `sql/schema.sql`) |
+| `AMIVCS_STORAGE_PATH` | absoluter Pfad des Objektspeichers, **außerhalb** des Web-Roots; Objekte landen unter `<pfad>/<benutzer>/<repo>/objects/<2 hex>/<30 hex>` |
+| `AMIVCS_MAX_UPLOAD` | größtes einzelnes Objekt in Bytes (Standard 100 MB) – praktisch die größte versionierbare Datei. `post_max_size` und `upload_max_filesize` in `php.ini` passend setzen |
+| `AMIVCS_ALLOW_HTTP` | nur für lokale Tests (`php -S`): erlaubt Klartext-HTTP. **Nie in Produktion** |
+
+Test:
+
+```sh
+curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"
+# -> {"status":"ok","version":"0.1"}
+```
+
+Danach:
+
+- API für die Clients: `https://amivcs.example.com/api.php` – in der
+  Client-Konfiguration aber nur die Basis-URL eintragen:
+  `server=https://amivcs.example.com`
+- Web-Oberfläche (nur lesend: Repository-Liste, Branches, Historie mit
+  Graph): `https://amivcs.example.com/web.php`
+
+Repositories werden nicht auf dem Server angelegt, sondern beim ersten
+`amivcs push <name>` automatisch (Namen: Buchstaben, Ziffern, `_`, `.`,
+`-`, höchstens 128 Zeichen). Jeder Benutzer sieht nur seine eigenen
+Repositories.
+
+Weitere Benutzer legt man wie in Schritt 6 an; einen Benutzer sperrt
+`UPDATE users SET active = 0 WHERE username = 'bob';`.
+
+Datensicherung: Datenbank (`mysqldump amivcs`) **und**
+`AMIVCS_STORAGE_PATH` gemeinsam sichern – die Datenbank enthält nur
+Metadaten, die Objekte liegen als Dateien im Speicherverzeichnis.
+
+Lokaler Test ohne Apache (nur zur Entwicklung): in einer lokalen
+`config.php` `define('AMIVCS_ALLOW_HTTP', true);` setzen und
+`php -S 127.0.0.1:8180 -t server/` starten. Klartext-HTTP können nur
+die PC-Clients benutzen; auf dem Amiga ist ausschließlich HTTPS möglich.
+Die Web-Oberfläche funktioniert so nicht, weil ihr Sitzungs-Cookie nur
+über HTTPS gesendet wird.

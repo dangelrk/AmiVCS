@@ -1,0 +1,27 @@
+<?php
+/* AMIVCS server configuration -- copy to config.php and fill in values.
+ *
+ * Fully separate from AmiCloud's server/config.php: own constants (all
+ * AMIVCS_-prefixed, never DB_HOST/STORAGE_PATH etc. -- see docs/adr/
+ * 09_ADR_VCS_Design.md's separation requirement), own database, own
+ * storage directory, own vhost. Nothing here is shared with the cloud
+ * server; the only thing AMIVCS and AmiCloud have in common is the
+ * client-side C libraries (libcloudcore/libcloudfs/libcloudhttp). */
+
+define('AMIVCS_DB_HOST', 'localhost');
+define('AMIVCS_DB_NAME', 'amivcs');
+define('AMIVCS_DB_USER', 'amivcs');
+define('AMIVCS_DB_PASS', 'changeme');
+
+/* Absolute path to object storage -- must be OUTSIDE the web root, and a
+ * different directory tree than AmiCloud's STORAGE_PATH. */
+define('AMIVCS_STORAGE_PATH', '/var/amivcs-storage');
+
+/* Maximum single-object upload size in bytes (must match php.ini
+ * post_max_size) -- a whole file's blob is uploaded in one request, so
+ * this is effectively the largest file AMIVCS can version. */
+define('AMIVCS_MAX_UPLOAD', 100 * 1024 * 1024);
+
+/* Local development only (php -S can't do TLS): allow plain HTTP.
+ * Never set this in production! */
+/* define('AMIVCS_ALLOW_HTTP', true); */

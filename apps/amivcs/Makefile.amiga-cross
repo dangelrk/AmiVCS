@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# amivcs -- AmigaOS 3.x (VBCC), CROSS-compiled from a host (macOS/Linux/
+# Windows) using the toolchain described in docs/BUILD.md.
+# Mirrors AmiCloud's apps/cloudsync/Makefile.amiga-cross (reason: no oml on the
+# host, so this links directly against the libs' .o files instead of
+# .lib archives) with libcloudvcs's sources in place of libcloudsync's.
+#
+# Build:  export VBCC=/path/to/vbcc     (see docs/BUILD.md)
+#         make -f Makefile.amiga-cross
+
+VBCC    ?= /opt/vbcc
+CC       = $(VBCC)/bin/vc
+TARGET   = +aos68k
+CPU      = 68000
+
+RUNTIME_INC = $(VBCC)/targets/m68k-amigaos/include
+RUNTIME_LIB = $(VBCC)/targets/m68k-amigaos/lib
+NDK_INC     = $(VBCC)/sdk/NDK_3.2/Include_H
+NET_INC     = $(VBCC)/sdk/Roadshow/netinclude
+AMISSL_INC  = $(VBCC)/sdk/AmiSSL-v5/Developer/include
+
+LIBS_DIR = ../../core
+CORE_DIR = $(LIBS_DIR)/libcloudcore
+FS_DIR   = $(LIBS_DIR)/libcloudfs
+HTTP_DIR = $(LIBS_DIR)/libcloudhttp
+VCS_DIR  = ../../libs/libcloudvcs
+
+CORE_INC = $(CORE_DIR)/include/cloudcore
+FS_INC   = $(FS_DIR)/include/cloudfs
+HTTP_INC = $(HTTP_DIR)/include/cloudhttp
+VCS_INC  = $(VCS_DIR)/include/cloudvcs
+
+# AMISSL_INC before NDK_INC/RUNTIME_INC -- see core/libcloudhttp/Makefile.amiga-cross
+CFLAGS  = $(TARGET) -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=$(CPU) \
+          -I$(VCS_INC) -I$(CORE_INC) -I$(FS_INC) -I$(HTTP_INC) \
+          -I$(AMISSL_INC) -I$(NET_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
+# -lmieee: parson (libcloudcore) uses double arithmetic, which on a 68000
+# (no FPU) needs mathieeedoubbas.library's stub routines -- undefined-
+# symbol link errors otherwise.
+LDFLAGS = $(TARGET) -L$(RUNTIME_LIB) -lmieee
+
+OBJDIR = obj/amiga
+BINDIR = ../../bin/amiga
+TARGET_BIN = $(BINDIR)/amivcs
+
+CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress
+CORE_OBJS = $(CORE_SRCS:%=$(OBJDIR)/core_%.o)
+FS_SRCS   = localfs_amiga localfs_util pattern_amiga
+FS_OBJS   = $(FS_SRCS:%=$(OBJDIR)/fs_%.o)
+# NOT cmd.c -- that's AmiCloud's own server-verb wrapper (cmd_list() and
+# friends), which remote.c never calls; only the generic transport in
+# http_amiga.c (http_request() etc.) is needed here.
+HTTP_SRCS = http_amiga
+HTTP_OBJS = $(HTTP_SRCS:%=$(OBJDIR)/http_%.o)
+VCS_SRCS  = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote
+VCS_OBJS  = $(VCS_SRCS:%=$(OBJDIR)/vcs_%.o)
+
+OWN_OBJS = $(OBJDIR)/main.o
+
+all: $(OBJDIR) $(BINDIR) $(TARGET_BIN)
+
+$(OBJDIR) $(BINDIR):
+	mkdir -p $@
+
+$(TARGET_BIN): $(OWN_OBJS) $(VCS_OBJS) $(HTTP_OBJS) $(FS_OBJS) $(CORE_OBJS)
+	$(CC) $(LDFLAGS) -o $(TARGET_BIN) $(OWN_OBJS) $(VCS_OBJS) $(HTTP_OBJS) $(FS_OBJS) $(CORE_OBJS)
+
+$(OBJDIR)/%.o: src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/vcs_%.o: $(VCS_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/http_%.o: $(HTTP_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/core_%.o: $(CORE_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/fs_%.o: $(FS_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(OBJDIR)
+	rm -f $(TARGET_BIN)
+
+.PHONY: all clean

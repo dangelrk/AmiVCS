@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# amivcs -- one-shot CLI front-end for libcloudvcs. Linked against
+# libcloudvcs + libcloudhttp + libcloudfs + libcloudcore (libcloudhttp
+# for remote.c's clone/push/pull).
+#
+# Build:   make -f Makefile.pc
+
+CC = gcc
+
+LIBS_DIR = ../../core
+CORE_DIR = $(LIBS_DIR)/libcloudcore
+FS_DIR   = $(LIBS_DIR)/libcloudfs
+HTTP_DIR = $(LIBS_DIR)/libcloudhttp
+VCS_DIR  = ../../libs/libcloudvcs
+
+CORE_INC = $(CORE_DIR)/include/cloudcore
+FS_INC   = $(FS_DIR)/include/cloudfs
+HTTP_INC = $(HTTP_DIR)/include/cloudhttp
+VCS_INC  = $(VCS_DIR)/include/cloudvcs
+
+PKG_CF  := $(shell pkg-config --cflags libcurl 2>/dev/null)
+PKG_LF  := $(shell pkg-config --libs   libcurl 2>/dev/null)
+ifeq ($(PKG_CF),)
+  PKG_CF := -I/opt/homebrew/include -I/usr/local/include
+  PKG_LF := -L/opt/homebrew/lib -L/usr/local/lib -lcurl
+endif
+
+CFLAGS  = -O2 -Wall -Wextra -std=c99 -I$(VCS_INC) -I$(CORE_INC) -I$(FS_INC) -I$(HTTP_INC) $(PKG_CF)
+
+OBJDIR = obj/pc
+BINDIR = ../../bin/pc
+LIBDIR = ../../lib/pc
+LDFLAGS = -L$(LIBDIR) $(PKG_LF)
+
+TARGET = $(BINDIR)/amivcs
+OBJS   = $(OBJDIR)/main.o
+
+all: libs $(TARGET)
+
+libs:
+	$(MAKE) -C $(CORE_DIR) -f Makefile.pc
+	$(MAKE) -C $(HTTP_DIR) -f Makefile.pc
+	$(MAKE) -C $(FS_DIR)   -f Makefile.pc
+	$(MAKE) -C $(VCS_DIR)  -f Makefile.pc
+
+$(TARGET): $(OBJS) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) -lcloudvcs -lcloudhttp -lcloudfs -lcloudcore $(LDFLAGS)
+
+$(OBJDIR)/%.o: src/%.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJDIR) $(BINDIR):
+	mkdir -p $@
+
+install: $(TARGET)
+	install -m 755 $(TARGET) /usr/local/bin/
+
+clean:
+	rm -rf $(OBJDIR)
+	rm -f $(TARGET)
+
+.PHONY: all libs install clean

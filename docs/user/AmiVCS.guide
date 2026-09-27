@@ -1,0 +1,1064 @@
+@database "AmiVCS.guide"
+@$VER: AmiVCS.guide 0.3 (27.09.2026)
+@author "Ronny Krueger"
+@(c) "2026 Ronny Krueger, GPL-3.0-or-later"
+@wordwrap
+@smartwrap
+@width 76
+
+@node Main "AmiVCS - Hauptmenü"
+
+                               AmiVCS
+                  Versionsverwaltung für den Amiga
+                  ---------------------------------
+
+AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
+für AmigaOS 3.x und den PC. Fast alles läuft rein lokal; ein Server
+wird nur für clone, push und pull gebraucht.
+
+  Allgemeines
+    @{" Einführung und Überblick   " link Einfuehrung}
+    @{" Voraussetzungen            " link Voraussetzungen}
+
+  Installation
+    @{" Installation auf dem Amiga " link Installation}
+    @{" Manuelle Installation      " link InstManuell}
+    @{" Deinstallation             " link Deinstallation}
+    @{" Installation auf dem PC    " link InstPC}
+
+  Konfiguration
+    @{" Konfigurationsdatei        " link Konfiguration}
+    @{" AMIVCSPrefs                " link Prefs}
+
+  Programme
+    @{" amivcs - Aufruf, Optionen  " link CLI}
+    @{" amivcs - lokale Befehle    " link Lokal}
+    @{" amivcs - Server-Befehle    " link Remote}
+    @{" amivcs-gui (MUI, Amiga)    " link GUI}
+    @{" amivcs-gui (Qt, PC)        " link GUIQt}
+
+  Arbeiten mit AmiVCS
+    @{" Typischer Arbeitsablauf    " link Workflow}
+    @{" Konflikte auflösen         " link Konflikte}
+    @{" .amivcsignore              " link Ignore}
+    @{" Objektmodell und Grenzen   " link Modell}
+
+  Server
+    @{" Server einrichten          " link ServerSetup}
+    @{" Web-Oberfläche             " link WebUI}
+
+  Anhang
+    @{" Handler                    " link Handler}
+    @{" Fehlersuche                " link Fehlersuche}
+    @{" Bauen aus den Quellen      " link Bauen}
+    @{" Lizenz                     " link Lizenz}
+    @{" Autor und Kontakt          " link Autor}
+    @{" Versionsgeschichte         " link Historie}
+@endnode
+
+@node Einfuehrung "Einführung und Überblick"
+
+Einführung und Überblick
+------------------------
+
+AmiVCS ist KEIN Git-Nachbau. Es übernimmt bewährte Grundideen von Git
+(Commit, Tree und Blob, Branches, dateiweises Vormerken, 3-Wege-Merge),
+verzichtet aber bewusst auf Rebase, Cherry-Pick, Stash, Reflog und
+Ähnliches. Ziel ist ein System, das auf einem 68000 ohne FPU flüssig
+läuft und das man komplett verstehen kann.
+
+Bestandteile:
+
+  amivcs        Kommandozeilen-Client (Amiga und PC). Alle Befehle,
+                lokal und für den Server.
+  amivcs-gui    Grafische Oberfläche im Stil von "git gui": auf dem
+                Amiga mit MUI, auf dem PC mit Qt 6.
+  AMIVCSPrefs   Einstellungs-Editor für amivcs.cfg (nur Amiga).
+  Server        Schlanker PHP-Server: speichert nur Objekte und
+                Branch-Zeiger. Dazu eine nur lesende Web-Oberfläche.
+
+Rein lokal (ohne Server) funktionieren: init, status, add, remove,
+commit, log, branch, switch, checkout, merge, gc, cat-file.
+Nur clone, push und pull sprechen mit einem AmiVCS-Server.
+
+Jedes Repository ist ein ganz normales Verzeichnis. AmiVCS legt darin
+das Unterverzeichnis ".amivcs" (Objekte, Branches, Index) und die Datei
+".amivcsignore" an. Alles andere gehört Ihnen.
+
+AmiVCS ist von AmiCloud vollständig getrennt: eigener Server, eigene
+Datenbank, eigene Konfigurationsdatei, eigene Zugangsdaten.
+
+@{" Zurück " link Main}  @{" Weiter " link Voraussetzungen}
+@endnode
+
+@node Voraussetzungen "Voraussetzungen"
+
+Voraussetzungen
+---------------
+
+Für alle Amiga-Programme:
+  - AmigaOS 3.x
+  - 68000 oder besser (keine FPU nötig)
+
+Zusätzlich für Serververbindungen (amivcs clone/push/pull und
+amivcs-gui):
+  - ein TCP/IP-Stack mit bsdsocket.library (z.B. Roadshow, AmiTCP
+    oder Miami), gestartet und online
+  - AmiSSL 5 (amisslmaster.library in LIBS:); alle Verbindungen
+    laufen über HTTPS
+
+Zusätzlich für amivcs-gui:
+  - MUI 3.8 oder neuer (muimaster.library Version 19)
+
+AMIVCSPrefs braucht nur Intuition und GadTools aus dem Betriebssystem.
+
+WICHTIG: amivcs (Kommandozeile) öffnet Netzwerk und AmiSSL erst bei
+clone, push oder pull. amivcs-gui dagegen braucht TCP/IP-Stack und
+AmiSSL schon beim Start, auch wenn Sie nur lokal arbeiten. Fehlt etwas,
+beendet es sich ohne Fenster (siehe @{" Fehlersuche " link Fehlersuche}).
+
+Stack: Alle Programme fordern selbst 64 KB Stack an; der Startcode von
+vbcc legt bei Bedarf einen größeren Stack an. Ein vorheriges "Stack"
+ist nicht nötig.
+
+Für den Server: siehe @{" Server einrichten " link ServerSetup}.
+
+@{" Zurück " link Einfuehrung}  @{" Index " link Main}
+@{" Weiter " link Installation}
+@endnode
+
+@node Installation "Installation auf dem Amiga"
+
+Installation auf dem Amiga
+--------------------------
+
+Das Archiv AmiVCS.lha enthält die Schublade "AmiVCS":
+
+  Install-AmiVCS     Installationsskript
+  Uninstall-AmiVCS   Deinstallationsskript
+  ReadMe             Kurzbeschreibung
+  LICENSE            Lizenztext (GPLv3)
+  C/                 amivcs, amivcs-gui, AMIVCSPrefs
+  Docs/              AmiVCS.guide (dieses Handbuch)
+  Examples/          amivcs.cfg.example
+
+Auspacken und Installationsskript starten (im Shell-Fenster):
+
+  lha x AmiVCS.lha RAM:
+  CD RAM:AmiVCS
+  Execute Install-AmiVCS
+
+Das Skript fragt jeden Schritt einzeln ab (Antwort y oder n):
+
+  - amivcs nach C:
+  - amivcs-gui nach C:
+  - AMIVCSPrefs nach SYS:Prefs/
+  - AmiVCS.guide nach HELP: (nur wenn der Assign HELP: existiert)
+
+Es warnt, wenn muimaster.library oder amisslmaster.library in LIBS:
+fehlen, und bietet am Ende an, AMIVCSPrefs zu starten, falls es noch
+keine ENVARC:amivcs.cfg gibt. Vorhandene Konfigurationen werden nie
+überschrieben.
+
+Es wird kein DOS-Treiber installiert und nichts gemountet; AmiVCS
+enthält keinen Handler.
+
+Danach den Server-Zugang eintragen, sofern Sie clone, push oder pull
+nutzen wollen (@{" Konfiguration " link Konfiguration}), und loslegen
+(@{" Arbeitsablauf " link Workflow}).
+
+@{" Zurück " link Voraussetzungen}  @{" Index " link Main}
+@{" Weiter " link InstManuell}
+@endnode
+
+@node InstManuell "Manuelle Installation"
+
+Manuelle Installation
+---------------------
+
+Wohin welche Datei gehört:
+
+  C/amivcs            -> C:
+  C/amivcs-gui        -> C: (oder eine beliebige Schublade)
+  C/AMIVCSPrefs       -> SYS:Prefs/
+  Docs/AmiVCS.guide   -> HELP: (oder beliebig)
+  Examples/amivcs.cfg.example
+                      -> Vorlage für ENVARC:amivcs.cfg
+
+Im Shell-Fenster, aus der Schublade heraus:
+
+  Copy C/amivcs C:
+  Copy C/amivcs-gui C:
+  Copy C/AMIVCSPrefs SYS:Prefs/
+  Copy Docs/AmiVCS.guide HELP:
+
+Es werden keine Icons mitgeliefert. AMIVCSPrefs startet man im Shell
+mit "SYS:Prefs/AMIVCSPrefs"; auf der Workbench ist es nur sichtbar,
+wenn im Fenster "Alle Dateien anzeigen" eingeschaltet ist.
+
+Wer amivcs-gui von der Workbench aus starten möchte, legt sich ein
+Projekt-Icon an. amivcs-gui versteht diese Merkmale (Tooltypes):
+
+  REPO=<pfad>   zu öffnendes Repository
+  DEBUG         Fehlermeldungen ausgeben (wie Option -v)
+
+@{" Zurück " link Installation}  @{" Index " link Main}
+@{" Weiter " link Deinstallation}
+@endnode
+
+@node Deinstallation "Deinstallation"
+
+Deinstallation
+--------------
+
+Aus der Installationsschublade:
+
+  Execute Uninstall-AmiVCS
+
+Das Skript löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AMIVCSPrefs und
+HELP:AmiVCS.guide und fragt, ob auch ENV:amivcs.cfg und
+ENVARC:amivcs.cfg entfernt werden sollen.
+
+Von Hand:
+
+  Delete C:amivcs C:amivcs-gui SYS:Prefs/AMIVCSPrefs
+  Delete HELP:AmiVCS.guide
+  Delete ENV:amivcs.cfg ENVARC:amivcs.cfg
+
+Ihre Repositories (Verzeichnisse mit einem Unterverzeichnis ".amivcs")
+bleiben unberührt. Wer ein Repository wieder in ein ganz normales
+Verzeichnis verwandeln will, löscht darin ".amivcs" und
+".amivcsignore" - damit ist allerdings auch die gesamte Historie weg.
+
+@{" Zurück " link InstManuell}  @{" Index " link Main}
+@{" Weiter " link InstPC}
+@endnode
+
+@node InstPC "Installation auf dem PC"
+
+Installation auf dem PC
+-----------------------
+
+Auf macOS, Linux und Windows werden die Programme aus den Quellen
+gebaut (siehe @{" Bauen " link Bauen}) und dann installiert:
+
+  make pc
+  make qt
+  sudo make install
+
+"make install" kopiert amivcs und amivcs-gui nach /usr/local/bin
+(anderes Ziel mit PREFIX=..., Paketbau mit DESTDIR=...).
+
+Konfiguration auf dem PC:
+
+  amivcs      -c <datei>, sonst ~/.amivcsrc
+              (Windows-Build: amivcs.cfg im aktuellen Verzeichnis)
+  amivcs-gui  ~/.amivcsrc
+
+Das Format ist dasselbe wie auf dem Amiga. Ausführlich: docs/INSTALL.md
+im Quellarchiv.
+
+@{" Zurück " link Deinstallation}  @{" Index " link Main}
+@{" Weiter " link Konfiguration}
+@endnode
+
+@node Konfiguration "Konfigurationsdatei"
+
+Konfigurationsdatei amivcs.cfg
+------------------------------
+
+Nur für clone, push und pull nötig - mit einer Ausnahme: "user" ist
+auch der Autorname Ihrer Commits. Eigene Datei, NICHT amicloud.cfg.
+
+Wo die Programme suchen:
+
+  amivcs        -c <datei>, sonst ENV:amivcs.cfg,
+                sonst amivcs.cfg im aktuellen Verzeichnis
+  amivcs-gui    ENV:amivcs.cfg, sonst amivcs.cfg im aktuellen
+                Verzeichnis
+  AMIVCSPrefs   ENV:amivcs.cfg, sonst ENVARC:amivcs.cfg
+
+Dauerhaft gehört die Datei nach ENVARC:; beim Systemstart kopiert
+AmigaOS sie nach ENV:. Am bequemsten per @{" AMIVCSPrefs " link Prefs}.
+
+Format: eine Einstellung pro Zeile, "schlüssel=wert". Zeilen mit "#"
+am Anfang sind Kommentare.
+
+  server=https://amivcs.example.com
+  user=bob
+  pass=geheim
+  #verify_ssl=1
+
+Die Schlüssel:
+
+  server       Basis-URL des AmiVCS-Servers, ohne "/api.php". Ein
+               abschließender "/" wird entfernt. Auf dem Amiga sind
+               nur https://-Adressen möglich.
+  user         Benutzername am Server UND Commit-Autor (erscheint in
+               "amivcs log"; ohne user heißt der Autor "unknown").
+               Andere Schreibweise: username
+  pass         Passwort am Server. Andere Schreibweise: password
+  verify_ssl   1 = Zertifikat des Servers prüfen (Standard),
+               0 = nicht prüfen, nur zum Testen!
+
+Der gemeinsame Parser kennt außerdem basepath, debug, gmt_offset und
+dst; AmiVCS wertet diese nicht aus.
+
+Den Autor für einen einzelnen Aufruf ändern:
+
+  amivcs --author "Ronny" commit -a -m "Text"
+
+Von Hand anlegen:
+
+  Copy Examples/amivcs.cfg.example ENVARC:amivcs.cfg
+  Ed ENVARC:amivcs.cfg
+  Copy ENVARC:amivcs.cfg ENV:
+
+Die Datei enthält Ihr Passwort im Klartext.
+
+@{" Zurück " link InstPC}  @{" Index " link Main}  @{" Weiter " link Prefs}
+@endnode
+
+@node Prefs "AMIVCSPrefs"
+
+AMIVCSPrefs
+-----------
+
+Einstellungs-Editor für amivcs.cfg, im Stil der Workbench-Voreinsteller.
+Aufruf: SYS:Prefs/AMIVCSPrefs (Shell oder Workbench). Das Fenster
+öffnet sich auf dem Workbench-Bildschirm.
+
+Felder:
+
+  Server               Basis-URL des Servers (Schlüssel "server")
+  Benutzer (= Autor)   Benutzername und Commit-Autor ("user")
+  Passwort             Passwort ("pass")
+  Zertifikat prüfen    Häkchen = verify_ssl=1
+
+Knöpfe (klassische Prefs-Semantik):
+
+  Speichern   schreibt ENVARC:amivcs.cfg UND ENV:amivcs.cfg -
+              gilt sofort und dauerhaft
+  Benutzen    schreibt nur ENV:amivcs.cfg - gilt bis zum Neustart
+  Abbrechen   schreibt nichts
+
+Beim Öffnen wird ENV:amivcs.cfg gelesen, ersatzweise ENVARC:. Weichen
+beide Dateien voneinander ab, meldet die Statuszeile
+"ENV:/ENVARC: unterscheiden sich (angezeigt: ENV:)".
+
+Eine eigene amivcs.cfg im aktuellen Verzeichnis (die amivcs und
+amivcs-gui ersatzweise lesen) bearbeitet AMIVCSPrefs nicht.
+
+@{" Zurück " link Konfiguration}  @{" Index " link Main}
+@{" Weiter " link CLI}
+@endnode
+
+@node CLI "amivcs - Aufruf und Optionen"
+
+amivcs - Aufruf und Optionen
+----------------------------
+
+  amivcs [--author <name>] [-c <datei>] <befehl> [argumente]
+
+Optionen (vor dem Befehl angeben):
+
+  --author <name>   Commit-Autor für diesen Aufruf (statt "user" aus
+                    der Konfigurationsdatei)
+  -c <datei>        andere Konfigurationsdatei verwenden
+
+Befehle im Überblick:
+
+  init, status, add, remove, commit, log, branch, switch, checkout,
+  merge, gc, cat-file, version
+      -> @{" lokale Befehle " link Lokal}
+  clone, push, pull
+      -> @{" Server-Befehle " link Remote}
+
+"amivcs" ohne Befehl oder mit unbekanntem Befehl zeigt eine kurze
+Hilfe. "amivcs version" gibt die Version aus.
+
+WICHTIG: amivcs muss immer im Wurzelverzeichnis des Repositorys
+aufgerufen werden (dort, wo ".amivcs" liegt). Anders als Git sucht
+amivcs nicht in übergeordneten Verzeichnissen. Ausnahmen: init und
+clone.
+
+Pfade in add/remove sind relativ zum Repository, z.B. "src/main.c".
+
+Rückgabewert: 0 bei Erfolg, sonst ungleich 0 (für Skripte mit
+"If WARN"/"If ERROR" auswertbar).
+
+@{" Zurück " link Prefs}  @{" Index " link Main}  @{" Weiter " link Lokal}
+@endnode
+
+@node Lokal "amivcs - lokale Befehle"
+
+amivcs - lokale Befehle
+-----------------------
+
+Diese Befehle brauchen weder Netzwerk noch Server.
+
+init
+    Legt im aktuellen Verzeichnis ein neues Repository an: das
+    Unterverzeichnis .amivcs, den Branch "main" (noch ohne Commit) und
+    eine .amivcsignore mit Standardmustern, falls noch keine da ist.
+
+status
+    Zeigt "Changes to be committed" (vorgemerkt) und "Changes not
+    staged for commit" (geändert, aber nicht vorgemerkt), jeweils mit
+    new/modified/deleted.
+
+add <pfad> ...
+    Merkt Dateien oder ganze Verzeichnisse (rekursiv) für den
+    nächsten Commit vor. Ein ausdrücklich genannter Pfad wird auch
+    dann vorgemerkt, wenn er einem Ignoriermuster entspricht.
+
+add -A
+    Merkt alle Änderungen vor (neu, geändert, gelöscht).
+
+remove <pfad> ...
+    Nimmt Vormerkungen zurück. Die Datei selbst bleibt unverändert.
+
+commit -m <text> [-a]
+    Speichert das Vorgemerkte als neuen Commit. Mit -a (oder --all)
+    wird vorher alles vorgemerkt. Ohne vorheriges add und ohne -a
+    gibt es nichts zu committen.
+
+log
+    Historie des aktuellen Branches (Commit-ID, Autor, Datum in UTC,
+    Nachricht). Bei Merge-Commits folgt log nur dem ersten Elternteil;
+    die vollständige verzweigte Historie zeigen amivcs-gui und die
+    Web-Oberfläche.
+
+branch
+    Listet alle Branches, der aktuelle ist mit "*" markiert.
+
+branch <name>
+    Legt einen neuen Branch auf dem aktuellen Commit an (wechselt
+    aber nicht dorthin). Geht erst nach dem ersten Commit.
+
+switch <branch>
+    Wechselt den Branch und bringt das Arbeitsverzeichnis auf dessen
+    Stand. Wird verweigert, solange es ungesicherte Änderungen gibt.
+
+checkout
+    Stellt das Arbeitsverzeichnis auf den Stand des aktuellen Commits
+    ein. Wird ebenfalls verweigert, wenn es ungesicherte Änderungen
+    gibt - AmiVCS überschreibt nie stillschweigend Ihre Arbeit.
+
+merge <branch>
+    Führt <branch> in den aktuellen Branch zusammen: "Already up to
+    date", "Fast-forward" oder ein echter 3-Wege-Merge mit
+    Merge-Commit. Bei Konflikten: @{" Konflikte " link Konflikte}.
+
+gc
+    Packt alle losen Objekte in eine Pack-Datei (spart
+    Verzeichniseinträge und Platz auf FFS). Ausgabe: "packed N
+    object(s)".
+
+cat-file <oid>
+    Zeigt Typ (blob/tree/commit) und Größe eines Objekts. Zur
+    Fehlersuche; <oid> ist die 32-stellige Hex-ID.
+
+version
+    Gibt die Version aus.
+
+Beispiel:
+
+  CD Work:MeinProjekt
+  amivcs init
+  amivcs add -A
+  amivcs commit -m "Erster Stand"
+  amivcs branch feature
+  amivcs switch feature
+
+@{" Zurück " link CLI}  @{" Index " link Main}  @{" Weiter " link Remote}
+@endnode
+
+@node Remote "amivcs - Server-Befehle"
+
+amivcs - Server-Befehle
+-----------------------
+
+Brauchen server, user und pass in der Konfigurationsdatei sowie einen
+laufenden TCP/IP-Stack und AmiSSL. Der Fortschritt wird laufend
+angezeigt.
+
+clone <repo> [verzeichnis]
+    Holt das Server-Repository <repo> in ein neues Verzeichnis (ohne
+    Angabe: gleicher Name wie <repo>) und legt dort alle Branches des
+    Servers an. Ausgecheckt wird "main", falls vorhanden, sonst der
+    erste Branch. Der Name <repo> wird in .amivcs/config gemerkt.
+    Dieser Befehl darf überall aufgerufen werden.
+
+push [<repo>]
+    Lädt den aktuellen Branch hoch: alle Objekte, die der Server noch
+    nicht hat, dann den Branch-Zeiger. Mit <repo> wird dieses
+    Server-Repository benutzt und gemerkt; existiert es noch nicht,
+    wird es angelegt. Ohne <repo> gilt das gemerkte (aus clone oder
+    einem früheren push).
+
+pull [<branch>]
+    Holt <branch> (ohne Angabe: gleichnamig zum aktuellen Branch) vom
+    Server und führt ihn genauso zusammen wie "merge": Fast-forward,
+    3-Wege-Merge oder Abbruch bei Konflikt.
+
+Repository-Namen auf dem Server: Buchstaben, Ziffern, "_", "." und
+"-", höchstens 128 Zeichen. Jeder Benutzer sieht nur seine eigenen
+Repositories.
+
+Ein push, der fremde Commits auf dem Server überschreiben würde, wird
+IMMER abgelehnt:
+
+  amivcs: rejected -- the server has commits you don't have;
+  pull and merge first
+
+Dann: "amivcs pull", gegebenenfalls Konflikte lösen
+(@{" Konflikte " link Konflikte}), erneut "amivcs push".
+
+Beispiel mit zwei Rechnern:
+
+  Amiga:   amivcs init
+           amivcs commit -a -m "Start"
+           amivcs push projekt-x      ; legt projekt-x an
+
+  PC:      amivcs clone projekt-x
+           cd projekt-x
+           ... ändern ...
+           amivcs commit -a -m "Vom PC"
+           amivcs push
+
+  Amiga:   amivcs pull
+
+@{" Zurück " link Lokal}  @{" Index " link Main}  @{" Weiter " link GUI}
+@endnode
+
+@node GUI "amivcs-gui (MUI, Amiga)"
+
+amivcs-gui (MUI, Amiga)
+-----------------------
+
+Grafische Oberfläche im Stil von "git gui". Braucht MUI 3.8+,
+einen laufenden TCP/IP-Stack und AmiSSL (schon beim Start).
+
+Aufruf:
+
+  amivcs-gui [-v] [<pfad>]
+
+  <pfad>   zu öffnendes Repository; ohne Angabe das aktuelle
+           Verzeichnis
+  -v       Fehlermeldungen im Shell-Fenster ausgeben
+
+Von der Workbench aus (Projekt-Icon) übernehmen die Merkmale
+REPO=<pfad> und DEBUG dieselben Aufgaben.
+
+Ist das Verzeichnis noch kein Repository, fragt amivcs-gui, ob es
+eines anlegen soll (auch: Menü Repository > Init Repository Here).
+
+Das Fenster:
+
+  - oben: Repository-Pfad und aktueller Branch
+  - "Not staged" (links) und "To be committed" (rechts):
+      "Stage ->"    markierte Dateien vormerken
+      "Stage All"   alles vormerken
+      "<- Unstage"  Vormerkung zurücknehmen
+    Mehrfachauswahl mit gedrückter Umschalttaste.
+  - Commit-Zeile: Nachricht eingeben, "-a: OFF/ON" schaltet
+    "alles vormerken vor dem Commit" um, dann "Commit".
+  - "History": vollständige Historie aller Branches mit Spalten
+    Graph, OID, Author, Date, Message. Der Graph ist als Zeichen
+    ("| * ", "|/ ") dargestellt; Branch-Namen stehen in eckigen
+    Klammern vor der Nachricht.
+  - Knopfleiste: Refresh, New Branch, Switch, Merge, Clone, Push,
+    Pull, Quit
+
+Menüs:
+
+  Project      About... (Amiga-?), Quit (Amiga-Q)
+  Repository   Init Repository Here, Refresh (R), New Branch... (B),
+               Switch Branch... (S), Merge Branch... (M)
+  Remote       Clone..., Push (P), Pull (L)
+
+Switch und Merge zeigen zuerst die vorhandenen Branches an; danach
+wird der Name eingetippt.
+
+Clone, Push, Pull: Fehlen Server, Benutzer oder Passwort in
+amivcs.cfg, fragt amivcs-gui danach. Diese Eingaben gelten nur bis
+zum Programmende. Während der Übertragung erscheint ein Fenster
+"Working..." mit Abbrechen-Knopf.
+
+WICHTIG: Push und Pull in amivcs-gui benutzen immer das gemerkte
+Server-Repository. Ein frisch mit init angelegtes Repository muss
+deshalb einmal mit "amivcs push <name>" in der Shell verknüpft werden
+(bei geklonten Repositories ist das schon geschehen).
+
+@{" Zurück " link Remote}  @{" Index " link Main}  @{" Weiter " link GUIQt}
+@endnode
+
+@node GUIQt "amivcs-gui (Qt, PC)"
+
+amivcs-gui (Qt, PC)
+-------------------
+
+Dieselbe Oberfläche für macOS, Linux und Windows (Qt 6).
+
+  amivcs-gui [<pfad>]
+
+Ohne <pfad> wird das aktuelle Verzeichnis geöffnet. --help und
+--version werden unterstützt. Konfiguration: ~/.amivcsrc.
+
+Unterschiede zur MUI-Fassung:
+
+  - Dateien lassen sich auch per Doppelklick vormerken bzw.
+    zurücknehmen.
+  - "-a" ist ein Häkchen "Stage all changes before commit (-a)".
+  - Switch/Merge bieten die Branches in einer Auswahlliste an.
+  - Clone fragt den Namen auf dem Server und wählt das Zielverzeichnis
+    per Dateidialog.
+  - Der Commit-Graph wird grafisch gezeichnet.
+  - Menüs: Repository, Remote, Help; Refresh zusätzlich in der
+    Werkzeugleiste.
+  - Fehlende Zugangsdaten fragt ein Dialog "AMIVCS - Remote Server"
+    ab (Server URL, Username, Password, Verify TLS certificate); auch
+    hier nur bis zum Programmende.
+
+Push/Pull benutzen wie bei MUI das gemerkte Server-Repository.
+
+@{" Zurück " link GUI}  @{" Index " link Main}  @{" Weiter " link Workflow}
+@endnode
+
+@node Workflow "Typischer Arbeitsablauf"
+
+Typischer Arbeitsablauf
+-----------------------
+
+Allein und nur lokal:
+
+  CD Work:MeinProjekt
+  amivcs init
+  amivcs commit -a -m "Erster Stand"
+  amivcs branch experiment
+  amivcs switch experiment
+  ... Dateien ändern ...
+  amivcs status
+  amivcs add -A
+  amivcs commit -m "Experiment"
+  amivcs switch main
+  amivcs merge experiment
+  amivcs log
+
+Mit Server (einmalig verknüpfen, dann nur noch push/pull):
+
+  amivcs push meinprojekt      ; beim ersten Mal mit Namen
+  ... arbeiten, committen ...
+  amivcs pull                  ; Änderungen anderer holen
+  amivcs push
+
+Auf einem zweiten Rechner:
+
+  amivcs clone meinprojekt
+  CD meinprojekt
+
+Aufräumen ab und zu:
+
+  amivcs gc
+
+@{" Zurück " link GUIQt}  @{" Index " link Main}
+@{" Weiter " link Konflikte}
+@endnode
+
+@node Konflikte "Konflikte auflösen"
+
+Konflikte auflösen
+------------------
+
+merge und pull arbeiten dateiweise. Haben beide Seiten dieselbe Datei
+unterschiedlich geändert (oder eine Seite geändert, die andere
+gelöscht), ist das ein Konflikt. AmiVCS löst Konflikte NIE
+automatisch:
+
+  - Für jeden Konflikt erscheint "conflict: <pfad>".
+  - Die Datei behält Ihren eigenen Inhalt.
+  - Die Fassung der anderen Seite liegt daneben als <pfad>.theirs.
+  - Konfliktfreie Änderungen der anderen Seite stehen bereits im
+    Arbeitsverzeichnis.
+  - Es entsteht KEIN Commit; die Meldung lautet
+    "N conflict(s) -- resolve by hand (see the .theirs files), then
+    commit; the merge was NOT completed".
+
+Wichtig zu wissen: Nur ein konfliktfreier merge/pull erzeugt einen
+Merge-Commit mit zwei Eltern. Ein von Hand "gelöster" Commit hat nur
+einen Elternteil - ein erneutes merge/pull meldet denselben Konflikt
+dann wieder, und push wird weiter abgelehnt. Bewährter Weg:
+
+  1. Eigene Fassung sichern und die andere übernehmen:
+       Copy datei datei.mine
+       Copy datei.theirs datei
+       Delete datei.theirs
+  2. Committen und erneut zusammenführen - jetzt ohne Konflikt:
+       amivcs commit -a -m "Stand der Gegenseite übernommen"
+       amivcs merge <branch>        (bzw. amivcs pull)
+     Meldung: "Merge completed."
+  3. Die eigenen Änderungen aus datei.mine von Hand in datei
+     einarbeiten, datei.mine löschen, committen:
+       amivcs commit -a -m "Konflikt aufgelöst"
+  4. Gegebenenfalls amivcs push.
+
+Merge-Commits tragen den Autor "amivcs" und die Nachricht
+"Merge branch '<name>'".
+
+merge, pull, switch und checkout verweigern die Arbeit, solange das
+Arbeitsverzeichnis ungesicherte Änderungen enthält ("working tree has
+uncommitted changes -- commit first").
+
+@{" Zurück " link Workflow}  @{" Index " link Main}
+@{" Weiter " link Ignore}
+@endnode
+
+@node Ignore ".amivcsignore"
+
+.amivcsignore
+-------------
+
+Die Datei .amivcsignore im Wurzelverzeichnis des Repositorys listet
+Dateien und Verzeichnisse, die AmiVCS nicht versionieren soll. "amivcs
+init" legt sie mit diesem Inhalt an:
+
+  # AMIVCS default ignore patterns
+  .amivcs/
+  #?.o
+  #?.lib
+  bin/
+  obj/
+
+Regeln:
+
+  - Eine Zeile = ein Muster. Leere Zeilen werden übersprungen.
+  - "#" am Zeilenanfang leitet einen Kommentar ein - AUSSER bei "#?",
+    dem AmigaDOS-Joker.
+  - Joker: "*" und "?" (PC-Schreibweise) sowie "#?" und "?"
+    (AmigaDOS). Auf dem Amiga gilt zusätzlich die volle
+    AmigaDOS-Mustersprache.
+  - Ein "/" am Ende: Muster gilt nur für Verzeichnisse.
+  - Ohne "/" im Muster: vergleicht nur den Dateinamen, in jeder
+    Verzeichnisebene ("bin/" trifft jedes Verzeichnis namens bin).
+  - Mit "/" im Muster (z.B. "/build", "docs/*.log", "**/tmp/"): an
+    der Repository-Wurzel verankert und Ebene für Ebene verglichen.
+    "*" springt dabei nie über ein "/"; ein eigenes Segment "**"
+    steht für beliebig viele (auch null) Ebenen.
+  - .amivcs selbst wird immer ignoriert.
+
+status, commit, checkout und ein rekursives "add <verzeichnis>"
+beachten die Muster. Ein ausdrücklich genannter Pfad ("add
+datei.o") wird trotzdem vorgemerkt.
+
+Beim Wechsel des Branches lässt AmiVCS ignorierte Dateien im
+Arbeitsverzeichnis stehen (z.B. Kompilate in obj/).
+
+@{" Zurück " link Konflikte}  @{" Index " link Main}
+@{" Weiter " link Modell}
+@endnode
+
+@node Modell "Objektmodell und Grenzen"
+
+Objektmodell und Grenzen
+------------------------
+
+AmiVCS speichert Inhalte als Objekte in einer kompakten binären
+Kodierung, ohne Gleitkommazahlen (Zeitstempel sind ganze Sekunden in
+UTC) und ohne Kompression - ein 68000 ohne FPU braucht dafür nichts
+extra.
+
+  Blob     Rohe Dateibytes. Die ID (OID) ist die MD5-Summe des
+           Inhalts, 32 Hex-Zeichen. Gleicher Inhalt wird nur einmal
+           gespeichert.
+  Tree     Eine Verzeichnisebene: sortierte Liste aus Name, Typ, OID.
+  Commit   Tree-OID, 0 bis 2 Eltern, Zeitstempel, Autor, Nachricht.
+  Branch   Name und Commit-OID. Alle Branches stehen gemeinsam in
+           EINER Datei (.amivcs/packed-refs), nicht eine Datei je
+           Branch - das spart Verzeichniseinträge auf FFS.
+
+Aufbau von .amivcs:
+
+  HEAD                     aktueller Branch
+  packed-refs              alle Branches
+  index                    Vormerkungen (die OID eines Trees)
+  config                   gemerktes Server-Repository
+  objects/<2>/<30>         lose Objekte (nach OID verteilt)
+  objects/pack/            Pack-Dateien aus "amivcs gc"
+
+Lesen funktioniert gleich, egal ob ein Objekt lose oder gepackt ist.
+
+Bewusste Grenzen der Version 1:
+
+  - Vormerken nur für ganze Dateien (kein "git add -p").
+  - Merge nur dateiweise, keine zeilenweise Zusammenführung.
+  - "amivcs log" zeigt nur die erste Elternlinie.
+  - Kein Aufstieg in übergeordnete Verzeichnisse: immer im
+    Wurzelverzeichnis arbeiten.
+  - Kein Rebase, Cherry-Pick, Stash, Reflog, keine signierten
+    Commits, keine Tags.
+  - Kein Diff-Befehl.
+  - Auf dem Server nur eigene Repositories, keine Team-Repositories.
+  - Die Größe einer einzelnen Datei begrenzt der Server
+    (AMIVCS_MAX_UPLOAD, Standard 100 MB).
+
+@{" Zurück " link Ignore}  @{" Index " link Main}
+@{" Weiter " link ServerSetup}
+@endnode
+
+@node ServerSetup "Server einrichten"
+
+Server einrichten
+-----------------
+
+Der AmiVCS-Server liegt im Quellarchiv unter server/. Er läuft auf
+einem gewöhnlichen Webserver (PHP 7.4 oder neuer mit pdo_mysql,
+MariaDB oder MySQL, HTTPS-Zertifikat) - nicht auf dem Amiga.
+
+Kurzfassung (Einzelheiten: docs/INSTALL.md im Quellarchiv):
+
+  1. Eigene (Sub-)Domain, z.B. amivcs.example.com, mit eigenem
+     vHost und HTTPS. Die Dateien gehören in die Wurzel des vHosts.
+  2. Inhalt von server/ samt .htaccess-Dateien in den Web-Root
+     kopieren, AllowOverride All setzen.
+  3. config.php.example nach config.php kopieren und ausfüllen:
+       AMIVCS_DB_HOST, AMIVCS_DB_NAME, AMIVCS_DB_USER,
+       AMIVCS_DB_PASS    Datenbankzugang
+       AMIVCS_STORAGE_PATH  Objektspeicher AUSSERHALB des Web-Roots
+       AMIVCS_MAX_UPLOAD    größtes Objekt in Bytes
+       AMIVCS_ALLOW_HTTP    nur für lokale Tests, nie produktiv
+  4. Datenbank anlegen: sql/schema.sql einspielen, DB-Benutzer
+     anlegen.
+  5. Ersten Benutzer anlegen: Passwort-Hash mit
+       php -r "echo password_hash('geheim', PASSWORD_BCRYPT);"
+     erzeugen und in die Tabelle users eintragen.
+  6. Test:
+       curl -u bob:geheim
+         "https://amivcs.example.com/api.php?action=status"
+     liefert {"status":"ok","version":"0.1"}.
+
+Auf den Clients dann:
+
+  server=https://amivcs.example.com
+
+Repositories entstehen beim ersten "amivcs push <name>" von selbst.
+
+@{" Zurück " link Modell}  @{" Index " link Main}  @{" Weiter " link WebUI}
+@endnode
+
+@node WebUI "Web-Oberfläche"
+
+Web-Oberfläche
+--------------
+
+Unter https://amivcs.example.com/web.php (Adresse Ihres Servers)
+können Sie Ihre Repositories im Browser ansehen. Anmeldung mit
+denselben Zugangsdaten wie in amivcs.cfg.
+
+Angezeigt werden:
+
+  - die Liste Ihrer Repositories mit Anzahl der Branches und Datum
+  - je Repository: alle Branches (Name und OID) und die vollständige
+    Historie aller Branches mit einem kleinen Graphen
+
+Die Web-Oberfläche ist nur zum Ansehen da: kein Datei-Browser, kein
+Diff, kein Anlegen von Repositories, kein Commit/Push/Pull.
+
+Sie läuft nur über HTTPS (das Sitzungs-Cookie ist entsprechend
+geschützt) und benutzt eine eigene Anmeldung mit CSRF-Schutz.
+
+@{" Zurück " link ServerSetup}  @{" Index " link Main}
+@{" Weiter " link Handler}
+@endnode
+
+@node Handler "Handler"
+
+Handler
+-------
+
+AmiVCS enthält keinen DOS-Handler: Es gibt kein Laufwerk zum Mounten
+und keinen Eintrag in DEVS:DOSDrivers. Repositories sind ganz normale
+Verzeichnisse auf Ihren Laufwerken.
+
+Wer einen Cloud-Speicher als Laufwerk sucht, findet ihn in den
+Schwesterprojekten AmiCloud (CLOUD:) und AmiOwnCloud (OWNCLOUD:), siehe
+@{" Autor und Kontakt " link Autor}.
+
+@{" Zurück " link WebUI}  @{" Index " link Main}
+@{" Weiter " link Fehlersuche}
+@endnode
+
+@node Fehlersuche "Fehlersuche"
+
+Fehlersuche
+-----------
+
+"not an AMIVCS repository (no .amivcs/ here -- run from the repo root)"
+    amivcs im Wurzelverzeichnis des Repositorys aufrufen (dort, wo
+    .amivcs liegt). Übergeordnete Verzeichnisse werden nicht
+    durchsucht.
+
+"init failed (already a repository here?)"
+    Im Verzeichnis gibt es schon ein .amivcs.
+
+"working tree has uncommitted changes -- commit first"
+    switch, checkout, merge und pull überschreiben keine
+    ungesicherte Arbeit. "amivcs status" ansehen, committen, erneut
+    versuchen.
+
+"nothing to commit, working tree clean" bzw. commit ohne Wirkung
+    Vorher "amivcs add ..." oder "commit -a" benutzen.
+
+"cannot branch -- no commits yet"
+    Branches gibt es erst nach dem ersten Commit.
+
+"... requires server=/user=/pass= in the config file"
+    amivcs.cfg fehlt oder ist unvollständig
+    (@{" Konfiguration " link Konfiguration}).
+    Mit -c <datei> lässt sich eine andere Datei angeben.
+
+"no remote repository configured -- give one explicitly"
+    Das Repository ist noch mit keinem Server-Repository verknüpft:
+    einmal "amivcs push <name>" aufrufen.
+
+"rejected -- the server has commits you don't have; pull and merge
+first"
+    Kein Fehler: Jemand hat vor Ihnen gepusht. "amivcs pull",
+    ggf. @{" Konflikte " link Konflikte} lösen, dann erneut push.
+
+"network error" oder Meldungen zu bsdsocket.library/AmiSSL
+    TCP/IP-Stack gestartet und online? AmiSSL 5 installiert? Nur
+    https://-Adressen sind möglich. Hinweis: Diese Meldungen der
+    gemeinsamen HTTP-Bibliothek beginnen mit "amicloud:".
+
+HTTP 401 (Invalid credentials)
+    Benutzer oder Passwort falsch, oder das Konto ist gesperrt.
+
+Zertifikatsfehler
+    Zertifikat des Servers prüfen. verify_ssl=0 nur zum Testen.
+
+amivcs-gui startet nicht (kein Fenster)
+    MUI 3.8+, TCP/IP-Stack und AmiSSL müssen vorhanden sein - auch
+    für rein lokale Arbeit. Im Shell mit "amivcs-gui -v" starten,
+    dann erscheint der Grund.
+
+Server testen
+    curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"
+    muss {"status":"ok",...} liefern. "HTTPS required" bedeutet: per
+    http:// statt https:// aufgerufen.
+
+@{" Zurück " link Handler}  @{" Index " link Main}  @{" Weiter " link Bauen}
+@endnode
+
+@node Bauen "Bauen aus den Quellen"
+
+Bauen aus den Quellen
+---------------------
+
+Die Quellen: https://github.com/dangelrk/AmiVCS
+Beim Klonen das Submodul core/ (AmiCloudCore) mitnehmen:
+
+  git clone --recurse-submodules https://github.com/dangelrk/AmiVCS.git
+
+Auf dem PC (Cross-Compile mit vbcc):
+
+  export VBCC=/pfad/zu/vbcc
+  make amiga          ; -> bin/amiga/
+  make dist-amiga     ; Installationsschublade build/dist/AmiVCS/
+
+Für den PC selbst: "make pc" (amivcs) und "make qt" (amivcs-gui).
+
+Nativ auf dem Amiga (vbcc mit m68k-amigaos, NDK 3.2, AmiSSL-SDK,
+Roadshow-SDK, MUI-SDK), im Projektverzeichnis:
+
+  Execute Build-Amiga
+
+Die SDK-Pfade stehen oben im Skript (AMISSL_INC, NET_INC, MUI_INC)
+bzw. werden über die Assigns AmiSSL:, NetInclude: und MUI: gefunden.
+Build-Amiga wurde auf dem Host gegengeprüft, auf echter Hardware aber
+noch nicht getestet.
+
+Vollständige Anleitung: docs/BUILD.md im Quellarchiv.
+
+@{" Zurück " link Fehlersuche}  @{" Index " link Main}
+@{" Weiter " link Lizenz}
+@endnode
+
+@node Lizenz "Lizenz"
+
+Lizenz
+------
+
+AmiVCS - Copyright (C) 2026 Ronny Krueger
+
+Dieses Programm ist freie Software: Sie können es unter den
+Bedingungen der GNU General Public License, wie von der Free Software
+Foundation veröffentlicht, weitergeben und/oder verändern, entweder
+gemäß Version 3 der Lizenz oder (nach Ihrer Wahl) jeder späteren
+Version (GPL-3.0-or-later).
+
+Kurz gesagt:
+
+  - Sie dürfen AmiVCS benutzen, kopieren und weitergeben.
+  - Sie dürfen es verändern und veränderte Fassungen weitergeben,
+    wenn diese wieder unter der GPL stehen und der Quelltext
+    verfügbar ist.
+  - Es gibt KEINE GEWÄHRLEISTUNG, soweit gesetzlich zulässig.
+
+Maßgeblich ist allein der englische Lizenztext in der Datei LICENSE
+(liegt der Installationsschublade bei), siehe auch
+https://www.gnu.org/licenses/gpl-3.0.html
+
+Die im Projekt AmiCloudCore enthaltene JSON-Bibliothek Parson steht
+unter der MIT-Lizenz.
+
+@{" Zurück " link Bauen}  @{" Index " link Main}  @{" Weiter " link Autor}
+@endnode
+
+@node Autor "Autor und Kontakt"
+
+Autor und Kontakt
+-----------------
+
+Ronny Krueger
+
+Projektseite, Quelltext, Fehlermeldungen und Wünsche:
+
+  https://github.com/dangelrk/AmiVCS
+
+Schwesterprojekte:
+
+  https://github.com/dangelrk/AmiCloudCore  gemeinsame Bibliotheken
+  https://github.com/dangelrk/AmiCloud      Cloud-Server, CLOUD:
+  https://github.com/dangelrk/AmiOwnCloud   OwnCloud/Nextcloud,
+                                            OWNCLOUD:, AmiCloudSync
+
+@{" Zurück " link Lizenz}  @{" Index " link Main}
+@{" Weiter " link Historie}
+@endnode
+
+@node Historie "Versionsgeschichte"
+
+Versionsgeschichte
+------------------
+
+Handbuch 0.3 (27.09.2026)
+  - Projekt heißt jetzt AmiVCS und hat ein eigenes Repository
+    (Bibliotheken aus AmiCloudCore als Submodul).
+  - Handbuch überarbeitet: Installation, Install-Skript,
+    Konfiguration, AMIVCSPrefs, Fehlersuche.
+
+Programmversion 0.1 (Juli 2026)
+  - 12.07.2026: amivcs mit init, status, commit, log, branch,
+    switch, checkout; merge (Fast-forward und 3-Wege); gc und
+    cat-file; eigener Server; clone, push, pull mit Fortschritt.
+  - 13.07.2026: Vormerkbereich (add, remove, commit -a),
+    vollständige Mehrbranch-Historie; amivcs-gui für Qt und MUI;
+    Web-Oberfläche des Servers.
+  - 14.07.2026: .amivcsignore mit Pfadmustern und "**";
+    AMIVCSPrefs.
+  - 15./16.07.2026: Fehlerkorrekturen beim Speichern der
+    Einstellungen unter AmigaOS.
+
+@{" Zurück " link Autor}  @{" Index " link Main}
+@endnode

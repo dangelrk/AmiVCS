@@ -1,0 +1,50 @@
+AmiVCS 0.1 - Versionsverwaltung für AmigaOS 3.x
+================================================
+
+AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
+(Commits, Branches, Vormerken, 3-Wege-Merge). Fast alles läuft rein
+lokal; ein eigener AmiVCS-Server wird nur für clone, push und pull
+gebraucht. Dieselben Programme gibt es auch für macOS, Linux und
+Windows.
+
+Inhalt der Schublade
+--------------------
+
+  Install-AmiVCS     Installationsskript
+  Uninstall-AmiVCS   Deinstallationsskript
+  ReadMe             diese Datei
+  LICENSE            GNU General Public License, Version 3
+  C/amivcs           Kommandozeilen-Client
+  C/amivcs-gui       grafische Oberfläche (MUI)
+  C/AMIVCSPrefs      Einstellungs-Editor für amivcs.cfg
+  Docs/AmiVCS.guide  Handbuch (AmigaGuide)
+  Examples/          amivcs.cfg.example (Vorlage für die Einstellungen)
+
+Installation
+------------
+
+  1. Archiv auspacken:     lha x AmiVCS.lha RAM:
+  2. In die Schublade:     CD RAM:AmiVCS
+  3. Skript starten:       Execute Install-AmiVCS
+  4. Fragen beantworten (y/n); nichts Vorhandenes wird überschrieben.
+  5. Handbuch lesen:       MultiView Docs/AmiVCS.guide
+
+Voraussetzungen
+---------------
+
+  - AmigaOS 3.x, 68000 oder besser (keine FPU nötig)
+  - für clone/push/pull und für amivcs-gui: TCP/IP-Stack mit
+    bsdsocket.library (z.B. Roadshow, AmiTCP, Miami) und AmiSSL 5
+  - für amivcs-gui: MUI 3.8 oder neuer
+  - ein AmiVCS-Server nur für clone/push/pull (Einrichtung: siehe
+    docs/INSTALL.md im Quellarchiv)
+
+Lizenz
+------
+
+Copyright (C) 2026 Ronny Krueger. AmiVCS ist freie Software unter der
+GNU General Public License, Version 3 oder später (siehe LICENSE).
+Es gibt keine Gewährleistung.
+
+Quelltext, Fehlermeldungen, Wünsche:
+  https://github.com/dangelrk/AmiVCS

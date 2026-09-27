@@ -1,0 +1,28 @@
+# amivcs.cfg -- Konfiguration fuer AmiVCS (amivcs, amivcs-gui, AMIVCSPrefs).
+# Eigenes Format, vollstaendig getrennt von amicloud.cfg (kein gemeinsamer
+# Server, keine gemeinsamen Zugangsdaten).
+#
+# Ablage:
+#   Amiga:  ENVARC:amivcs.cfg (dauerhaft) und ENV:amivcs.cfg (aktiv),
+#           am bequemsten ueber SYS:Prefs/AMIVCSPrefs ("Speichern")
+#   PC:     ~/.amivcsrc  (Windows-Build der CLI: amivcs.cfg im aktuellen
+#           Verzeichnis)
+#   oder:   amivcs -c <datei> ...
+#
+# Fuer rein lokale Nutzung (init/add/commit/log/branch/merge/...) wird
+# diese Datei nicht gebraucht -- nur clone/push/pull brauchen server,
+# user und pass. "#" am Zeilenanfang = Kommentar.
+
+# Basis-URL des AmiVCS-Servers (siehe server/ und docs/INSTALL.md),
+# ohne /api.php und ohne abschliessenden "/". Auf dem Amiga nur https://.
+server=https://amivcs.example.com
+
+# "user" ist zugleich der Commit-Autor (Name in "amivcs log"), auch
+# wenn nie ein Server benutzt wird. Einmalig ueberschreibbar mit
+# "amivcs --author <name> commit ...".
+user=bob
+pass=geheim
+
+# TLS-Zertifikat des Servers pruefen (1 = ja, Standard; 0 = nur zum
+# Testen mit selbstsignierten Zertifikaten):
+#verify_ssl=1

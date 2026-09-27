@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+<Files "config.php">
+    Require all denied
+</Files>
+<FilesMatch "^(config\.php\.example)$">
+    Require all denied
+</FilesMatch>
+# includes/ itself is blocked by includes/.htaccess -- <DirectoryMatch> is
+# NOT allowed inside a .htaccess file (only in the main server/vhost
+# config); having it here made Apache reject this whole file as invalid
+# and 500 every request under this directory (caught in production,
+# 2026-07-12 -- see includes/.htaccess for the actual block).

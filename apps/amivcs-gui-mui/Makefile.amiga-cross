@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# amivcs-gui (MUI/Amiga frontend) — AmigaOS 3.x (VBCC), CROSS-compiled
+# from a host (macOS/Linux/Windows) using the toolchain described in
+# docs/BUILD.md. For a *native* build on a real/emulated
+# Amiga, use Build-Amiga (project root) instead.
+#
+# No oml on the host, so there is no
+# libcloudhttp.lib/libcloudfs.lib/libcloudcore.lib/libcloudvcs.lib/
+# libcloudvcsgui.lib step -- the lib .o files are compiled straight into
+# this directory's obj/amiga/ and linked in directly.
+#
+# Build:  export VBCC=/path/to/vbcc     (see docs/BUILD.md)
+#         make -f Makefile.amiga-cross
+
+VBCC    ?= /opt/vbcc
+CC       = $(VBCC)/bin/vc
+TARGET   = +aos68k
+CPU      = 68000
+
+RUNTIME_INC = $(VBCC)/targets/m68k-amigaos/include
+RUNTIME_LIB = $(VBCC)/targets/m68k-amigaos/lib
+NDK_INC     = $(VBCC)/sdk/NDK_3.2/Include_H
+NDK_LIB     = $(VBCC)/sdk/NDK_3.2/lib
+NET_INC     = $(VBCC)/sdk/Roadshow/netinclude
+AMISSL_INC  = $(VBCC)/sdk/AmiSSL-v5/Developer/include
+MUI_INC     = $(VBCC)/sdk/MUI_3.8/Developer/C/Include
+
+LIBS_DIR = ../../core
+CORE_DIR = $(LIBS_DIR)/libcloudcore
+HTTP_DIR = $(LIBS_DIR)/libcloudhttp
+FS_DIR   = $(LIBS_DIR)/libcloudfs
+VCS_DIR  = ../../libs/libcloudvcs
+GUI_DIR  = ../../libs/libcloudvcsgui
+
+CORE_INC = $(CORE_DIR)/include/cloudcore
+HTTP_INC = $(HTTP_DIR)/include/cloudhttp
+FS_INC   = $(FS_DIR)/include/cloudfs
+VCS_INC  = $(VCS_DIR)/include/cloudvcs
+GUI_INC  = $(GUI_DIR)/include/cloudvcsgui
+
+# AMISSL_INC before NDK_INC/RUNTIME_INC -- see core/libcloudhttp/Makefile.amiga-cross
+CFLAGS  = $(TARGET) -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=$(CPU) \
+          -Isrc -I$(GUI_INC) -I$(VCS_INC) -I$(CORE_INC) -I$(HTTP_INC) -I$(FS_INC) \
+          -I$(AMISSL_INC) -I$(NET_INC) -I$(MUI_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
+# -lmieee: parson (libcloudcore) uses double arithmetic, which on a 68000
+# (no FPU) needs mathieeedoubbas.library's stub routines.
+LDFLAGS = $(TARGET) -L$(RUNTIME_LIB) -L$(NDK_LIB) -lmieee
+
+# DoMethod()/DoSuperMethod()/CoerceMethod() (clib/alib_protos.h) are plain
+# amiga.lib stub functions, not muimaster.library LVO calls.
+GUI_LIBS = -lamiga
+
+OBJDIR = obj/amiga
+BINDIR = ../../bin/amiga
+TARGET_BIN = $(BINDIR)/amivcs-gui
+
+CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress wbstartup
+CORE_OBJS = $(CORE_SRCS:%=$(OBJDIR)/core_%.o)
+HTTP_SRCS = http_amiga
+HTTP_OBJS = $(HTTP_SRCS:%=$(OBJDIR)/http_%.o)
+FS_SRCS   = localfs_amiga localfs_util pattern_amiga
+FS_OBJS   = $(FS_SRCS:%=$(OBJDIR)/fs_%.o)
+VCS_SRCS  = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote
+VCS_OBJS  = $(VCS_SRCS:%=$(OBJDIR)/vcs_%.o)
+GUILIB_SRCS = graph session
+GUILIB_OBJS = $(GUILIB_SRCS:%=$(OBJDIR)/vcsgui_%.o)
+
+OWN_SRCS = main_mui gui historylist mui_stubs
+OWN_OBJS = $(OWN_SRCS:%=$(OBJDIR)/%.o)
+
+all: $(OBJDIR) $(BINDIR) $(TARGET_BIN)
+
+$(OBJDIR) $(BINDIR):
+	mkdir -p $@
+
+$(TARGET_BIN): $(OWN_OBJS) $(GUILIB_OBJS) $(VCS_OBJS) $(HTTP_OBJS) $(FS_OBJS) $(CORE_OBJS)
+	$(CC) $(LDFLAGS) -o $(TARGET_BIN) \
+	    $(OWN_OBJS) $(GUILIB_OBJS) $(VCS_OBJS) $(HTTP_OBJS) $(FS_OBJS) $(CORE_OBJS) $(GUI_LIBS)
+
+$(OBJDIR)/%.o: src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/vcsgui_%.o: $(GUI_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/vcs_%.o: $(VCS_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/http_%.o: $(HTTP_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/core_%.o: $(CORE_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/fs_%.o: $(FS_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(OBJDIR)
+	rm -f $(TARGET_BIN)
+
+.PHONY: all clean

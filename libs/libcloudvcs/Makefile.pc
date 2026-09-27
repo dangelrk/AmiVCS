@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# libcloudvcs -- AMIVCS's core/version-control logic (object model, object
+# store, refs, repository operations, merge, remote). See docs/adr/
+# 09_ADR_VCS_Design.md and docs/design/08_VCS_Grundkonzept.md.
+#
+# Build:   make -f Makefile.pc
+# Output:  <repo-root>/lib/pc/libcloudvcs.a (NOT bin/ -- bin/ is
+#          executables only, matching every other lib in this tree).
+
+CC      = gcc
+CORE_INC = ../../core/libcloudcore/include/cloudcore
+FS_INC   = ../../core/libcloudfs/include/cloudfs
+HTTP_INC = ../../core/libcloudhttp/include/cloudhttp
+INCDIR   = include/cloudvcs
+
+CFLAGS  = -O2 -Wall -Wextra -std=c99 -I$(INCDIR) -I$(CORE_INC) -I$(FS_INC) -I$(HTTP_INC)
+AR      = ar
+ARFLAGS = rcs
+
+OBJDIR = obj/pc
+LIBDIR = ../../lib/pc
+
+SRCS = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote
+OBJS = $(SRCS:%=$(OBJDIR)/%.o)
+
+LIB = $(LIBDIR)/libcloudvcs.a
+
+all: $(LIB)
+
+$(LIB): $(OBJS) | $(LIBDIR)
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+
+$(OBJDIR)/%.o: src/%.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJDIR) $(LIBDIR):
+	mkdir -p $@
+
+clean:
+	rm -rf $(OBJDIR)
+	rm -f $(LIB)
+
+.PHONY: all clean

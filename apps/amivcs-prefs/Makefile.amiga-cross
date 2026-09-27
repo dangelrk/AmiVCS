@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# amivcs-prefs -- AmigaOS 3.x (VBCC), CROSS-compiled from a host (macOS/
+# Linux/Windows) using the toolchain described in
+# docs/BUILD.md. GadTools/Intuition only (see core/common/
+# src/prefsgui.c) -- no MUI, so no MUI_INC/mui_stubs.[ch] and no -lamiga
+# (GadTools/Commodities have proper VBCC-native inline stubs in the NDK,
+# same reasoning as AmiOwnCloud's apps/amicloud-sync-cx/Makefile.amiga-cross).
+#
+# No oml on the host, so this links directly against the lib .o files
+# (compiled into obj/amiga/ alongside this app's own objects) instead of
+# against .lib archives.
+#
+# Build:  export VBCC=/path/to/vbcc     (see docs/BUILD.md)
+#         make -f Makefile.amiga-cross
+
+VBCC    ?= /opt/vbcc
+CC       = $(VBCC)/bin/vc
+TARGET   = +aos68k
+CPU      = 68000
+
+RUNTIME_INC = $(VBCC)/targets/m68k-amigaos/include
+RUNTIME_LIB = $(VBCC)/targets/m68k-amigaos/lib
+NDK_INC     = $(VBCC)/sdk/NDK_3.2/Include_H
+
+LIBS_DIR   = ../../core
+CORE_DIR   = $(LIBS_DIR)/libcloudcore
+COMMON_DIR = ../../core/common
+
+CORE_INC   = $(CORE_DIR)/include/cloudcore
+COMMON_INC = $(COMMON_DIR)/include/common
+
+CFLAGS  = $(TARGET) -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=$(CPU) \
+          -I$(COMMON_INC) -I$(CORE_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
+# -lmieee: config.c/parson (libcloudcore) use double arithmetic, which on
+# a 68000 (no FPU) needs mathieeedoubbas.library's stub routines --
+# undefined-symbol link errors otherwise.
+LDFLAGS = $(TARGET) -L$(RUNTIME_LIB) -lmieee
+
+OBJDIR = obj/amiga
+BINDIR = ../../bin/amiga
+TARGET_BIN = $(BINDIR)/AMIVCSPrefs
+
+CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress
+CORE_OBJS = $(CORE_SRCS:%=$(OBJDIR)/core_%.o)
+
+OWN_SRCS = main
+OWN_OBJS = $(OWN_SRCS:%=$(OBJDIR)/%.o) $(OBJDIR)/prefsgui.o
+
+all: $(OBJDIR) $(BINDIR) $(TARGET_BIN)
+
+$(OBJDIR) $(BINDIR):
+	mkdir -p $@
+
+$(TARGET_BIN): $(OWN_OBJS) $(CORE_OBJS)
+	$(CC) $(LDFLAGS) -o $(TARGET_BIN) $(OWN_OBJS) $(CORE_OBJS)
+
+$(OBJDIR)/%.o: src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/prefsgui.o: $(COMMON_DIR)/src/prefsgui.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/core_%.o: $(CORE_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(OBJDIR)
+	rm -f $(TARGET_BIN)
+
+.PHONY: all clean

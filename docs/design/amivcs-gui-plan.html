@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>AMIVCS-GUI — Umsetzungsplan v2</title>
+<style>
+  :root {
+    --bg: #f7f5f0;
+    --fg: #221f1a;
+    --muted: #7a7266;
+    --border: #ddd6c9;
+    --code-bg: #efeade;
+    --accent: #2f6e6a;
+    --accent-soft: #e2efed;
+    --accent-border: #b9d9d5;
+    --warn-soft: #f3ece0;
+    --warn-border: #d9c6a3;
+    --warn: #8a6a2d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --fg: #e9e5db; --muted: #a89f8f; --border: #33312a;
+      --code-bg: #1f2320; --accent: #6fc2ba; --accent-soft: #1c2b29; --accent-border: #2c4644;
+      --warn-soft: #2a2318; --warn-border: #4a3c22; --warn: #d3ab5f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --fg: #e9e5db; --muted: #a89f8f; --border: #33312a;
+    --code-bg: #1f2320; --accent: #6fc2ba; --accent-soft: #1c2b29; --accent-border: #2c4644;
+    --warn-soft: #2a2318; --warn-border: #4a3c22; --warn: #d3ab5f;
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f5f0; --fg: #221f1a; --muted: #7a7266; --border: #ddd6c9;
+    --code-bg: #efeade; --accent: #2f6e6a; --accent-soft: #e2efed; --accent-border: #b9d9d5;
+    --warn-soft: #f3ece0; --warn-border: #d9c6a3; --warn: #8a6a2d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .page { max-width: 780px; margin: 0 auto; padding: 3.5rem 1.5rem 6rem; }
+
+  .kicker {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 0.6rem;
+  }
+  .kicker.v2 { color: var(--warn); }
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 2.1rem; font-weight: 600; letter-spacing: -0.01em;
+    margin: 0 0 0.35rem; text-wrap: balance;
+  }
+  .subtitle { color: var(--muted); margin: 0 0 2rem; font-size: 1.03rem; max-width: 64ch; }
+
+  h2 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 1.38rem; font-weight: 600; margin: 3rem 0 1rem;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 1.06rem; font-weight: 600; color: var(--accent); margin: 1.8rem 0 0.7rem;
+  }
+  h4 { font-size: 0.95rem; font-weight: 700; margin: 1.4rem 0 0.5rem; }
+
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  ul, ol { margin: 0 0 1.1rem; padding-left: 1.35rem; max-width: 66ch; }
+  li { margin-bottom: 0.35rem; }
+  strong { font-weight: 650; }
+
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 0.12em 0.4em; border-radius: 4px;
+  }
+  pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.15rem; overflow-x: auto; margin: 0 0 1.2rem; line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; }
+
+  .badge {
+    display: inline-block; font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 0.2em 0.55em; border-radius: 999px;
+    background: var(--warn-soft); border: 1px solid var(--warn-border); color: var(--warn);
+    margin-left: 0.5em; vertical-align: middle;
+  }
+
+  .callout {
+    background: var(--accent-soft); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 0.85rem 1.1rem; margin: 1.2rem 0 1.4rem;
+    font-size: 0.93em; max-width: 66ch;
+  }
+  .callout strong { display: block; margin-bottom: 0.25rem; color: var(--accent); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.4rem; font-size: 0.9rem; }
+  th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 650; }
+
+  .stagelist { counter-reset: stage; list-style: none; padding-left: 0; }
+  .stagelist > li { counter-increment: stage; position: relative; padding-left: 2.6rem; margin-bottom: 1.1rem; }
+  .stagelist > li::before {
+    content: counter(stage); position: absolute; left: 0; top: 0.05rem;
+    width: 1.9rem; height: 1.9rem; border-radius: 50%;
+    background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent);
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.85rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stagelist code.commit { display: block; margin-top: 0.3rem; font-size: 0.78rem; color: var(--muted); background: none; padding: 0; }
+
+  .graphdemo {
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.2rem; margin: 0.5rem 0 1.4rem; overflow-x: auto; white-space: pre; line-height: 1.7;
+  }
+  .graphdemo .lane1 { color: var(--accent); }
+  .graphdemo .lane2 { color: var(--warn); }
+
+  footer { margin-top: 3.5rem; padding-top: 1.4rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.82rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="kicker v2">Umsetzungsplan v2 · Erweiterung</p>
+  <h1>AMIVCS-GUI</h1>
+  <p class="subtitle">Staging-Bereich, vollständige Multi-Branch-Historie mit echtem Graphen, und eine
+  WebUI — Erweiterung des ersten Entwurfs nach Durchsicht.</p>
+
+  <h2>Kontext</h2>
+  <p>Drei substanzielle Ergänzungen zum ersten <code>amivcs-gui</code>-Entwurf (Qt+MUI, git-gui-Stil):</p>
+  <ol>
+    <li><strong>Vollständige Historie über mehrere Branches</strong> — bisher nur Erster-Elternteil-Kette.
+    Konsole bleibt schlicht (Amiga-Fenster ~70–80 Zeichen breit), aber die <strong>GUI bekommt einen echten
+    visuellen Graphen</strong> mit Spalten/Linien wie <code>gitk</code>/<code>git log --graph</code>.</li>
+    <li><strong>Staging-Bereich, dateiweise</strong> — kippt die ursprüngliche ADR-09-Entscheidung „kein
+    Staging/Index" bewusst. <code>add</code>/<code>remove</code> von Dateien, Granularität = ganze Datei.</li>
+    <li><strong>WebUI</strong> — nach Login alle Repos des Nutzers mit Historie auflisten, analog zu
+    <code>server/web.php</code> bei AmiCloud.</li>
+  </ol>
+  <p>Diese Version <strong>ersetzt</strong> den vorherigen Entwurf vollständig. Was dort nicht erwähnt
+  wird, gilt weiterhin unverändert (Bibliotheksaufteilung <code>libs/libcloudvcsgui/</code>, Qt+MUI als
+  Dual-Frontend, Binary-Name <code>amivcs-gui</code>, echtes Abbrechen bei Push/Pull/Clone über
+  <code>ui_hooks.h</code>). Nur Planung — noch nicht implementiert.</p>
+
+  <h2>1. Staging-Bereich (neu, dateiweise)</h2>
+  <h3>Design-Idee: Index = einfach eine Tree-OID</h3>
+  <p>Kein neues Dateiformat nötig — der Staging-Index ist schlicht die OID eines gewöhnlichen
+  <code>VCS_OBJ_TREE</code>-Objekts (existiert schon), gespeichert in einer einzeiligen Datei
+  <code>.amivcs/index</code>. Ein frisches Repo hat einen Index, der exakt HEADs Tree spiegelt.</p>
+
+  <pre><code>#define VCS_INDEX_FILE "index"
+
+int vcs_index_load(const char *amivcs_dir, VcsOid *out_tree_oid);
+int vcs_index_save(const char *amivcs_dir, const VcsOid *tree_oid);
+
+/* Nach checkout/switch/merge/pull: Index spiegelt wieder den neuen HEAD. */
+int vcs_index_reset_to(const char *amivcs_dir, const VcsOid *tree_oid);
+
+/* Hasht/schreibt relpaths aktuellen Inhalt als Blob, schreibt den
+ * Index-Tree (+ jeden Eltern-Tree entlang des Pfads) neu. */
+int vcs_index_add(VcsRepo *repo, const char *relpath);
+
+/* Entfernt relpath aus dem Index (wie "git rm --cached"). */
+int vcs_index_remove(VcsRepo *repo, const char *relpath);
+
+/* "git add -A": staged alle aktuell gemeldeten Aenderungen auf einmal. */
+int vcs_index_add_all(VcsRepo *repo);</code></pre>
+
+  <p><code>add</code>/<code>remove</code> nutzen einen „Tree-Pfad neu aufbauen"-Algorithmus: Tree-Objekte
+  entlang des Pfads werden dekodiert, der Blatt-Eintrag ersetzt/entfernt, jede Ebene von unten nach oben
+  neu geschrieben — bis zur neuen Wurzel-OID in <code>.amivcs/index</code>. Nutzt ausschließlich bereits
+  vorhandene Bausteine (<code>vcs_tree_decode/encode/upsert</code>, <code>vcsobjstore_write</code>).</p>
+
+  <h3>Auswirkung auf repo.h / repo.c</h3>
+  <p>Status wird zweigeteilt (git-Wortlaut):</p>
+  <pre><code>typedef struct {
+    VcsChangeList staged;    /* Index vs. HEAD -- wird committet */
+    VcsChangeList unstaged;  /* Arbeitsverzeichnis vs. Index */
+} VcsStatus;
+
+int  vcs_repo_status_raw(VcsRepo *repo, VcsStatus *out);
+void vcs_status_free(VcsStatus *out);</code></pre>
+
+  <p>Commit committet jetzt den Index, nicht mehr das Arbeitsverzeichnis:</p>
+  <pre><code>int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message,
+                    int stage_all, VcsOid *out_oid);</code></pre>
+  <p><code>stage_all</code> (CLI: <code>-a</code>/<code>--all</code>) staged vorher automatisch alles.
+  Ohne das Flag muss vorher explizit <code>add</code> aufgerufen worden sein. Commit braucht keinen
+  Arbeitsverzeichnis-Scan mehr — Tree-OID kommt direkt aus dem Index.</p>
+  <p><code>vcs_repo_snapshot_workdir()</code> bleibt erhalten (weiter gebraucht von <code>merge.c</code>s
+  konfliktfreiem Merge-Pfad — Merge betrifft potenziell viele Pfade auf einmal, Staging ist dafür kein
+  passendes Modell). <code>vcs_repo_is_dirty()</code> bleibt unverändert.</p>
+
+  <h4>CLI-Ergänzungen</h4>
+  <table>
+    <tr><th>Befehl</th><th>Wirkung</th></tr>
+    <tr><td><code>amivcs add &lt;pfad&gt;...</code></td><td>Datei(en) vormerken</td></tr>
+    <tr><td><code>amivcs add -A</code></td><td>Alle Änderungen vormerken</td></tr>
+    <tr><td><code>amivcs remove &lt;pfad&gt;...</code></td><td>Aus der Vormerkung entfernen (Datei bleibt erhalten)</td></tr>
+    <tr><td><code>amivcs commit -m &lt;text&gt; [-a]</code></td><td>Committet Vorgemerktes; <code>-a</code> merkt vorher alles automatisch vor</td></tr>
+    <tr><td><code>amivcs status</code></td><td>Zeigt „Changes to be committed" + „Changes not staged for commit"</td></tr>
+  </table>
+
+  <div class="callout">
+    <strong>Bestätigt</strong>
+    <code>amivcs commit -m</code> ohne vorheriges <code>add</code> committet ab jetzt nichts mehr
+    (git-Konvention) — anders als bisher, wo automatisch der komplette Arbeitsbaum committet wurde.
+    Wer committen will, muss entweder explizit <code>add</code>en (CLI) oder die Dateien in der GUI in
+    den Staging-Bereich verschieben. <code>-a</code> bleibt die Ausnahme-Bequemlichkeit für „alles
+    committen, ohne einzeln zu adden".
+  </div>
+
+  <h2>2. Vollständige Multi-Branch-Historie + echter Graph</h2>
+  <h3>Neue Rohdaten — repo.h / repo.c</h3>
+  <pre><code>typedef struct {
+    VcsOid oid;
+    VcsOid parents[VCS_MAX_PARENTS];
+    int    nparents;
+    long   mtime;
+    char   author[64];
+    char  *message;
+    char   decoration[256]; /* Branch-Namen, die genau hier zeigen */
+} VcsLogEntry;
+typedef struct { VcsLogEntry *items; int n, cap; } VcsLogList;
+
+int vcs_repo_log_raw(VcsRepo *repo, VcsLogList *out);      /* nur 1. Elternteil -- CLI's `log` */
+int vcs_repo_log_all_raw(VcsRepo *repo, VcsLogList *out);  /* alle Branches, dedupliziert -- GUI */
+void vcs_loglist_free(VcsLogList *list);</code></pre>
+
+  <h3>Graph-Layout — neu in libs/libcloudvcsgui/</h3>
+  <p>Die Spalten-/Linienzuordnung ist reine Darstellungslogik ohne VCS-Entscheidungscharakter — gehört in
+  die gemeinsame GUI-Bibliothek, wird aber von <strong>beiden</strong> Frontends genutzt (Qt zeichnet,
+  MUI baut ASCII-Art daraus):</p>
+  <pre><code>typedef struct {
+    int lane;
+    int parent_lanes[VCS_MAX_PARENTS];
+    int nparent_lanes;
+} VcsGraphRow;
+typedef struct { VcsGraphRow *items; int n; int max_lanes; } VcsGraphLayout;
+
+int  vcsgui_compute_graph_layout(const VcsLogList *log, VcsGraphLayout *out);
+void vcsgui_graph_layout_free(VcsGraphLayout *out);</code></pre>
+
+  <p>Standard-Lane-Packing: Commits in Datums-Reihenfolge durchlaufen, „aktive Lanes" führen (jede wartet
+  auf eine Eltern-OID). Trifft ein Commit auf eine wartende Lane, übernimmt er ihre Spalte; bei einem
+  zweiten Elternteil (Merge) wird eine zusätzliche Lane eingefügt. Freiwerdende Lanes werden
+  wiederverwendet, damit der Graph nicht unbegrenzt breit wird.</p>
+
+  <div class="graphdemo">* <span class="lane1">┃</span>  bae63ed  Merge branch 'feature'
+<span class="lane1">┃</span><span class="lane2">╲</span>
+<span class="lane1">┃</span> <span class="lane2">*</span>  ca6e258  feature: add d.txt
+<span class="lane1">*</span> <span class="lane2">┃</span>  9149eb6  main: add c.txt
+<span class="lane1">┃</span><span class="lane2">╱</span>
+<span class="lane1">*</span>  88e1faa  first commit</div>
+
+  <p>Qt zeichnet dies als <code>QPainter</code>-Grafik in einer eigenen Delegate-Spalte. MUI braucht
+  <strong>kein</strong> Custom-BOOPSI-Zeichnen — dieselbe <code>VcsGraphLayout</code> wird zu genau
+  dieser Art ASCII-Spalte zusammengesetzt und einfach im bestehenden <code>MUIA_List_DisplayHook</code>
+  ausgegeben. Passt exakt zur schmalen Amiga-Fensterbreite und zur „nur eingebaute Klassen"-Konvention
+  des Commanders.</p>
+
+  <h2>3. Auswirkung auf den GUI-Funktionsumfang</h2>
+  <p>Die „Änderungsliste" aus dem ersten Entwurf wird <strong>zweigeteilt</strong> <span class="badge">Ersetzt v1</span>:</p>
+  <ul>
+    <li><strong>Nicht vorgemerkte Änderungen</strong> — Vormerken-Button/Doppelklick verschiebt Dateien in den Staging-Bereich.</li>
+    <li><strong>Vorgemerkte Änderungen</strong> — Entfernen-Button verschiebt zurück; „Alles vormerken"-Knopf.</li>
+    <li><strong>Commit</strong> committet nur, was vorgemerkt ist.</li>
+    <li><strong>Historie</strong> zeigt jetzt den vollen Multi-Branch-Graphen, nicht mehr nur die Kette.</li>
+  </ul>
+  <pre><code>typedef struct {
+    ...
+    VcsChangeList  staged, unstaged;  /* ersetzt das fruehere flache "changes" */
+    VcsLogList     log_all;
+    VcsGraphLayout graph;
+    ...
+} VcsGuiSession;
+
+int vcsgui_add(VcsGuiSession *s, const char *relpath);
+int vcsgui_remove(VcsGuiSession *s, const char *relpath);
+int vcsgui_add_all(VcsGuiSession *s);
+int vcsgui_commit(VcsGuiSession *s, const char *message, int stage_all, VcsOid *out_oid);</code></pre>
+
+  <h2>4. Neu: AMIVCS-WebUI</h2>
+  <p>Analog zu <code>server/web.php</code> bei AmiCloud — eigene Session/Login, eigene Tabellen, kein
+  gemeinsamer Code mit dem Cloud-Server.</p>
+
+  <h3>Login — exakt das verifizierte Muster von server/web.php</h3>
+  <pre><code>session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
+session_start();
+// CSRF-Token in $_SESSION, per hash_equals() bei POST geprueft
+// password_verify() gegen amivcs.users.pass_hash
+// session_regenerate_id(true) nach Login, session_destroy() bei Logout</code></pre>
+  <p>Getrennt von <code>api.php</code>s zustandslosem HTTP-Basic-Auth (für C-Clients) — eigene
+  formularbasierte Session für Menschen im Browser.</p>
+
+  <h4>Seiten (v1-Umfang)</h4>
+  <table>
+    <tr><th>Seite</th><th>Inhalt</th></tr>
+    <tr><td>Repo-Liste (nach Login)</td><td>Alle eigenen Repos, Branch-Anzahl, letzter Commit</td></tr>
+    <tr><td>Repo-Detail</td><td>Branch-Liste + volle Multi-Branch-Historie als HTML/CSS-Tabelle mit Lane-Indikatoren (kein interaktiver JS-Graph, serverseitig vorgerechnet)</td></tr>
+  </table>
+  <p><strong>Bewusst nicht in v1:</strong> kein Datei-/Baum-Browser, kein Diff-View, kein Commit/Push/Pull
+  aus dem Browser, keine Repo-Anlage über die WebUI — ein Repo-Überblick mit Historie, kein
+  GitHub-Nachbau.</p>
+
+  <h4>Neue serverseitige Bausteine</h4>
+  <ul>
+    <li><code>includes/ObjectDecoder.php</code> — liest Tree-/Commit-Objekte aus dem Storage, dekodiert das binäre Format (Varint-Lesen, Tree-/Commit-Layout aus <code>object.c</code> in PHP nachgebildet) — rein lesend, nur für Anzeige.</li>
+    <li><code>includes/GraphLayout.php</code> — PHP-Portierung des Lane-Algorithmus aus §2.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Architektur-Hinweis</strong>
+    ADR 09 legt fest, dass der Server keinerlei VCS-Logik besitzt (Merge-/Ancestry-Entscheidungen).
+    Objekte für eine reine Nur-Lese-Anzeige zu dekodieren ist etwas anderes (Darstellung, keine
+    Entscheidung) — aber neuer Code, den die ursprüngliche ADR nicht vorgesehen hat. Bewusst als
+    schmale, ausdrücklich gewünschte Ausnahme markiert.
+  </div>
+
+  <h2>5. Geplante Implementierungsreihenfolge <span class="badge">ersetzt v1</span></h2>
+  <ol class="stagelist">
+    <li>Staging-Modul (<code>index.h</code>/<code>index.c</code>) + zweigeteilter Status + Commit-Umbau + CLI <code>add</code>/<code>remove</code>/<code>-a</code>.
+      <code class="commit">libcloudvcs: file-level staging area (add/remove/index)</code></li>
+    <li>Volle Multi-Branch-Historie (<code>vcs_repo_log_all_raw</code> + Decorations).
+      <code class="commit">libcloudvcs: full multi-branch history with decorations</code></li>
+    <li>Graph-Layout-Algorithmus in <code>libcloudvcsgui</code> — reine Datenberechnung, host-testbar.
+      <code class="commit">libcloudvcsgui: commit graph lane layout</code></li>
+    <li><code>libcloudvcsgui</code>-Session-Kern + Cancel/Progress-Anbindung (wie im ersten Entwurf).
+      <code class="commit">libcloudvcsgui: headless GUI session/controller</code></li>
+    <li>Qt-Frontend — inkl. Staged/Unstaged-Ansicht + gezeichnetem Graphen.
+      <code class="commit">amivcs-gui-qt: Qt6 git-gui-style frontend</code></li>
+    <li>MUI-Frontend — inkl. Staged/Unstaged-Ansicht + ASCII-Graph-Spalte.
+      <code class="commit">amivcs-gui-mui: MUI 3.8 frontend</code></li>
+    <li>AMIVCS-WebUI (<code>web.php</code> + <code>ObjectDecoder.php</code> + <code>GraphLayout.php</code>).
+      <code class="commit">amivcs-server: web UI (repo list + history)</code></li>
+    <li>Doku — GUI- und WebUI-Kapitel ergänzen.
+      <code class="commit">docs: AMIVCS GUI + WebUI chapters</code></li>
+  </ol>
+
+  <h2>6. Verifikation</h2>
+  <p><strong>Stufe 1:</strong> frisches Repo → <code>status</code> leer; Datei anlegen → „not staged";
+  <code>add</code> → „to be committed"; <code>commit -m</code> ohne <code>-a</code> committet nur
+  Vorgemerktes; zweite Datei anlegen, nicht adden, <code>commit -m</code> → bleibt unstaged, kein Fehler;
+  <code>commit -a</code> staged+committet den Rest. Nach <code>switch</code>/<code>checkout</code> ist
+  der Index sauber.</p>
+  <p><strong>Stufe 2:</strong> Repo mit zwei divergierenden Branches + einem Merge — <code>log_all_raw()</code>
+  muss beide Linien plus Merge-Commit zeigen, jeder Commit genau einmal, korrekte Decorations.</p>
+  <p><strong>Stufe 3:</strong> gleiches Test-Repo — Lane-Zuordnung von Hand nachvollziehen.</p>
+  <p><strong>Stufen 5–6:</strong> wie im ersten Entwurf, ergänzt um Datei vormerken/zurücknehmen,
+  Teil-Commit, Graph-Ansicht mit echtem Merge-Szenario.</p>
+  <p><strong>Stufe 7:</strong> Login-Session + CSRF-Schutz testen, Repo-Liste zeigt nur eigene Repos,
+  Historie-Ansicht stimmt mit der GUI-Ansicht überein.</p>
+  <p><strong>Regressions-Sicherung:</strong> bestehende CLI-Tests (init/branch/switch/checkout/merge/gc/
+  clone/push/pull) funktionieren unverändert, abgesehen von der bewusst geänderten
+  <code>commit</code>-Semantik.</p>
+
+  <footer>AMIVCS-GUI — Architekturplan v2, Stand 2026-07-12. Markdown-Fassung:
+  <code>docs/architecture/amivcs-gui-plan.md</code>. Noch nicht implementiert.</footer>
+
+</div>
+</body>
+</html>

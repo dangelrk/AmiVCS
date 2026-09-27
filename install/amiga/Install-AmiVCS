@@ -1,0 +1,115 @@
+; $VER: Install-AmiVCS 0.1 (27.09.2026)
+; Install-AmiVCS -- installiert AmiVCS aus der Installationsschublade.
+; SPDX-License-Identifier: GPL-3.0-or-later
+; Copyright (C) 2026 Ronny Krueger
+;
+; Aufruf im Shell-Fenster, aus der Schublade heraus:
+;     CD RAM:AmiVCS
+;     Execute Install-AmiVCS
+;
+; Kopiert amivcs und amivcs-gui nach C:, AMIVCSPrefs nach SYS:Prefs/ und
+; das Handbuch nach HELP: (nur wenn HELP: existiert). Jeder Schritt wird
+; einzeln abgefragt. Vorhandene Einstellungen (ENV:/ENVARC:amivcs.cfg)
+; werden nie angelegt oder überschrieben.
+
+FailAt 21
+
+If NOT EXISTS C/amivcs
+  Echo "Install-AmiVCS muss aus der Installationsschublade gestartet werden:"
+  Echo "  CD RAM:AmiVCS"
+  Echo "  Execute Install-AmiVCS"
+  Quit 10
+EndIf
+
+Echo ""
+Echo "AmiVCS - Installation"
+Echo "====================="
+Echo "Jeder Schritt wird einzeln abgefragt: y = ja, n = nein."
+Echo ""
+
+; ---- Kommandozeile ----------------------------------------------------
+Ask "amivcs (Kommandozeile) nach C: kopieren? (y/n)"
+If WARN
+  Copy C/amivcs C: CLONE QUIET
+  If WARN
+    Echo "FEHLER: C/amivcs konnte nicht nach C: kopiert werden."
+  Else
+    Echo "  C:amivcs installiert."
+  EndIf
+EndIf
+
+; ---- MUI-Oberfläche ---------------------------------------------------
+Ask "amivcs-gui (MUI-Oberfläche) nach C: kopieren? (y/n)"
+If WARN
+  Copy C/amivcs-gui C: CLONE QUIET
+  If WARN
+    Echo "FEHLER: C/amivcs-gui konnte nicht nach C: kopiert werden."
+  Else
+    Echo "  C:amivcs-gui installiert."
+  EndIf
+  If NOT EXISTS LIBS:muimaster.library
+    Echo "  Hinweis: LIBS:muimaster.library fehlt - amivcs-gui braucht MUI 3.8+."
+  EndIf
+EndIf
+
+; ---- Einstellungs-Editor ----------------------------------------------
+Ask "AMIVCSPrefs (Einstellungen) nach SYS:Prefs/ kopieren? (y/n)"
+If WARN
+  Copy C/AMIVCSPrefs SYS:Prefs/ CLONE QUIET
+  If WARN
+    Echo "FEHLER: C/AMIVCSPrefs konnte nicht nach SYS:Prefs/ kopiert werden."
+  Else
+    Echo "  SYS:Prefs/AMIVCSPrefs installiert."
+  EndIf
+EndIf
+
+; ---- Handbuch ---------------------------------------------------------
+Assign >NIL: EXISTS HELP:
+If WARN
+  Echo "HELP: ist nicht zugewiesen - das Handbuch bleibt in Docs/AmiVCS.guide."
+Else
+  Ask "Handbuch AmiVCS.guide nach HELP: kopieren? (y/n)"
+  If WARN
+    Copy Docs/AmiVCS.guide HELP: CLONE QUIET
+    If WARN
+      Echo "FEHLER: Docs/AmiVCS.guide konnte nicht nach HELP: kopiert werden."
+    Else
+      Echo "  HELP:AmiVCS.guide installiert."
+    EndIf
+  EndIf
+EndIf
+
+; ---- Voraussetzungen für Serververbindungen ---------------------------
+If NOT EXISTS LIBS:amisslmaster.library
+  Echo ""
+  Echo "Hinweis: LIBS:amisslmaster.library fehlt. Für clone/push/pull und"
+  Echo "für amivcs-gui werden AmiSSL 5 und ein TCP/IP-Stack benötigt."
+EndIf
+
+; ---- Einstellungen: nie überschreiben ----------------------------------
+Echo ""
+If EXISTS ENVARC:amivcs.cfg
+  Echo "ENVARC:amivcs.cfg ist vorhanden und bleibt unverändert."
+Else
+  Echo "Es gibt noch keine ENVARC:amivcs.cfg. Sie wird nur für clone,"
+  Echo "push und pull gebraucht (und für den Autornamen der Commits)."
+  If EXISTS SYS:Prefs/AMIVCSPrefs
+    Ask "AMIVCSPrefs jetzt starten, um Server und Benutzer einzutragen? (y/n)"
+    If WARN
+      SYS:Prefs/AMIVCSPrefs
+    EndIf
+  Else
+    Echo "Vorlage: Examples/amivcs.cfg.example nach ENVARC:amivcs.cfg"
+    Echo "kopieren, anpassen und zusätzlich nach ENV: kopieren."
+  EndIf
+EndIf
+
+Echo ""
+Echo "Fertig. Erste Schritte im Shell-Fenster:"
+Echo "  CD Work:MeinProjekt"
+Echo "  amivcs init"
+Echo "  amivcs commit -a -m *"Erster Stand*""
+Echo "  amivcs log"
+Echo "Handbuch: MultiView HELP:AmiVCS.guide (bzw. Docs/AmiVCS.guide)"
+Echo "Deinstallation: Execute Uninstall-AmiVCS"
+Quit 0

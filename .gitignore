@@ -1,0 +1,30 @@
+# Build-Ausgaben: Programme unter bin/<system>/, Bibliotheken unter
+# lib/<system>/, Objektdateien unter obj/<system>/ je Komponente,
+# CMake-/Dist-Ausgaben unter build/
+obj/
+bin/
+lib/
+build/
+*.o
+*.a
+*.lib
+*.exe
+*.lha
+
+# CMake / Qt Creator
+CMakeFiles/
+CMakeCache.txt
+.qtcreator/
+*.user
+
+# Echte Zugangsdaten nie einchecken (nur *.example ist versioniert)
+server/config.php
+*.cfg
+!config-examples/*.cfg.example
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
+.cache/
+__pycache__/

@@ -1,0 +1,71 @@
+; $VER: Uninstall-AmiVCS 0.1 (27.09.2026)
+; Uninstall-AmiVCS -- entfernt die von Install-AmiVCS installierten Dateien.
+; SPDX-License-Identifier: GPL-3.0-or-later
+; Copyright (C) 2026 Ronny Krueger
+;
+; Aufruf:  Execute Uninstall-AmiVCS
+;
+; Löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AMIVCSPrefs und
+; HELP:AmiVCS.guide. Die Einstellungen (ENV:/ENVARC:amivcs.cfg) werden
+; nur nach Rückfrage gelöscht. Repositories bleiben unberührt.
+
+FailAt 21
+
+Echo ""
+Echo "AmiVCS - Deinstallation"
+Echo "======================="
+Ask "AmiVCS wirklich deinstallieren? (y/n)"
+If NOT WARN
+  Echo "Abgebrochen, nichts gelöscht."
+  Quit 0
+EndIf
+
+If EXISTS C:amivcs
+  Delete C:amivcs QUIET
+  Echo "  C:amivcs gelöscht."
+EndIf
+If EXISTS C:amivcs-gui
+  Delete C:amivcs-gui QUIET
+  Echo "  C:amivcs-gui gelöscht."
+EndIf
+If EXISTS SYS:Prefs/AMIVCSPrefs
+  Delete SYS:Prefs/AMIVCSPrefs QUIET
+  Echo "  SYS:Prefs/AMIVCSPrefs gelöscht."
+EndIf
+If EXISTS SYS:Prefs/AMIVCSPrefs.info
+  Delete SYS:Prefs/AMIVCSPrefs.info QUIET
+EndIf
+
+Assign >NIL: EXISTS HELP:
+If NOT WARN
+  If EXISTS HELP:AmiVCS.guide
+    Delete HELP:AmiVCS.guide QUIET
+    Echo "  HELP:AmiVCS.guide gelöscht."
+  EndIf
+EndIf
+
+If EXISTS ENVARC:amivcs.cfg
+  Ask "Einstellungen ENVARC:amivcs.cfg und ENV:amivcs.cfg auch löschen? (y/n)"
+  If WARN
+    Delete ENVARC:amivcs.cfg QUIET
+    If EXISTS ENV:amivcs.cfg
+      Delete ENV:amivcs.cfg QUIET
+    EndIf
+    Echo "  Einstellungen gelöscht."
+  Else
+    Echo "  Einstellungen bleiben erhalten."
+  EndIf
+Else
+  If EXISTS ENV:amivcs.cfg
+    Ask "Einstellungen ENV:amivcs.cfg auch löschen? (y/n)"
+    If WARN
+      Delete ENV:amivcs.cfg QUIET
+      Echo "  ENV:amivcs.cfg gelöscht."
+    EndIf
+  EndIf
+EndIf
+
+Echo ""
+Echo "AmiVCS ist deinstalliert. Ihre Repositories (Verzeichnisse mit"
+Echo "einem Unterverzeichnis .amivcs) sind unverändert."
+Quit 0

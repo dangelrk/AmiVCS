@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# libcloudvcsgui -- shared, presentation-only logic for the AMIVCS GUI
+# frontends (amivcs-gui-qt/amivcs-gui-mui): commit-graph lane layout and
+# the headless VcsGuiSession controller. See docs/design/
+# amivcs-gui-plan.md. No Qt/MUI types anywhere in this library.
+#
+# Build:   make -f Makefile.pc
+# Output:  <repo-root>/lib/pc/libcloudvcsgui.a
+
+CC      = gcc
+CORE_INC = ../../core/libcloudcore/include/cloudcore
+FS_INC   = ../../core/libcloudfs/include/cloudfs
+HTTP_INC = ../../core/libcloudhttp/include/cloudhttp
+VCS_INC  = ../libcloudvcs/include/cloudvcs
+INCDIR   = include/cloudvcsgui
+
+CFLAGS  = -O2 -Wall -Wextra -std=c99 -I$(INCDIR) -I$(VCS_INC) -I$(CORE_INC) -I$(FS_INC) -I$(HTTP_INC)
+AR      = ar
+ARFLAGS = rcs
+
+OBJDIR = obj/pc
+LIBDIR = ../../lib/pc
+
+SRCS = graph session
+OBJS = $(SRCS:%=$(OBJDIR)/%.o)
+
+LIB = $(LIBDIR)/libcloudvcsgui.a
+
+all: $(LIB)
+
+$(LIB): $(OBJS) | $(LIBDIR)
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+
+$(OBJDIR)/%.o: src/%.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJDIR) $(LIBDIR):
+	mkdir -p $@
+
+clean:
+	rm -rf $(OBJDIR)
+	rm -f $(LIB)
+
+.PHONY: all clean
