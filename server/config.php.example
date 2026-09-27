@@ -1,4 +1,6 @@
 <?php
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Ronny Krueger
 /* AMIVCS server configuration -- copy to config.php and fill in values.
  *
  * Fully separate from AmiCloud's server/config.php: own constants (all
