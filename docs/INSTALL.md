@@ -212,7 +212,7 @@ Benutzer `www-data`, die vHost-Datei liegt unter `/etc/apache2/sites-available/`
 #        </Directory>
 #    </VirtualHost>
 #    AllowOverride All ist nötig: die .htaccess-Dateien sperren
-#    config.php, config.php.example und includes/.
+#    config.php, config.php.example, includes/ und sql/.
 
 # 3. HTTPS-Zertifikat (certbot legt den HTTPS-vHost und die Umleitung an):
 sudo certbot --apache -d amivcs.example.com
@@ -223,7 +223,12 @@ sudo mkdir -p /var/www/amivcs /var/amivcs-storage
 sudo cp -r server/. /var/www/amivcs/
 sudo cp /var/www/amivcs/config.php.example /var/www/amivcs/config.php
 sudo nano /var/www/amivcs/config.php        # DB-Zugang, Speicherpfad
-sudo chown -R apache:apache /var/www/amivcs /var/amivcs-storage
+# Code gehört root, Apache darf nur lesen; config.php (Passwort) nur
+# für root und die Gruppe apache; schreiben darf Apache nur im Storage:
+sudo chown -R root:apache /var/www/amivcs
+sudo chmod -R u=rwX,g=rX,o= /var/www/amivcs
+sudo chmod 640 /var/www/amivcs/config.php
+sudo chown -R apache:apache /var/amivcs-storage
 sudo chmod 750 /var/amivcs-storage
 
 # 5. Datenbank "amivcs" samt Tabellen anlegen, DB-Benutzer einrichten:
