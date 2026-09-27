@@ -929,7 +929,7 @@ first"
 "network error" oder Meldungen zu bsdsocket.library/AmiSSL
     TCP/IP-Stack gestartet und online? AmiSSL 5 installiert? Nur
     https://-Adressen sind möglich. Hinweis: Diese Meldungen der
-    gemeinsamen HTTP-Bibliothek beginnen mit "amicloud:".
+    gemeinsamen HTTP-Bibliothek beginnen mit "amicloudcore:".
 
 HTTP 401 (Invalid credentials)
     Benutzer oder Passwort falsch, oder das Konto ist gesperrt.

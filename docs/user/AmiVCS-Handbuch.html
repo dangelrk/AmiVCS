@@ -690,7 +690,7 @@ jeder Anfrage. Antworten: <code>{"status":"ok",…}</code> bzw.
 <tr><td><code>… requires server=/user=/pass= in the config file</code></td><td><code>amivcs.cfg</code> fehlt oder ist unvollständig (<a href="#konfiguration">Kapitel 4</a>)</td></tr>
 <tr><td><code>no remote repository configured -- give one explicitly</code></td><td>einmal <code>amivcs push &lt;name&gt;</code> aufrufen</td></tr>
 <tr><td><code>rejected -- the server has commits you don't have; pull and merge first</code></td><td>jemand hat vorher gepusht: <code>amivcs pull</code>, ggf. <a href="#konflikte">Konflikte</a> lösen, erneut <code>push</code></td></tr>
-<tr><td><code>network error</code>, Meldungen zu bsdsocket.library/AmiSSL</td><td>TCP/IP-Stack online? AmiSSL 5 installiert? Auf dem Amiga nur <code>https://</code>. Diese Meldungen der gemeinsamen HTTP-Bibliothek beginnen mit <code>amicloud:</code></td></tr>
+<tr><td><code>network error</code>, Meldungen zu bsdsocket.library/AmiSSL</td><td>TCP/IP-Stack online? AmiSSL 5 installiert? Auf dem Amiga nur <code>https://</code>. Diese Meldungen der gemeinsamen HTTP-Bibliothek beginnen mit <code>amicloudcore:</code></td></tr>
 <tr><td>HTTP 401</td><td>Benutzer/Passwort falsch oder Konto gesperrt</td></tr>
 <tr><td>Zertifikatsfehler</td><td>Zertifikat des Servers prüfen; <code>verify_ssl=0</code> nur zum Testen</td></tr>
 <tr><td><code>amivcs-gui</code> startet nicht (Amiga)</td><td>MUI 3.8+, TCP/IP-Stack und AmiSSL nötig – auch für lokale Arbeit; <code>amivcs-gui -v</code> zeigt den Grund</td></tr>
