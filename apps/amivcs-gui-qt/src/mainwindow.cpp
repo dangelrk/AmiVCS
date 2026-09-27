@@ -404,7 +404,7 @@ void MainWindow::onPull()
 
 void MainWindow::onAbout()
 {
-    QMessageBox::about(this, tr("About AMIVCS GUI"),
-        tr("AMIVCS GUI v%1\n\nA minimal, git-gui-style graphical front-end for AMIVCS, "
-           "built on libcloudvcs/libcloudvcsgui.").arg(QString::fromUtf8(AC_VERSION)));
+    QMessageBox::about(this, tr("About AmiVCS GUI"),
+        tr("AmiVCS GUI v%1\n\nA minimal, git-gui-style graphical front-end for AmiVCS.\n\n"
+           "(C) 2026 Ronny Krueger\nGNU General Public License v3 or later").arg(QString::fromUtf8(AC_VERSION)));
 }

@@ -514,8 +514,9 @@ static void do_about(void)
 {
     char msg[256];
     snprintf(msg, sizeof(msg),
-            "amivcs-gui v%s\nMinimal git-gui-style AMIVCS frontend\n\n"
-            "Built on libcloudvcs/libcloudvcsgui.", AC_VERSION);
+            "amivcs-gui v%s\nMinimal git-gui-style AmiVCS frontend\n\n"
+            "(C) 2026 Ronny Krueger\n"
+            "GNU General Public License v3 or later", AC_VERSION);
     MUI_Request(g_app, NULL, 0, "About amivcs-gui", "_OK", msg);
 }
 
@@ -607,10 +608,10 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     g_app = ApplicationObject,
         MUIA_Application_Title,       "amivcs-gui",
-        MUIA_Application_Version,     "$VER: amivcs-gui " AC_VERSION,
-        MUIA_Application_Copyright,   "AmiCloud",
-        MUIA_Application_Author,      "AmiCloud",
-        MUIA_Application_Description, "AMIVCS git-gui-style frontend",
+        MUIA_Application_Version,     "$VER: amivcs-gui " AC_VERSION " (27.09.2026)",
+        MUIA_Application_Copyright,   "(C) 2026 Ronny Krueger",
+        MUIA_Application_Author,      "Ronny Krueger",
+        MUIA_Application_Description, "AmiVCS git-gui-style frontend",
         MUIA_Application_Base,        "AMIVCSGUI",
 
         SubWindow, window = WindowObject,

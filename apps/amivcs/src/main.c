@@ -29,7 +29,7 @@
 
 #ifdef PLATFORM_AMIGA
 long __stack = 65536;
-const char amiga_ver[] = "$VER: amivcs 0.1 (12.07.2026)";
+const char amiga_ver[] = "$VER: amivcs " AC_VERSION " (27.09.2026)";
 #endif
 
 /* Own config file, fully separate from amicloud's (plan section 2's
