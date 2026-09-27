@@ -158,6 +158,32 @@ Auf dem Host gibt es kein `oml` (Amiga-Librarian); jedes Programm
 übersetzt die benötigten Bibliotheksquellen deshalb direkt in sein
 eigenes `obj/amiga/` und linkt die Objektdateien ohne `.lib`-Zwischenschritt.
 
+### Cross-Compile unter Windows (MSYS2) – ungetestet
+
+Der Amiga-Build ist unter Windows nicht getestet; vorgesehen ist dieser
+Weg:
+
+1. [MSYS2](https://www.msys2.org/) installieren und in der Umgebung
+   „MSYS“ die Werkzeuge holen: `pacman -S make git python`
+   (`python` wird nur für `make build-amiga-script`,
+   `make verify-amiga-script` und `make check-guide` gebraucht).
+2. vbcc, vasm und vlink als Windows-Programme bereitstellen – aus den
+   Quellen von http://sun.hasenbraten.de/vbcc/ selbst übersetzen (z. B.
+   mit `gcc` aus MSYS2) oder vorkompiliert beziehen – und mit Target und
+   SDKs im oben beschriebenen Layout ablegen, am besten in einem Pfad
+   ohne Leerzeichen, z. B. `C:\vbcc`.
+3. In der MSYS2-Shell den Pfad in MSYS2-Schreibweise angeben und bauen:
+
+   ```sh
+   export VBCC=/c/vbcc
+   make amiga
+   make dist-amiga
+   ```
+
+Auch hier gilt die folgende Stolperfalle: Enthält `config/aos68k`
+absolute Pfade, müssen sie zum Windows-Pfad passen (sonst
+`VC_CONFIG=…`).
+
 ### Stolperfalle: absolute Pfade in `config/aos68k`
 
 Die Datei `$VBCC/config/aos68k` enthält bei vielen Installationen
