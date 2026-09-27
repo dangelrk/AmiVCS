@@ -52,6 +52,7 @@ AmiVCS/
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             Kurzbeschreibung
   LICENSE            GPLv3
+  THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
   C/                 amivcs, amivcs-gui, AMIVCSPrefs
   Docs/              AmiVCS.guide
   Examples/          amivcs.cfg.example

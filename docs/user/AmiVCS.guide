@@ -138,6 +138,7 @@ Das Archiv AmiVCS.lha enthält die Schublade "AmiVCS":
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             Kurzbeschreibung
   LICENSE            Lizenztext (GPLv3)
+  THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
   C/                 amivcs, amivcs-gui, AMIVCSPrefs
   Docs/              AmiVCS.guide (dieses Handbuch)
   Examples/          amivcs.cfg.example
@@ -1015,7 +1016,8 @@ Maßgeblich ist allein der englische Lizenztext in der Datei LICENSE
 https://www.gnu.org/licenses/gpl-3.0.html
 
 Die im Projekt AmiCloudCore enthaltene JSON-Bibliothek Parson steht
-unter der MIT-Lizenz.
+unter der MIT-Lizenz; ihr Wortlaut liegt als THIRD-PARTY-NOTICES in
+der Installationsschublade.
 
 @{" Zurück " link Bauen}  @{" Index " link Main}  @{" Weiter " link Autor}
 @endnode

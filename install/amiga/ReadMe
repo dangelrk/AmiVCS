@@ -14,6 +14,7 @@ Inhalt der Schublade
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             diese Datei
   LICENSE            GNU General Public License, Version 3
+  THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
   C/amivcs           Kommandozeilen-Client
   C/amivcs-gui       grafische Oberfläche (MUI)
   C/AMIVCSPrefs      Einstellungs-Editor für amivcs.cfg
@@ -44,6 +45,7 @@ Lizenz
 
 Copyright (C) 2026 Ronny Krueger. AmiVCS ist freie Software unter der
 GNU General Public License, Version 3 oder später (siehe LICENSE).
+Enthält den JSON-Parser Parson (MIT-Lizenz, siehe THIRD-PARTY-NOTICES).
 Es gibt keine Gewährleistung.
 
 Quelltext, Fehlermeldungen, Wünsche:
