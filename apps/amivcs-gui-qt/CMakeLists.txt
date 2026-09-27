@@ -47,12 +47,27 @@ set(HTTP_DIR ${LIBS_DIR}/libcloudhttp)
 set(VCS_DIR  ${ROOT_DIR}/libs/libcloudvcs)
 set(GUI_DIR  ${ROOT_DIR}/libs/libcloudvcsgui)
 
+# The libraries are built by their own (GNU make) Makefile.pc -- not by
+# ${CMAKE_MAKE_PROGRAM}, which is ninja with the Ninja generator. Runs on
+# every build; the sub-makes only rebuild what changed.
+find_program(GNU_MAKE NAMES gmake make mingw32-make)
+if(NOT GNU_MAKE)
+    message(FATAL_ERROR "GNU make not found -- needed to build the libraries (Makefile.pc)")
+endif()
+set(LIB_ARCHIVES
+    ${LIB_OUT_DIR}/libcloudvcsgui.a
+    ${LIB_OUT_DIR}/libcloudvcs.a
+    ${LIB_OUT_DIR}/libcloudhttp.a
+    ${LIB_OUT_DIR}/libcloudfs.a
+    ${LIB_OUT_DIR}/libcloudcore.a
+)
 add_custom_target(amivcs_gui_build_libs
-    COMMAND ${CMAKE_MAKE_PROGRAM} -C ${CORE_DIR} -f Makefile.pc
-    COMMAND ${CMAKE_MAKE_PROGRAM} -C ${HTTP_DIR} -f Makefile.pc
-    COMMAND ${CMAKE_MAKE_PROGRAM} -C ${FS_DIR}   -f Makefile.pc
-    COMMAND ${CMAKE_MAKE_PROGRAM} -C ${VCS_DIR}  -f Makefile.pc
-    COMMAND ${CMAKE_MAKE_PROGRAM} -C ${GUI_DIR}  -f Makefile.pc
+    COMMAND ${GNU_MAKE} -C ${CORE_DIR} -f Makefile.pc
+    COMMAND ${GNU_MAKE} -C ${HTTP_DIR} -f Makefile.pc
+    COMMAND ${GNU_MAKE} -C ${FS_DIR}   -f Makefile.pc
+    COMMAND ${GNU_MAKE} -C ${VCS_DIR}  -f Makefile.pc
+    COMMAND ${GNU_MAKE} -C ${GUI_DIR}  -f Makefile.pc
+    BYPRODUCTS ${LIB_ARCHIVES}
     COMMENT "Building libcloudcore/fs/http/vcs/vcsgui via their own Makefile.pc"
     VERBATIM
 )
@@ -75,10 +90,11 @@ target_include_directories(amivcs-gui PRIVATE
     ${GUI_DIR}/include/cloudvcsgui
     ${CURL_INCLUDE_DIRS}
 )
-target_link_directories(amivcs-gui PRIVATE ${LIB_OUT_DIR})
+# Full archive paths (not just -lcloudvcs ...) so the build system knows
+# the files: a rebuilt archive (e.g. after a core/ change) relinks the GUI.
 target_link_libraries(amivcs-gui PRIVATE
     Qt6::Widgets
-    cloudvcsgui cloudvcs cloudhttp cloudfs cloudcore
+    ${LIB_ARCHIVES}
     ${CURL_LIBRARIES}
 )
 target_compile_options(amivcs-gui PRIVATE ${CURL_CFLAGS_OTHER})
