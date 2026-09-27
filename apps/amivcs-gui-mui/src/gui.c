@@ -21,6 +21,7 @@
 #include "historylist.h"
 #include "mui_stubs.h"
 #include "localfs.h"
+#include "http.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -415,6 +416,31 @@ static void do_merge_branch(void)
     refresh_ui();
 }
 
+/* Like git, everything except clone/push/pull works without any network:
+ * bsdsocket.library/AmiSSL are only opened on the first remote operation
+ * (main_mui.c no longer calls http_init() at startup). If that fails the
+ * reason is shown and the window stays open for local work; the next
+ * remote operation simply tries again (e.g. after starting the TCP/IP
+ * stack). http_cleanup() in main_mui.c is safe either way. */
+static int g_net_ready = 0;
+
+static int ensure_network(const char *title)
+{
+    if (g_net_ready) return 1;
+    if (!http_init()) {
+        const char *why = http_last_error();
+        MUI_Request(g_app, NULL, 0, (char *)title, "_OK",
+                    "Network initialisation failed%s%s\n\n"
+                    "Clone, Push and Pull need a running TCP/IP stack\n"
+                    "(bsdsocket.library) and AmiSSL 5. Local work is\n"
+                    "not affected.",
+                    (char *)(*why ? ":\n" : "."), (char *)why);
+        return 0;
+    }
+    g_net_ready = 1;
+    return 1;
+}
+
 static int ensure_remote_configured(void)
 {
     char server[AC_MAX_URL], user[64], pass[128];
@@ -438,6 +464,7 @@ static void do_clone(void)
     char repo_name[128], local_dir[512];
     int ok;
 
+    if (!ensure_network("Clone")) return;
     if (!ensure_remote_configured()) return;
     if (!ask_string("Clone: repository name on server", "", repo_name, sizeof(repo_name)) || !repo_name[0]) return;
     if (!ask_string("Clone: local directory", "", local_dir, sizeof(local_dir)) || !local_dir[0]) return;
@@ -455,6 +482,7 @@ static void do_push(void)
 {
     int ok;
     if (!g_session.is_open) return;
+    if (!ensure_network("Push")) return;
     if (!ensure_remote_configured()) return;
 
     begin_remote_op();
@@ -470,6 +498,7 @@ static void do_pull(void)
 {
     int ok;
     if (!g_session.is_open) return;
+    if (!ensure_network("Pull")) return;
     if (!ensure_remote_configured()) return;
 
     begin_remote_op();

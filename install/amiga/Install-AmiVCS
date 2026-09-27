@@ -82,8 +82,8 @@ EndIf
 ; ---- Voraussetzungen für Serververbindungen ---------------------------
 If NOT EXISTS LIBS:amisslmaster.library
   Echo ""
-  Echo "Hinweis: LIBS:amisslmaster.library fehlt. Für clone/push/pull und"
-  Echo "für amivcs-gui werden AmiSSL 5 und ein TCP/IP-Stack benötigt."
+  Echo "Hinweis: LIBS:amisslmaster.library fehlt. Für clone/push/pull"
+  Echo "(auch in amivcs-gui) werden AmiSSL 5 und ein TCP/IP-Stack benötigt."
 EndIf
 
 ; ---- Einstellungen: nie überschreiben ----------------------------------

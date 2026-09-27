@@ -33,7 +33,7 @@ Voraussetzungen
 ---------------
 
   - AmigaOS 3.x, 68000 oder besser (keine FPU nötig)
-  - für clone/push/pull und für amivcs-gui: TCP/IP-Stack mit
+  - nur für clone/push/pull (auch in amivcs-gui): TCP/IP-Stack mit
     bsdsocket.library (z.B. Roadshow, AmiTCP, Miami) und AmiSSL 5
   - für amivcs-gui: MUI 3.8 oder neuer
   - ein AmiVCS-Server nur für clone/push/pull (Einrichtung: siehe

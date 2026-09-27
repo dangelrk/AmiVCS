@@ -100,7 +100,7 @@ Für alle Amiga-Programme:
   - AmigaOS 3.x
   - 68000 oder besser (keine FPU nötig)
 
-Zusätzlich für Serververbindungen (amivcs clone/push/pull und
+Zusätzlich für Serververbindungen (clone/push/pull in amivcs und
 amivcs-gui):
   - ein TCP/IP-Stack mit bsdsocket.library (z.B. Roadshow, AmiTCP
     oder Miami), gestartet und online
@@ -112,11 +112,10 @@ Zusätzlich für amivcs-gui:
 
 AMIVCSPrefs braucht nur Intuition und GadTools aus dem Betriebssystem.
 
-WICHTIG: amivcs (Kommandozeile) öffnet Netzwerk und AmiSSL erst bei
-clone, push oder pull. amivcs-gui dagegen braucht TCP/IP-Stack und
-AmiSSL schon beim Start, auch wenn Sie nur lokal arbeiten. Fehlt etwas,
-zeigt es einen Requester mit der Ursache und beendet sich (siehe
-@{" Fehlersuche " link Fehlersuche}).
+Wie bei git funktioniert alles Lokale ohne Netzwerk: amivcs und
+amivcs-gui öffnen TCP/IP-Stack und AmiSSL erst bei clone, push oder
+pull. Fehlt dann etwas, meldet amivcs-gui die Ursache in einem
+Requester und bleibt geöffnet (siehe @{" Fehlersuche " link Fehlersuche}).
 
 Stack: Alle Programme fordern selbst 64 KB Stack an; der Startcode von
 vbcc legt bei Bedarf einen größeren Stack an. Ein vorheriges "Stack"
@@ -538,8 +537,9 @@ Beispiel mit zwei Rechnern:
 amivcs-gui (MUI, Amiga)
 -----------------------
 
-Grafische Oberfläche im Stil von "git gui". Braucht MUI 3.8+,
-einen laufenden TCP/IP-Stack und AmiSSL (schon beim Start).
+Grafische Oberfläche im Stil von "git gui". Braucht MUI 3.8+; für
+Clone, Push und Pull zusätzlich einen laufenden TCP/IP-Stack und
+AmiSSL. Lokal arbeitet sie wie git auch ohne Netzwerk.
 
 Aufruf:
 
@@ -939,9 +939,13 @@ Zertifikatsfehler
     Zertifikat des Servers prüfen. verify_ssl=0 nur zum Testen.
 
 amivcs-gui startet nicht (Requester statt Fenster)
-    MUI 3.8+, TCP/IP-Stack und AmiSSL müssen vorhanden sein - auch
-    für rein lokale Arbeit. Der Requester nennt den Grund. Mehr
-    Einzelheiten zeigt ein Start im Shell mit "amivcs-gui -v".
+    MUI 3.8 oder neuer fehlt. Der Requester nennt den Grund.
+
+Clone/Push/Pull in amivcs-gui: "Network initialisation failed"
+    TCP/IP-Stack starten bzw. AmiSSL 5 installieren; der Requester
+    nennt den Grund. Das Fenster bleibt offen, der nächste Versuch
+    initialisiert das Netzwerk erneut. Einzelheiten zeigt ein Start im
+    Shell mit "amivcs-gui -v".
 
 Server testen
     curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"

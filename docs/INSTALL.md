@@ -24,7 +24,7 @@ und Zugangsdaten sind nur für `clone`, `push` und `pull` nötig.
 | Was | Wofür |
 |---|---|
 | AmigaOS 3.x, 68000 oder besser | alle Programme (übersetzt für 68000, keine FPU nötig) |
-| TCP/IP-Stack mit `bsdsocket.library` (z. B. Roadshow, AmiTCP, Miami) | `amivcs clone`/`push`/`pull`; **`amivcs-gui` braucht ihn schon beim Start** |
+| TCP/IP-Stack mit `bsdsocket.library` (z. B. Roadshow, AmiTCP, Miami) | Clone/Push/Pull in `amivcs` und `amivcs-gui` – lokal wird er nicht gebraucht |
 | AmiSSL 5 (`amisslmaster.library`) | wie oben; alle Serververbindungen laufen über HTTPS |
 | MUI 3.8 oder neuer (`muimaster.library` ≥ 19) | nur `amivcs-gui` |
 | – | `AMIVCSPrefs` braucht nur Intuition/GadTools |
@@ -33,9 +33,9 @@ Hinweise:
 
 - `amivcs` (Kommandozeile) öffnet Netzwerk und AmiSSL erst bei `clone`,
   `push` oder `pull`. Alle anderen Befehle laufen ohne TCP/IP-Stack.
-- `amivcs-gui` initialisiert Netzwerk und AmiSSL beim Programmstart.
-  Fehlt eines davon, zeigt es einen Requester mit der Ursache und
-  beendet sich.
+- `amivcs-gui` ebenso: Netzwerk und AmiSSL werden erst bei Clone, Push
+  oder Pull geöffnet. Fehlt dann etwas, zeigt es einen Requester mit
+  der Ursache und bleibt geöffnet.
 - Stack: Alle drei Programme fordern selbst 64 KB Stack an (vbcc-Variable
   `__stack`, der Startcode legt bei Bedarf einen größeren Stack an).
   Ein `Stack`-Befehl vorher ist nicht nötig.

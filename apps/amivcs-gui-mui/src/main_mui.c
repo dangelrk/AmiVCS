@@ -136,19 +136,9 @@ int main(int argc, char *argv[])
         return 20;
     }
 
-    if (!http_init()) {
-        char msg[400];
-        const char *why = http_last_error();
-        snprintf(msg, sizeof(msg),
-                 "Network initialisation failed%s%s\n\n"
-                 "amivcs-gui needs a running TCP/IP stack\n"
-                 "(bsdsocket.library) and AmiSSL 5.",
-                 *why ? ":\n" : ".", why);
-        startup_error(argc > 0, msg);
-        close_libs();
-        return 1;
-    }
-
+    /* No http_init() here: like git, local work needs no network --
+     * gui.c opens it on the first clone/push/pull (ensure_network()).
+     * http_cleanup() is a no-op if that never happened. */
     rc = gui_run(&cfg, repo_path);
 
     http_cleanup();
