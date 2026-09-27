@@ -43,6 +43,8 @@ Alle Ziele werden im Projektverzeichnis aufgerufen (`make help` zeigt sie):
 | `make dist-amiga` | baut `make amiga` und legt die Installationsschublade `build/dist/AmiVCS/` an, dazu `build/AmiVCS.lha`, falls `lha` installiert ist |
 | `make build-amiga-script` | erzeugt das native Amiga-Buildskript `Build-Amiga` neu |
 | `make verify-amiga-script` | erzeugt `Build-Amiga` und baut es testweise auf dem Host mit vbcc nach |
+| `make check-guide` | AmigaGuide-Handbuch in `docs/user/` prüfen (Knoten, Verweise, Latin-1, Zeilenlänge) |
+| `make fsuae [PROGS="…"]` | Amiga-Programme im Emulator FS-UAE testen (siehe unten) |
 | `make install` | kopiert alle Programme aus `bin/pc/` nach `$(PREFIX)/bin` (Standard `/usr/local`, `DESTDIR` wird unterstützt) |
 | `make clean` | entfernt alle Build-Ergebnisse (`bin/`, `lib/`, `obj/`, `build/`) |
 
@@ -243,12 +245,12 @@ Dateien lassen sich über `DIST_EXTRA` im Top-Level-`Makefile` hinzufügen
 wird, steht in [INSTALL.md](INSTALL.md).
 
 Das AmigaGuide-Handbuch ist in ISO-8859-1 kodiert. Nach Änderungen
-prüft `python3 scripts/check-guide.py docs/user/AmiVCS.guide` Knoten,
+prüft `make check-guide` (Skript `core/tools/check-guide.py`) Knoten,
 Verweise, Kodierung und Zeilenlänge.
 
 ## 7. Testen im Emulator (FS-UAE)
 
-`scripts/run-fsuae.sh` kopiert die gebauten Amiga-Programme aus
+`make fsuae` (Skript `core/tools/run-fsuae.sh`) kopiert die gebauten Amiga-Programme aus
 `bin/amiga/` in einen Austauschordner und startet FS-UAE. Die Pfade
 werden über Umgebungsvariablen eingestellt:
 
@@ -256,13 +258,13 @@ werden über Umgebungsvariablen eingestellt:
 |---|---|---|
 | `FSUAE_BIN` | FS-UAE-Programm | `fs-uae` aus `PATH`, unter macOS ersatzweise `/Applications/FS-UAE.app/Contents/MacOS/fs-uae` |
 | `FSUAE_CONFIG` | FS-UAE-Konfigurationsdatei (`.fs-uae`) | keiner – muss gesetzt werden |
-| `FSUAE_SHARED` | Host-Ordner, den die Konfiguration als Laufwerk einbindet | keiner – muss gesetzt werden |
+| `FSUAE_SHARED` | Host-Ordner, den die Konfiguration als Laufwerk einbindet | `build/fsuae-shared` |
 
 ```sh
 export FSUAE_CONFIG=$HOME/amiga/entwicklung.fs-uae
 export FSUAE_SHARED=$HOME/amiga/shared
-scripts/run-fsuae.sh                    # alle Programme aus bin/amiga/
-scripts/run-fsuae.sh amivcs amivcs-gui  # nur diese
+make fsuae                           # alle Programme aus bin/amiga/
+make fsuae PROGS="amivcs amivcs-gui"  # nur diese
 ```
 
 Die FS-UAE-Konfiguration muss `FSUAE_SHARED` selbst als Laufwerk

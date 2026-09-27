@@ -32,16 +32,18 @@ HTTP_DIR = $(LIBS_DIR)/libcloudhttp
 FS_DIR   = $(LIBS_DIR)/libcloudfs
 VCS_DIR  = ../../libs/libcloudvcs
 GUI_DIR  = ../../libs/libcloudvcsgui
+COMMON_DIR = ../../core/common
 
 CORE_INC = $(CORE_DIR)/include/cloudcore
 HTTP_INC = $(HTTP_DIR)/include/cloudhttp
 FS_INC   = $(FS_DIR)/include/cloudfs
 VCS_INC  = $(VCS_DIR)/include/cloudvcs
 GUI_INC  = $(GUI_DIR)/include/cloudvcsgui
+COMMON_INC = $(COMMON_DIR)/include/common
 
 # AMISSL_INC before NDK_INC/RUNTIME_INC -- see core/libcloudhttp/Makefile.amiga-cross
 CFLAGS  = $(TARGET) -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=$(CPU) \
-          -Isrc -I$(GUI_INC) -I$(VCS_INC) -I$(CORE_INC) -I$(HTTP_INC) -I$(FS_INC) \
+          -Isrc -I$(COMMON_INC) -I$(GUI_INC) -I$(VCS_INC) -I$(CORE_INC) -I$(HTTP_INC) -I$(FS_INC) \
           -I$(AMISSL_INC) -I$(NET_INC) -I$(MUI_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
 # -lmieee: parson (libcloudcore) uses double arithmetic, which on a 68000
 # (no FPU) needs mathieeedoubbas.library's stub routines.
@@ -66,8 +68,8 @@ VCS_OBJS  = $(VCS_SRCS:%=$(OBJDIR)/vcs_%.o)
 GUILIB_SRCS = graph session
 GUILIB_OBJS = $(GUILIB_SRCS:%=$(OBJDIR)/vcsgui_%.o)
 
-OWN_SRCS = main_mui gui historylist mui_stubs
-OWN_OBJS = $(OWN_SRCS:%=$(OBJDIR)/%.o)
+OWN_SRCS = main_mui gui historylist
+OWN_OBJS = $(OWN_SRCS:%=$(OBJDIR)/%.o) $(OBJDIR)/mui_stubs.o
 
 all: $(OBJDIR) $(BINDIR) $(TARGET_BIN)
 
@@ -79,6 +81,9 @@ $(TARGET_BIN): $(OWN_OBJS) $(GUILIB_OBJS) $(VCS_OBJS) $(HTTP_OBJS) $(FS_OBJS) $(
 	    $(OWN_OBJS) $(GUILIB_OBJS) $(VCS_OBJS) $(HTTP_OBJS) $(FS_OBJS) $(CORE_OBJS) $(GUI_LIBS)
 
 $(OBJDIR)/%.o: src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/mui_stubs.o: $(COMMON_DIR)/src/mui_stubs.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/vcsgui_%.o: $(GUI_DIR)/src/%.c
