@@ -48,7 +48,7 @@ If WARN
     Echo "  C:amivcs-gui installiert."
   EndIf
   If NOT EXISTS LIBS:muimaster.library
-    Echo "  Hinweis: LIBS:muimaster.library fehlt - amivcs-gui braucht MUI 3.8+."
+    Echo "  Hinweis: LIBS:muimaster.library fehlt - amivcs-gui braucht MUI."
   EndIf
 EndIf
 
