@@ -115,7 +115,8 @@ AMIVCSPrefs braucht nur Intuition und GadTools aus dem Betriebssystem.
 WICHTIG: amivcs (Kommandozeile) öffnet Netzwerk und AmiSSL erst bei
 clone, push oder pull. amivcs-gui dagegen braucht TCP/IP-Stack und
 AmiSSL schon beim Start, auch wenn Sie nur lokal arbeiten. Fehlt etwas,
-beendet es sich ohne Fenster (siehe @{" Fehlersuche " link Fehlersuche}).
+zeigt es einen Requester mit der Ursache und beendet sich (siehe
+@{" Fehlersuche " link Fehlersuche}).
 
 Stack: Alle Programme fordern selbst 64 KB Stack an; der Startcode von
 vbcc legt bei Bedarf einen größeren Stack an. Ein vorheriges "Stack"
@@ -937,10 +938,10 @@ HTTP 401 (Invalid credentials)
 Zertifikatsfehler
     Zertifikat des Servers prüfen. verify_ssl=0 nur zum Testen.
 
-amivcs-gui startet nicht (kein Fenster)
+amivcs-gui startet nicht (Requester statt Fenster)
     MUI 3.8+, TCP/IP-Stack und AmiSSL müssen vorhanden sein - auch
-    für rein lokale Arbeit. Im Shell mit "amivcs-gui -v" starten,
-    dann erscheint der Grund.
+    für rein lokale Arbeit. Der Requester nennt den Grund. Mehr
+    Einzelheiten zeigt ein Start im Shell mit "amivcs-gui -v".
 
 Server testen
     curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"

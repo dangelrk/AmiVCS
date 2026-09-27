@@ -34,8 +34,8 @@ Hinweise:
 - `amivcs` (Kommandozeile) öffnet Netzwerk und AmiSSL erst bei `clone`,
   `push` oder `pull`. Alle anderen Befehle laufen ohne TCP/IP-Stack.
 - `amivcs-gui` initialisiert Netzwerk und AmiSSL beim Programmstart.
-  Fehlt eines davon, beendet es sich sofort (ohne Fenster). Den Grund
-  zeigt ein Start mit `amivcs-gui -v` im Shell-Fenster.
+  Fehlt eines davon, zeigt es einen Requester mit der Ursache und
+  beendet sich.
 - Stack: Alle drei Programme fordern selbst 64 KB Stack an (vbcc-Variable
   `__stack`, der Startcode legt bei Bedarf einen größeren Stack an).
   Ein `Stack`-Befehl vorher ist nicht nötig.

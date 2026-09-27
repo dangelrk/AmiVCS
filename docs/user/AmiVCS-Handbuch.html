@@ -202,8 +202,9 @@ eigene Konfigurationsdatei, eigene Zugangsdaten.</p>
 Die Kommandozeile öffnet Netzwerk und AmiSSL erst bei <code>clone</code>,
 <code>push</code> oder <code>pull</code>. <code>amivcs-gui</code> auf dem
 Amiga initialisiert beides dagegen beim Programmstart – auch wenn Sie nur
-lokal arbeiten. Fehlt etwas, beendet es sich ohne Fenster; den Grund
-zeigt ein Start mit <code>amivcs-gui -v</code> im Shell-Fenster.</div>
+lokal arbeiten. Fehlt etwas, zeigt es einen Requester mit der Ursache
+(z.&nbsp;B. <code>cannot open bsdsocket.library</code>) und beendet
+sich.</div>
 
 <p>Stack: Alle Amiga-Programme fordern selbst 64&nbsp;KB Stack an; der
 Startcode von vbcc legt bei Bedarf einen größeren Stack an. Ein
@@ -693,7 +694,7 @@ jeder Anfrage. Antworten: <code>{"status":"ok",…}</code> bzw.
 <tr><td><code>network error</code>, Meldungen zu bsdsocket.library/AmiSSL</td><td>TCP/IP-Stack online? AmiSSL 5 installiert? Auf dem Amiga nur <code>https://</code>. Diese Meldungen der gemeinsamen HTTP-Bibliothek beginnen mit <code>amicloudcore:</code></td></tr>
 <tr><td>HTTP 401</td><td>Benutzer/Passwort falsch oder Konto gesperrt</td></tr>
 <tr><td>Zertifikatsfehler</td><td>Zertifikat des Servers prüfen; <code>verify_ssl=0</code> nur zum Testen</td></tr>
-<tr><td><code>amivcs-gui</code> startet nicht (Amiga)</td><td>MUI 3.8+, TCP/IP-Stack und AmiSSL nötig – auch für lokale Arbeit; <code>amivcs-gui -v</code> zeigt den Grund</td></tr>
+<tr><td><code>amivcs-gui</code> startet nicht (Amiga)</td><td>MUI 3.8+, TCP/IP-Stack und AmiSSL nötig – auch für lokale Arbeit; der Requester nennt den Grund, <code>amivcs-gui -v</code> im Shell zeigt Einzelheiten</td></tr>
 <tr><td><code>HTTPS required</code> vom Server</td><td>per <code>http://</code> statt <code>https://</code> aufgerufen</td></tr>
 </table>
 
