@@ -23,6 +23,8 @@ server=https://amivcs.example.com
 # wenn nie ein Server benutzt wird. Einmalig ueberschreibbar mit
 # "amivcs --author <name> commit ...".
 user=bob
+# Empfohlen: als pass ein App-Passwort aus der Weboberflaeche
+# (Persoenliche Einstellungen -> Geraete & App-Passwoerter):
 pass=geheim
 
 # TLS-Zertifikat des Servers pruefen (1 = ja, Standard; 0 = nur zum

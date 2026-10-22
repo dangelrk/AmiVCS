@@ -31,7 +31,7 @@ am Anfang sind Kommentare. Der Parser stammt aus
 |---|---|
 | `server` | Basis-URL des AmiVCS-Servers, z. B. `https://amivcs.example.com` (ohne `/api.php`; ein abschließender `/` wird entfernt). Auf dem Amiga nur `https://` |
 | `user` (auch `username`) | Benutzername am Server **und** Commit-Autor in `amivcs log`; `amivcs --author <name>` überschreibt ihn für einen Aufruf |
-| `pass` (auch `password`) | Passwort am Server |
+| `pass` (auch `password`) | Passwort am Server – am besten ein App-Passwort aus der Weboberfläche, das sich je Gerät widerrufen lässt |
 | `verify_ssl` | `1` (Standard) prüft das TLS-Zertifikat, `0` nur zum Testen |
 
 Der gemeinsame Parser versteht außerdem `basepath`, `debug`, `gmt_offset`

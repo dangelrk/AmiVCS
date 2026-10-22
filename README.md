@@ -25,7 +25,7 @@ und Branch-Zeiger; jede Merge-Entscheidung fällt auf dem Client.
 | `AMIVCSPrefs` (`apps/amivcs-prefs`) | Amiga | Einstellungs-Editor für `ENV:`/`ENVARC:amivcs.cfg` |
 | `libs/libcloudvcs` | beide | Objektmodell, Objektspeicher, Index, Merge, Packs, Remote-Protokoll |
 | `libs/libcloudvcsgui` | beide | GUI-neutrale Steuerschicht (Sitzung, Graph-Layout) für beide Oberflächen |
-| `server/` | Webserver (PHP + MariaDB) | AmiVCS-Server: `api.php` (Objekt-/Ref-Speicher für die Clients), `web.php` (nur lesende Web-Oberfläche) |
+| `server/` | Webserver (PHP + MariaDB) | AmiVCS-Server: `api.php` (Objekt-/Ref-Speicher für die Clients), `web.php` (Weboberfläche im Stil von Gitea: Code, Historie, Diffs, öffentliche/private Repos, App-Passwörter, Benutzerverwaltung) |
 | `core/` | – | [AmiCloudCore](https://github.com/dangelrk/AmiCloudCore) als Git-Submodul (libcloudcore, libcloudhttp, libcloudfs, gemeinsame Build-Logik) |
 
 ## Schnellstart

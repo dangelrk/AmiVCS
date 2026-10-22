@@ -599,7 +599,9 @@ zeilenweise Zusammenführung; kein Diff-Befehl.</li>
 <li>Kein Aufstieg in übergeordnete Verzeichnisse.</li>
 <li>Kein Rebase, Cherry-Pick, Stash, Reflog, keine Tags, keine signierten
 Commits.</li>
-<li>Auf dem Server nur eigene Repositories, keine Team-Repositories.</li>
+<li>Auf dem Server gehört jedes Repository genau einem Benutzer, keine
+Team-Repositories; öffentliche Repositories können andere nur im Browser
+ansehen.</li>
 <li>Größte Datei = <code>AMIVCS_MAX_UPLOAD</code> des Servers (Standard
 100&nbsp;MB).</li>
 </ul>
@@ -607,7 +609,7 @@ Commits.</li>
 <h2 id="server">15. Server einrichten</h2>
 
 <p>Der Server (<code>server/</code>) läuft auf einem gewöhnlichen
-Webserver: PHP ≥ 7.4 mit <code>pdo_mysql</code>, MariaDB oder MySQL,
+Webserver: PHP ≥ 7.4 mit <code>pdo_mysql</code> und <code>mbstring</code>, MariaDB oder MySQL,
 HTTPS-Zertifikat. Er gehört in die Wurzel eines eigenen vHosts
 (<code>web.php</code> leitet auf <code>/web.php</code> um). Die
 ausführliche Schritt-für-Schritt-Anleitung steht in
@@ -629,9 +631,8 @@ sudo mysql &lt; /var/www/amivcs/sql/schema.sql
 sudo mysql -e "CREATE USER 'amivcs'@'localhost' IDENTIFIED BY 'geheim';
   GRANT SELECT, INSERT, UPDATE, DELETE ON amivcs.* TO 'amivcs'@'localhost';"
 
-php -r "echo password_hash('geheim', PASSWORD_BCRYPT), PHP_EOL;"
-sudo mysql amivcs -e \
-  "INSERT INTO users (username, pass_hash) VALUES ('bob', '\$2y\$10\$...');"
+cd /var/www/amivcs
+sudo -u apache php bin/amivcs-admin.php user:add --admin bob
 
 sudo systemctl reload httpd
 curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"
@@ -646,27 +647,44 @@ curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"
 </table>
 
 <p>Auf den Clients genügt dann <code>server=https://amivcs.example.com</code>.
-Repositories entstehen beim ersten <code>amivcs push &lt;name&gt;</code>.
+Repositories entstehen beim ersten <code>amivcs push &lt;name&gt;</code>
+oder in der Web-Oberfläche. Weitere Benutzer legt der Administrator in der
+Web-Oberfläche an.
 Datensicherung: Datenbank <strong>und</strong> Speicherverzeichnis
 gemeinsam sichern.</p>
 
 <h2 id="webui">16. Web-Oberfläche <span class="platform-tag">Browser</span></h2>
 
-<p>Unter <code>https://amivcs.example.com/web.php</code> sehen Sie Ihre
-Repositories im Browser – Anmeldung mit denselben Zugangsdaten wie in
-<code>amivcs.cfg</code>. Angezeigt werden die Liste Ihrer Repositories
-(Anzahl der Branches, Datum) und je Repository alle Branches sowie die
-vollständige Historie aller Branches mit einem kleinen Graphen.</p>
-
-<p>Die Web-Oberfläche ist nur zum Ansehen da: kein Datei-Browser, kein
-Diff, kein Anlegen von Repositories, kein Commit/Push/Pull. Sie läuft nur
-über HTTPS, mit eigener Sitzung (Cookie <code>SameSite=Strict</code>) und
-CSRF-Schutz beim Anmelden.</p>
+<p>Unter <code>https://amivcs.example.com/</code> (Adresse Ihres Servers)
+bedient sich AmiVCS im Browser ähnlich wie Gitea: Anmeldung mit denselben
+Zugangsdaten wie in <code>amivcs.cfg</code>.</p>
+<ul>
+<li><strong>Code</strong>: Dateibaum je Branch oder Commit, README darunter,
+Dateiansicht mit Zeilennummern, Bilder (PNG/JPEG/GIF), ZIP-Download.
+Amiga-Textdateien in ISO-8859-1 werden richtig angezeigt (Hinweis
+„Latin-1“); Downloads liefern immer die Originalbytes.</li>
+<li><strong>Historie</strong>: alle oder ein Branch, mit Commit-Graph.</li>
+<li><strong>Commit</strong>: Nachricht, Autor, Eltern, geänderte Dateien und
+zeilenweise Änderungen.</li>
+<li><strong>Branches</strong> mit letztem Commit und Standard-Branch.</li>
+<li><strong>Einstellungen</strong> (nur Eigentümer): Beschreibung,
+öffentlich/privat, Standard-Branch, Löschen.</li>
+<li><strong>Persönliche Einstellungen</strong>: Profil, Passwort,
+App-Passwörter (eines je Gerät, einzeln widerrufbar – statt des
+Kontopassworts in <code>amivcs.cfg</code> eintragen).</li>
+<li><strong>Benutzer</strong> (nur Administratoren).</li>
+</ul>
+<p>Öffentliche Repositories sieht jeder, auch ohne Konto (Startseite und
+<em>Entdecken</em>); private sind für alle anderen unsichtbar. Klonen, Push und
+Pull bleiben immer dem Eigentümer vorbehalten. Neue Commits entstehen nur
+auf dem Client – im Browser wird nichts geändert außer den
+Repository-Einstellungen.</p>
 
 <h2 id="api">17. Server-API</h2>
 
 <p><code>https://&lt;host&gt;/api.php?action=…</code>, HTTP-Basic-Auth bei
-jeder Anfrage. Antworten: <code>{"status":"ok",…}</code> bzw.
+jeder Anfrage (Kontopasswort oder App-Passwort; nach 5 Fehlversuchen
+15&nbsp;Minuten Sperre mit 429). Antworten: <code>{"status":"ok",…}</code> bzw.
 <code>{"status":"error","code":N,"message":"…"}</code>;
 <code>get-object</code> liefert die Rohdaten.</p>
 <table>

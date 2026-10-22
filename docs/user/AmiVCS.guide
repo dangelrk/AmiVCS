@@ -1,5 +1,5 @@
 @database "AmiVCS.guide"
-@$VER: AmiVCS.guide 0.3 (27.09.2026)
+@$VER: AmiVCS.guide 0.4 (22.10.2026)
 @author "Ronny Krueger"
 @(c) "2026 Ronny Krueger, GPL-3.0-or-later"
 @wordwrap
@@ -298,7 +298,8 @@ Die Schlüssel:
   user         Benutzername am Server UND Commit-Autor (erscheint in
                "amivcs log"; ohne user heißt der Autor "unknown").
                Andere Schreibweise: username
-  pass         Passwort am Server. Andere Schreibweise: password
+  pass         Passwort am Server, am besten ein App-Passwort aus
+               der Web-Oberfläche. Andere Schreibweise: password
   verify_ssl   1 = Zertifikat des Servers prüfen (Standard),
                0 = nicht prüfen, nur zum Testen!
 
@@ -814,7 +815,7 @@ Server einrichten
 -----------------
 
 Der AmiVCS-Server liegt im Quellarchiv unter server/. Er läuft auf
-einem gewöhnlichen Webserver (PHP 7.4 oder neuer mit pdo_mysql,
+einem gewöhnlichen Webserver (PHP 7.4 oder neuer mit pdo_mysql und mbstring,
 MariaDB oder MySQL, HTTPS-Zertifikat) - nicht auf dem Amiga.
 
 Kurzfassung (Einzelheiten: docs/INSTALL.md im Quellarchiv):
@@ -831,9 +832,9 @@ Kurzfassung (Einzelheiten: docs/INSTALL.md im Quellarchiv):
        AMIVCS_ALLOW_HTTP    nur für lokale Tests, nie produktiv
   4. Datenbank anlegen: sql/schema.sql einspielen, DB-Benutzer
      anlegen.
-  5. Ersten Benutzer anlegen: Passwort-Hash mit
-       php -r "echo password_hash('geheim', PASSWORD_BCRYPT);"
-     erzeugen und in die Tabelle users eintragen.
+  5. Ersten Administrator anlegen (Passwort wird abgefragt):
+       sudo -u apache php bin/amivcs-admin.php user:add --admin bob
+     Weitere Benutzer legt er in der Web-Oberfläche an.
   6. Test:
        curl -u bob:geheim
          "https://amivcs.example.com/api.php?action=status"
@@ -843,7 +844,8 @@ Auf den Clients dann:
 
   server=https://amivcs.example.com
 
-Repositories entstehen beim ersten "amivcs push <name>" von selbst.
+Repositories entstehen beim ersten "amivcs push <name>" von selbst
+oder in der Web-Oberfläche.
 
 @{" Zurück " link Modell}  @{" Index " link Main}  @{" Weiter " link WebUI}
 @endnode
@@ -853,21 +855,30 @@ Repositories entstehen beim ersten "amivcs push <name>" von selbst.
 Web-Oberfläche
 --------------
 
-Unter https://amivcs.example.com/web.php (Adresse Ihres Servers)
-können Sie Ihre Repositories im Browser ansehen. Anmeldung mit
-denselben Zugangsdaten wie in amivcs.cfg.
+Unter https://amivcs.example.com/ (Adresse Ihres Servers) lassen
+sich die Repositories im Browser ansehen, ähnlich wie bei Gitea.
+Anmeldung mit denselben Zugangsdaten wie in amivcs.cfg.
 
-Angezeigt werden:
+  - Code: Dateibaum je Branch oder Commit, README, Dateiansicht
+    mit Zeilennummern, Bilder, ZIP-Download. Textdateien in
+    ISO-8859-1 (Amiga) werden richtig angezeigt.
+  - Historie aller oder eines Branches mit Commit-Graph.
+  - Commit: Nachricht, geänderte Dateien, zeilenweise Änderungen.
+  - Branches mit letztem Commit.
+  - Einstellungen (nur Eigentümer): Beschreibung, öffentlich oder
+    privat, Standard-Branch, Löschen.
+  - Persönliche Einstellungen: Profil, Passwort, App-Passwörter.
+  - Benutzerverwaltung für Administratoren.
 
-  - die Liste Ihrer Repositories mit Anzahl der Branches und Datum
-  - je Repository: alle Branches (Name und OID) und die vollständige
-    Historie aller Branches mit einem kleinen Graphen
+Öffentliche Repositories sieht jeder, auch ohne Konto; private sind
+für andere unsichtbar. clone, push und pull bleiben immer dem
+Eigentümer vorbehalten. Im Browser entstehen keine Commits.
 
-Die Web-Oberfläche ist nur zum Ansehen da: kein Datei-Browser, kein
-Diff, kein Anlegen von Repositories, kein Commit/Push/Pull.
-
-Sie läuft nur über HTTPS (das Sitzungs-Cookie ist entsprechend
-geschützt) und benutzt eine eigene Anmeldung mit CSRF-Schutz.
+App-Passwörter: Je Gerät eines anlegen (Persönliche Einstellungen,
+Geräte und App-Passwörter) und statt des Kontopassworts in
+amivcs.cfg eintragen. Es wird nur einmal angezeigt und lässt sich
+einzeln widerrufen. Nach 5 falschen Anmeldungen sperrt der Server
+15 Minuten.
 
 @{" Zurück " link ServerSetup}  @{" Index " link Main}
 @{" Weiter " link Handler}
@@ -1048,6 +1059,10 @@ Schwesterprojekte:
 
 Versionsgeschichte
 ------------------
+
+Handbuch 0.4 (22.10.2026)
+  - Web-Oberfläche mit Dateibaum, Diffs, öffentlichen
+    Repositories, App-Passwörtern und Benutzerverwaltung.
 
 Handbuch 0.3 (27.09.2026)
   - Projekt heißt jetzt AmiVCS und hat ein eigenes Repository

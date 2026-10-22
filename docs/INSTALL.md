@@ -180,13 +180,15 @@ Die Datei enthält ein Passwort, also am besten `chmod 600 ~/.amivcsrc`.
 
 Der Server (`server/`) ist ein reiner Objekt- und Ref-Speicher: Er nimmt
 Objekte entgegen, liefert sie aus und aktualisiert Branch-Zeiger per
-Compare-and-Swap. Er hat eine **eigene** Datenbank, ein eigenes
+Compare-and-Swap. Dazu kommt eine Weboberfläche (`web.php`) zum Ansehen
+der Repositories und zur Verwaltung von Benutzern und App-Passwörtern. Er hat eine **eigene** Datenbank, ein eigenes
 Speicherverzeichnis und eigene Benutzerkonten – unabhängig von einem
 AmiCloud-Server auf derselben Maschine.
 
 Voraussetzungen:
 
-- Webserver mit PHP ≥ 7.4 (Erweiterung `pdo_mysql`), getestet mit Apache
+- Webserver mit PHP ≥ 7.4 (Erweiterungen `pdo_mysql` und `mbstring`, für
+  ZIP-Downloads `zip`), getestet mit Apache
 - MariaDB oder MySQL
 - eine eigene (Sub-)Domain mit HTTPS-Zertifikat, z. B. per Let's Encrypt.
   Der Server lehnt Klartext-HTTP ab, und `web.php` leitet auf
@@ -204,7 +206,6 @@ Benutzer `www-data`, die vHost-Datei liegt unter `/etc/apache2/sites-available/`
 #    <VirtualHost *:80>
 #        ServerName   amivcs.example.com
 #        DocumentRoot /var/www/amivcs
-#        DirectoryIndex disabled
 #        <Directory /var/www/amivcs>
 #            Options None
 #            AllowOverride All
@@ -236,11 +237,9 @@ sudo mysql < /var/www/amivcs/sql/schema.sql
 sudo mysql -e "CREATE USER 'amivcs'@'localhost' IDENTIFIED BY 'geheim';
   GRANT SELECT, INSERT, UPDATE, DELETE ON amivcs.* TO 'amivcs'@'localhost';"
 
-# 6. Ersten AmiVCS-Benutzer anlegen (es gibt keine Admin-Oberfläche):
-php -r "echo password_hash('geheim', PASSWORD_BCRYPT), PHP_EOL;"
-sudo mysql amivcs -e \
-  "INSERT INTO users (username, pass_hash) VALUES ('bob', '\$2y\$10\$...');"
-#    ('\$2y\$10\$...' durch die Ausgabe des php-Befehls ersetzen)
+# 6. Ersten Administrator anlegen (Passwort wird ohne Echo abgefragt):
+cd /var/www/amivcs
+sudo -u apache php bin/amivcs-admin.php user:add --admin bob
 
 sudo systemctl reload httpd
 ```
@@ -253,6 +252,10 @@ sudo systemctl reload httpd
 | `AMIVCS_STORAGE_PATH` | absoluter Pfad des Objektspeichers, **außerhalb** des Web-Roots; Objekte landen unter `<pfad>/<benutzer>/<repo>/objects/<2 hex>/<30 hex>` |
 | `AMIVCS_MAX_UPLOAD` | größtes einzelnes Objekt in Bytes (Standard 100 MB) – praktisch die größte versionierbare Datei. `post_max_size` und `upload_max_filesize` in `php.ini` passend setzen |
 | `AMIVCS_ALLOW_HTTP` | nur für lokale Tests (`php -S`): erlaubt Klartext-HTTP. **Nie in Produktion** |
+| `AMIVCS_TIMEZONE` | optional, Zeitzone der Datumsanzeige in der Weboberfläche (Standard `Europe/Berlin`) |
+
+Unter PHP-FPM setzt die mitgelieferte `.user.ini` die Upload-Grenzen
+passend zu 100 MB; unter `mod_php` dieselben Werte in die `php.ini`.
 
 Test:
 
@@ -266,16 +269,32 @@ Danach:
 - API für die Clients: `https://amivcs.example.com/api.php` – in der
   Client-Konfiguration aber nur die Basis-URL eintragen:
   `server=https://amivcs.example.com`
-- Web-Oberfläche (nur lesend: Repository-Liste, Branches, Historie mit
-  Graph): `https://amivcs.example.com/web.php`
+- Startseite: `https://amivcs.example.com/` (öffentliche Repositories)
+- Weboberfläche: `https://amivcs.example.com/web.php` – Dateibaum,
+  Dateiansicht, Historie mit Graph, Commits mit Diff, Branches, ZIP-Download;
+  Repository-Einstellungen (Beschreibung, öffentlich/privat,
+  Standard-Branch, Löschen), persönliche Einstellungen mit App-Passwörtern,
+  Benutzerverwaltung für Administratoren.
 
-Repositories werden nicht auf dem Server angelegt, sondern beim ersten
-`amivcs push <name>` automatisch (Namen: Buchstaben, Ziffern, `_`, `.`,
-`-`, höchstens 128 Zeichen). Jeder Benutzer sieht nur seine eigenen
-Repositories.
+Repositories entstehen beim ersten `amivcs push <name>` automatisch oder
+in der Weboberfläche (Namen: Buchstaben, Ziffern, `_`, `.`, `-`, nicht mit
+`.` beginnend, höchstens 128 Zeichen). Neue Repositories sind **privat**;
+in den Repository-Einstellungen lassen sie sich öffentlich schalten – dann
+kann jeder sie im Browser ansehen und als ZIP laden. `clone`, `push` und
+`pull` bleiben immer dem Eigentümer vorbehalten.
 
-Weitere Benutzer legt man wie in Schritt 6 an; einen Benutzer sperrt
-`UPDATE users SET active = 0 WHERE username = 'bob';`.
+Benutzer verwaltet der Administrator in der Weboberfläche (Benutzermenü →
+*Benutzer*) oder mit `bin/amivcs-admin.php` (`user:list`, `user:add`,
+`user:passwd`, `user:admin <name> on|off`, `user:disable`, `user:enable`,
+`user:delete`, `repo:list`), immer als `sudo -u apache php …`. Für die
+Clients empfiehlt sich je Gerät ein **App-Passwort** (Weboberfläche →
+*Persönliche Einstellungen*). Nach 5 Fehlversuchen pro Benutzer und IP
+sperrt der Server 15 Minuten (HTTP 429).
+
+**Nachrüsten einer bestehenden Installation:** `sql/migrate_001.sql` als
+MariaDB-root einspielen (der Datenbankbenutzer `amivcs` darf kein
+`ALTER`), danach einen vorhandenen Benutzer zum Administrator machen:
+`sudo -u apache php bin/amivcs-admin.php user:admin bob on`.
 
 Datensicherung: Datenbank (`mysqldump amivcs`) **und**
 `AMIVCS_STORAGE_PATH` gemeinsam sichern – die Datenbank enthält nur

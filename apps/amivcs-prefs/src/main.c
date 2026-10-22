@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
     g_user = prefsgui_field_string(&lay, "Benutzer (= Autor)", GID_USER, cfg.username, sizeof(cfg.username) - 1);
     if (!g_user) goto fail;
 
-    g_pass = prefsgui_field_string(&lay, "Passwort", GID_PASS, cfg.password, sizeof(cfg.password) - 1);
+    g_pass = prefsgui_field_string(&lay, "(App-)Passwort", GID_PASS, cfg.password, sizeof(cfg.password) - 1);
     if (!g_pass) goto fail;
 
     g_verifyssl = prefsgui_field_checkbox(&lay, "Zertifikat pruefen", GID_VERIFYSSL, cfg.verify_ssl);
