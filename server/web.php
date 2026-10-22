@@ -1,330 +1,378 @@
 <?php
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Ronny Krueger
+define('AMIVCS_SERVER', 1);
+require __DIR__ . '/config.php';
+
+/* Weboberflaeche (docs/design/webui-plan.md): eigene und oeffentliche
+ * Repositories ansehen -- Code, Historie mit Graph, Commits mit Diff,
+ * Branches --, Repo-Einstellungen, persoenliche Einstellungen mit
+ * App-Passwoertern, Benutzerverwaltung. Rein lesend gegenueber dem
+ * Repository-Inhalt: Commits entstehen nur auf dem Client (ADR 09/10).
+ *
+ * GET  ?view=repos|explore|settings|users|login
+ * GET  ?r=<besitzer>/<repo>&v=code|blob|raw|zip|history|commit|branches|settings
+ *      [&ref=<branch|commit>][&p=<pfad>][&c=<commit>][&page=n][&dl=1]
+ * POST do=... (immer mit CSRF-Token) */
+
+date_default_timezone_set(defined('AMIVCS_TIMEZONE') ? AMIVCS_TIMEZONE : 'Europe/Berlin');
+
+/* ── HTTPS enforce (AMIVCS_ALLOW_HTTP: nur lokale Entwicklung) ─────────
+ * Vor session_start(), damit nie ein Session-Cookie ueber HTTP entsteht. */
+$https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+if (!$https && !(defined('AMIVCS_ALLOW_HTTP') && AMIVCS_ALLOW_HTTP)) {
+    header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
+    exit;
+}
 session_set_cookie_params([
     'lifetime' => 0,
     'path'     => '/',
-    'secure'   => true,
+    'secure'   => $https,
     'httponly' => true,
-    'samesite' => 'Strict',
+    'samesite' => 'Lax',  /* oeffentliche Repo-Links kommen oft von fremden Seiten */
 ]);
 session_start();
-define('AMIVCS_SERVER', 1);
 
-require __DIR__ . '/config.php';
 require __DIR__ . '/includes/Version.php';
+require __DIR__ . '/includes/Response.php';
 require __DIR__ . '/includes/DB.php';
+require __DIR__ . '/includes/Throttle.php';
+require __DIR__ . '/includes/Users.php';
+require __DIR__ . '/includes/AppPasswords.php';
 require __DIR__ . '/includes/Auth.php';
 require __DIR__ . '/includes/Repos.php';
 require __DIR__ . '/includes/ObjectDecoder.php';
 require __DIR__ . '/includes/GraphLayout.php';
+require __DIR__ . '/includes/Diff.php';
+require __DIR__ . '/includes/RepoReader.php';
+require __DIR__ . '/includes/web/helpers.php';
+require __DIR__ . '/includes/web/layout.php';
+require __DIR__ . '/includes/web/repos.php';
+require __DIR__ . '/includes/web/repo.php';
+require __DIR__ . '/includes/web/settings.php';
+require __DIR__ . '/includes/web/users.php';
 
-/* Auth::requireBasicAuth()/Response::* are api.php's stateless, JSON-only
- * contract for the C clients -- this file is a session/cookie-based
- * human UI and never includes Response.php (every one of its methods
- * calls exit(), incompatible with rendering an HTML page) or calls
- * Auth::requireBasicAuth() (see the login section below instead). */
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
+header('X-Frame-Options: SAMEORIGIN');
 
-/* ── Helpers ─────────────────────────────────────────────────────────── */
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(16));
+}
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+$do     = (string)($_POST['do'] ?? '');
 
-function h(string $s): string
-{
-    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+if ($isPost && !hash_equals($_SESSION['csrf'], (string)($_POST['csrf'] ?? ''))) {
+    flash('Die Sitzung ist abgelaufen. Bitte erneut versuchen.', 'error');
+    redirect('/web.php');
 }
 
-function formatDate(int $epochSeconds): string
-{
-    return gmdate('Y-m-d H:i:s', $epochSeconds) . ' UTC';
-}
-
-/* AMIVCS_STORAGE_PATH/<owner>/<repo>/objects/<2-hex>/<30-hex> -- same
- * fan-out formula as ObjectStore.php's private objectPath(), duplicated
- * here rather than exposed publicly there since that class's contract is
- * the stateless API (has/put-object/get-object), not general path
- * lookup for a different caller. */
-function objectFilePath(string $repoName, string $oid): string
-{
-    return Repos::storagePath($repoName) . '/objects/' . substr($oid, 0, 2) . '/' . substr($oid, 2);
-}
-
-/* Reads and decodes a commit object straight off disk for the given
- * repo. Returns null (skip, don't fail the whole history render) if the
- * object is missing, unreadable, or not actually a commit -- a
- * defensively-coded display path, not a place to surface a hard error
- * over one bad object. */
-function makeCommitReader(int $repoId, string $repoName): callable
-{
-    return function (string $oid) use ($repoId, $repoName): ?array {
-        static $cache = [];
-        if (array_key_exists($oid, $cache)) return $cache[$oid];
-
-        $stmt = DB::get()->prepare('SELECT type FROM objects WHERE repo_id = ? AND oid = ?');
-        $stmt->execute([$repoId, $oid]);
-        $row = $stmt->fetch();
-        if (!$row || (int)$row['type'] !== 2) { return $cache[$oid] = null; }
-
-        $data = @file_get_contents(objectFilePath($repoName, $oid));
-        if ($data === false) { return $cache[$oid] = null; }
-
-        try {
-            return $cache[$oid] = ObjectDecoder::decodeCommit($data);
-        } catch (RuntimeException $e) {
-            return $cache[$oid] = null;
-        }
-    };
-}
-
-/* ── HTTPS enforce (AMIVCS_ALLOW_HTTP: local development only) ───────── */
-if ((empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off')
-    && !(defined('AMIVCS_ALLOW_HTTP') && AMIVCS_ALLOW_HTTP)) {
-    header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
-    exit;
-}
-
-/* ── Logout ──────────────────────────────────────────────────────────── */
-if (isset($_GET['logout'])) {
-    session_destroy();
-    header('Location: /web.php');
-    exit;
-}
-
-/* ── Login ───────────────────────────────────────────────────────────── */
-$loginError = '';
-
-if (!isset($_SESSION['user_id'])) {
-    if (empty($_SESSION['csrf'])) {
-        $_SESSION['csrf'] = bin2hex(random_bytes(16));
+/* ── Anmelden ────────────────────────────────────────────────────────── */
+if ($isPost && $do === 'login') {
+    $r = Auth::webLogin((string)($_POST['username'] ?? ''), (string)($_POST['password'] ?? ''));
+    if (is_array($r)) {
+        Auth::startSession($r);
+        redirect('/web.php');
     }
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['username'])) {
-        if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
-            $loginError = 'Invalid request.';
-        } else {
-            $stmt = DB::get()->prepare(
-                'SELECT id, pass_hash FROM users WHERE username = ? AND active = 1 LIMIT 1'
-            );
-            $stmt->execute([trim($_POST['username'])]);
-            $row = $stmt->fetch();
-
-            if ($row && password_verify($_POST['password'] ?? '', $row['pass_hash'])) {
-                session_regenerate_id(true);
-                $_SESSION['user_id']  = (int)$row['id'];
-                $_SESSION['username'] = trim($_POST['username']);
-                $_SESSION['csrf']     = bin2hex(random_bytes(16));
-                header('Location: /web.php');
-                exit;
-            }
-            $loginError = 'Invalid credentials.';
-        }
-    }
-
-    renderLogin($loginError);
+    renderLogin($r);
     exit;
 }
 
-/* ── Auth state ──────────────────────────────────────────────────────── */
-Auth::$user_id  = $_SESSION['user_id'];
-Auth::$username = $_SESSION['username'];
+$loggedIn = Auth::loadSessionUser();
+$uid      = Auth::$user_id;
 
-/* ── Repo detail (branches + full multi-branch history) ───────────────── */
-$repoName = trim((string)($_GET['repo'] ?? ''));
-if ($repoName !== '') {
-    $stmt = DB::get()->prepare('SELECT id, name, created_at FROM repos WHERE owner_id = ? AND name = ?');
-    $stmt->execute([Auth::$user_id, $repoName]);
-    $repo = $stmt->fetch();
-    if (!$repo) {
-        header('Location: /web.php');
+function requireLogin(): void
+{
+    global $loggedIn;
+    if (!$loggedIn) {
+        renderLogin('');
         exit;
     }
-    $repoId = (int)$repo['id'];
+}
 
-    $stmt = DB::get()->prepare('SELECT name, oid FROM refs WHERE repo_id = ? ORDER BY name');
-    $stmt->execute([$repoId]);
-    $refs = $stmt->fetchAll();
+function requireAdmin(): void
+{
+    requireLogin();
+    if (!Auth::$is_admin) {
+        http_response_code(403);
+        exit('Nur für Administratoren.');
+    }
+}
 
-    $graph = GraphLayout::build($refs, makeCommitReader($repoId, $repoName));
-
-    renderRepoDetail($repo, $refs, $graph);
+function notFound(string $what = 'Diese Seite gibt es nicht.'): void
+{
+    http_response_code(404);
+    $hint = Auth::$user_id === 0
+        ? '<span>Private Repositories sind nur nach dem <a href="' . h(webUrl(['view' => 'login'])) . '">Anmelden</a> für ihren Eigentümer sichtbar.</span>'
+        : '';
+    renderLayout('Nicht gefunden', '', '<div class="empty card">' . icon('search', 'ic empty-ic')
+        . '<strong>' . h($what) . '</strong>' . $hint . '</div>');
     exit;
 }
 
-/* ── Repo list ───────────────────────────────────────────────────────── */
-$stmt = DB::get()->prepare(
-    'SELECT r.id, r.name, r.created_at,
-            (SELECT COUNT(*) FROM refs WHERE repo_id = r.id) AS branch_count
-       FROM repos r
-      WHERE r.owner_id = ?
-      ORDER BY r.name'
-);
-$stmt->execute([Auth::$user_id]);
-$repos = $stmt->fetchAll();
-
-renderRepoList($repos);
-
-
-/* ════════════════════════════════════════════════════════════════════════
-   Render: Login
-   ════════════════════════════════════════════════════════════════════════ */
-function renderLogin(string $error): void
+/* Datei ausliefern. Inline nur Text (als text/plain) und PNG/JPEG/GIF,
+ * alles andere als Download; nie HTML/SVG unter der eigenen Origin. */
+function sendFile(string $file, string $name, string $mime, bool $inline): void
 {
-    $csrf = $_SESSION['csrf'];
-?><!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AMIVCS v<?= AMIVCS_VERSION ?> — Login</title>
-  <link rel="stylesheet" href="/web.css">
-</head>
-<body class="login-page">
-  <div class="login-box">
-    <h1><span class="c-ami">AMI</span><span class="c-vcs">VCS</span></h1>
-    <?php if ($error !== ''): ?>
-      <div class="msg-error"><?= h($error) ?></div>
-    <?php endif; ?>
-    <form method="post" action="/web.php">
-      <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
-      <label>Username
-        <input type="text" name="username" autofocus autocomplete="username">
-      </label>
-      <label>Password
-        <input type="password" name="password" autocomplete="current-password">
-      </label>
-      <button type="submit">Sign in</button>
-    </form>
-  </div>
-</body>
-</html>
-<?php
+    $ascii = preg_replace('/[^\x20-\x7e]|["\\\\]/', '_', $name);
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($file));
+    header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . '; filename="' . $ascii
+           . '"; filename*=UTF-8\'\'' . rawurlencode($name));
+    header("Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'");
+    readfile($file);
+    exit;
 }
 
-
-/* ════════════════════════════════════════════════════════════════════════
-   Render: Repo list
-   ════════════════════════════════════════════════════════════════════════ */
-function renderRepoList(array $repos): void
+/* Repo eines POST-Formulars, nur fuer den Eigentuemer */
+function ownRepoFromPost(): array
 {
-?><!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AMIVCS v<?= AMIVCS_VERSION ?> — Repositories</title>
-  <link rel="stylesheet" href="/web.css">
-</head>
-<body>
-  <header class="topbar">
-    <a href="/web.php" class="brand"><span class="c-ami">AMI</span><span class="c-vcs">VCS</span></a>
-    <span class="userinfo">
-      <?= h(Auth::$username) ?>
-      <a href="/web.php?logout" class="btn-logout">Sign out</a>
-    </span>
-  </header>
-  <main>
-    <h2>Your repositories</h2>
-    <table class="repotable">
-      <thead>
-        <tr><th>Name</th><th>Branches</th><th>Created</th></tr>
-      </thead>
-      <tbody>
-        <?php foreach ($repos as $r): ?>
-        <tr>
-          <td><a href="/web.php?repo=<?= urlencode($r['name']) ?>"><?= h($r['name']) ?></a></td>
-          <td class="col-meta"><?= (int)$r['branch_count'] ?></td>
-          <td class="col-meta"><?= h(substr((string)$r['created_at'], 0, 16)) ?></td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (empty($repos)): ?>
-        <tr><td colspan="3" class="empty">No repositories yet -- create one via the amivcs CLI/GUI (`amivcs push`).</td></tr>
-        <?php endif; ?>
-      </tbody>
-    </table>
-  </main>
-  <footer class="pagefooter">AMIVCS v<?= AMIVCS_VERSION ?></footer>
-</body>
-</html>
-<?php
+    $parts = explode('/', (string)($_POST['r'] ?? ''), 2);
+    $repo  = count($parts) === 2 ? Repos::forView($parts[0], $parts[1]) : null;
+    if ($repo === null || !$repo['is_owner']) {
+        notFound();
+    }
+    return $repo;
 }
 
+/* ── POST-Aktionen (nur angemeldet) ──────────────────────────────────── */
+if ($isPost) {
+    requireLogin();
+    switch ($do) {
+    case 'logout':
+        $_SESSION = [];
+        session_destroy();
+        redirect('/web.php?view=explore');
 
-/* ════════════════════════════════════════════════════════════════════════
-   Render: Repo detail (branches + full multi-branch history)
-   ════════════════════════════════════════════════════════════════════════ */
-function renderRepoDetail(array $repo, array $refs, array $graph): void
-{
-    $maxLanes = max(1, $graph['max_lanes']);
-?><!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AMIVCS v<?= AMIVCS_VERSION ?> — <?= h($repo['name']) ?></title>
-  <link rel="stylesheet" href="/web.css">
-</head>
-<body>
-  <header class="topbar">
-    <a href="/web.php" class="brand"><span class="c-ami">AMI</span><span class="c-vcs">VCS</span></a>
-    <span class="userinfo">
-      <?= h(Auth::$username) ?>
-      <a href="/web.php?logout" class="btn-logout">Sign out</a>
-    </span>
-  </header>
-  <main>
-    <nav class="breadcrumb"><a href="/web.php">Repositories</a> <span class="sep">›</span> <?= h($repo['name']) ?></nav>
+    case 'repo_create':
+        $name = trim((string)($_POST['name'] ?? ''));
+        $err  = Repos::createFor($uid, Auth::$username, $name, trim((string)($_POST['description'] ?? '')),
+                                 !empty($_POST['is_public']));
+        if ($err !== null) {
+            flash($err, 'error');
+            redirect(webUrl());
+        }
+        flash("Repository $name angelegt.");
+        redirect(webUrl(['r' => Auth::$username . '/' . $name]));
 
-    <h2><?= h($repo['name']) ?></h2>
+    case 'repo_settings':
+        $repo = ownRepoFromPost();
+        $err  = Repos::updateSettings((int)$repo['id'], trim((string)($_POST['description'] ?? '')),
+                                      !empty($_POST['is_public']), (string)($_POST['default_branch'] ?? ''));
+        flash($err ?? 'Einstellungen gespeichert.', $err ? 'error' : 'info');
+        redirect(repoUrl($repo, 'settings'));
 
-    <h3>Branches</h3>
-    <ul class="branchlist">
-      <?php foreach ($refs as $r): ?>
-      <li>
-        <span class="branch-name"><?= h(preg_replace('#^refs/heads/#', '', $r['name'])) ?></span>
-        <span class="branch-oid"><?= h(substr($r['oid'], 0, 8)) ?></span>
-      </li>
-      <?php endforeach; ?>
-      <?php if (empty($refs)): ?>
-      <li class="empty">No branches yet</li>
-      <?php endif; ?>
-    </ul>
+    case 'repo_delete':
+        $repo = ownRepoFromPost();
+        if ((string)($_POST['confirm'] ?? '') !== $repo['name']) {
+            flash('Löschen abgebrochen: Der eingetippte Name stimmt nicht.', 'error');
+            redirect(repoUrl($repo, 'settings'));
+        }
+        $err = Repos::delete($repo);
+        flash($err ?? "Repository {$repo['name']} gelöscht.", $err ? 'error' : 'info');
+        redirect(webUrl());
 
-    <h3>History</h3>
-    <table class="historytable">
-      <thead>
-        <tr><th class="col-graph">Graph</th><th>OID</th><th>Author</th><th>Date</th><th>Message</th></tr>
-      </thead>
-      <tbody>
-        <?php foreach ($graph['rows'] as $row): ?>
-        <tr>
-          <td class="col-graph">
-            <svg width="<?= $maxLanes * 16 ?>" height="20" class="graph-svg">
-              <?php foreach ($row['active_lanes'] as $lane): ?>
-                <?php if ($lane !== $row['lane']): ?>
-                <line x1="<?= $lane * 16 + 8 ?>" y1="0" x2="<?= $lane * 16 + 8 ?>" y2="20" class="graph-line" />
-                <?php endif; ?>
-              <?php endforeach; ?>
-              <?php foreach ($row['parent_lanes'] as $plane): ?>
-                <line x1="<?= $row['lane'] * 16 + 8 ?>" y1="10" x2="<?= $plane * 16 + 8 ?>" y2="20" class="graph-line" />
-              <?php endforeach; ?>
-              <circle cx="<?= $row['lane'] * 16 + 8 ?>" cy="10" r="4" class="graph-dot" />
-            </svg>
-          </td>
-          <td class="col-meta"><?= h(substr($row['oid'], 0, 8)) ?></td>
-          <td class="col-meta"><?= h($row['author']) ?></td>
-          <td class="col-meta"><?= h(formatDate($row['mtime'])) ?></td>
-          <td>
-            <?php if ($row['decoration'] !== ''): ?><span class="deco">[<?= h($row['decoration']) ?>]</span> <?php endif; ?>
-            <?= h($row['message']) ?>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (empty($graph['rows'])): ?>
-        <tr><td colspan="5" class="empty">No commits yet</td></tr>
-        <?php endif; ?>
-      </tbody>
-    </table>
-  </main>
-  <footer class="pagefooter">AMIVCS v<?= AMIVCS_VERSION ?></footer>
-</body>
-</html>
-<?php
+    case 'profile':
+        $err = Users::updateProfile($uid, trim((string)($_POST['display_name'] ?? '')), trim((string)($_POST['email'] ?? '')));
+        flash($err ?? 'Profil gespeichert.', $err ? 'error' : 'info');
+        redirect(webUrl(['view' => 'settings']));
+
+    case 'password':
+        $new = (string)($_POST['new'] ?? '');
+        if (!password_verify((string)($_POST['current'] ?? ''), Auth::$user['pass_hash'])) {
+            $err = 'Das aktuelle Passwort ist falsch.';
+        } elseif ($new !== (string)($_POST['new2'] ?? '')) {
+            $err = 'Die neuen Passwörter stimmen nicht überein.';
+        } else {
+            $err = Users::setPassword($uid, $new);
+        }
+        if ($err === null) {
+            Auth::startSession(Users::find($uid));
+        }
+        flash($err ?? 'Passwort geändert. Andere Browser-Sitzungen wurden abgemeldet.', $err ? 'error' : 'info');
+        redirect(webUrl(['view' => 'settings']));
+
+    case 'apppw_create':
+        $name = trim((string)($_POST['name'] ?? ''));
+        [$token, $err] = AppPasswords::create($uid, $name);
+        if ($err !== null) {
+            flash($err, 'error');
+        } else {
+            $_SESSION['new_token'] = ['name' => $name, 'token' => $token];
+        }
+        redirect(webUrl(['view' => 'settings']) . '#devices');
+
+    case 'apppw_revoke':
+        AppPasswords::revoke($uid, (int)($_POST['id'] ?? 0));
+        flash('App-Passwort widerrufen.');
+        redirect(webUrl(['view' => 'settings']) . '#devices');
+
+    case 'user_create':
+        requireAdmin();
+        [$id, $err] = Users::create(
+            trim((string)($_POST['username'] ?? '')), (string)($_POST['password'] ?? ''),
+            trim((string)($_POST['display_name'] ?? '')), trim((string)($_POST['email'] ?? '')),
+            !empty($_POST['is_admin'])
+        );
+        flash($err ?? 'Benutzer ' . trim((string)$_POST['username']) . ' angelegt.', $err ? 'error' : 'info');
+        redirect(webUrl(['view' => 'users']));
+
+    case 'user_update':
+        requireAdmin();
+        $id  = (int)($_POST['id'] ?? 0);
+        $err = Users::updateProfile($id, trim((string)($_POST['display_name'] ?? '')), trim((string)($_POST['email'] ?? '')));
+        $err = $err ?? Users::updateAdmin($id, !empty($_POST['is_admin']), !empty($_POST['active']));
+        if ($err === null && (string)($_POST['password'] ?? '') !== '') {
+            $err = Users::setPassword($id, (string)$_POST['password']);
+            if ($err === null && $id === $uid) {
+                Auth::startSession(Users::find($uid));
+            }
+        }
+        flash($err ?? 'Änderungen gespeichert.', $err ? 'error' : 'info');
+        redirect(webUrl(['view' => 'users']));
+
+    case 'user_delete':
+        requireAdmin();
+        $row = Users::find((int)($_POST['id'] ?? 0));
+        if ($row === null || (string)($_POST['confirm'] ?? '') !== $row['username']) {
+            flash('Löschen abgebrochen: Der eingetippte Name stimmt nicht.', 'error');
+        } else {
+            $err = Users::delete((int)$row['id'], $uid);
+            flash($err ?? "Benutzer {$row['username']} gelöscht.", $err ? 'error' : 'info');
+        }
+        redirect(webUrl(['view' => 'users']));
+
+    default:
+        http_response_code(400);
+        exit('Unbekannte Aktion.');
+    }
+}
+
+/* ── Repository-Seiten (auch anonym, Zugriff per Repos::forView) ─────── */
+if (isset($_GET['r'])) {
+    $parts = explode('/', (string)$_GET['r'], 2);
+    $repo  = count($parts) === 2 ? Repos::forView($parts[0], $parts[1]) : null;
+    if ($repo === null) {
+        notFound('Dieses Repository gibt es nicht – oder es ist privat.');
+    }
+    $rd   = new RepoReader($repo);
+    $view = (string)($_GET['v'] ?? 'code');
+
+    if ($view === 'branches') {
+        renderLayout($repo['name'], $repo['is_owner'] ? 'repos' : 'explore', renderBranches($repo, $rd));
+        exit;
+    }
+    if ($view === 'settings') {
+        if (!$repo['is_owner']) {
+            notFound();
+        }
+        renderLayout($repo['name'], 'repos', renderRepoSettings($repo, $rd));
+        exit;
+    }
+    if ($view === 'commit') {
+        $c = (string)($_GET['c'] ?? '');
+        if (!RepoReader::isOid($c) || $rd->commit($c) === null) {
+            notFound('Diesen Commit gibt es nicht.');
+        }
+        renderLayout(subjectLine($rd->commit($c)['message']) . ' · ' . $repo['name'],
+                     $repo['is_owner'] ? 'repos' : 'explore', renderCommit($repo, $rd, $c));
+        exit;
+    }
+    if ($view === 'history') {
+        $ref = (string)($_GET['ref'] ?? '');
+        renderLayout('Historie · ' . $repo['name'], $repo['is_owner'] ? 'repos' : 'explore',
+                     renderHistory($repo, $rd, $ref, max(0, (int)($_GET['page'] ?? 0))));
+        exit;
+    }
+
+    /* code, blob, raw, zip: brauchen einen Stand */
+    $def = $rd->defaultBranch();
+    if ($def === null) {
+        renderLayout($repo['name'], $repo['is_owner'] ? 'repos' : 'explore', repoHeader($repo, 'code') . emptyRepo($repo));
+        exit;
+    }
+    $ref       = (string)($_GET['ref'] ?? $def['short']);
+    $commitOid = $rd->resolve($ref);
+    if ($commitOid === null) {
+        notFound('Diesen Branch oder Commit gibt es nicht.');
+    }
+    $path = trim((string)($_GET['p'] ?? ''), '/');
+    $node = $rd->lookup($commitOid, $path);
+    if ($node === null) {
+        notFound('Diesen Pfad gibt es in diesem Stand nicht.');
+    }
+
+    if ($view === 'zip') {
+        if ($node['type'] !== 'tree') {
+            notFound();
+        }
+        $label = RepoReader::isOid($ref) ? shortOid($ref) : preg_replace('/[^A-Za-z0-9_.-]/', '-', $ref);
+        $root  = $repo['name'] . '-' . $label . ($path !== '' ? '-' . preg_replace('/[^A-Za-z0-9_.-]/', '-', basename($path)) : '');
+        $tmp   = $rd->zip($node['oid'], $root);
+        if ($tmp[0] !== '/') {
+            flash($tmp, 'error');
+            redirect(repoUrl($repo, 'code', ['ref' => $ref, 'p' => $path]));
+        }
+        @set_time_limit(0);
+        sendFile($tmp, $root . '.zip', 'application/zip', false);
+    }
+    if ($view === 'raw') {
+        if ($node['type'] !== 'blob' || ($file = $rd->blobPath($node['oid'])) === null) {
+            notFound();
+        }
+        $image = imageMime($node['name']);
+        if (!empty($_GET['dl'])) {
+            sendFile($file, $node['name'], 'application/octet-stream', false);
+        }
+        if ($image !== null) {
+            sendFile($file, $node['name'], $image, true);
+        }
+        $head = (string)file_get_contents($file, false, null, 0, 8000);
+        if (RepoReader::isBinary($head)) {
+            sendFile($file, $node['name'], 'application/octet-stream', false);
+        }
+        $all = filesize($file) <= DISPLAY_MAX_BYTES ? (string)file_get_contents($file) : $head;
+        $cs  = mb_check_encoding($all, 'UTF-8') ? 'utf-8' : 'iso-8859-1';
+        sendFile($file, $node['name'], 'text/plain; charset=' . $cs, true);
+    }
+
+    $active = $repo['is_owner'] ? 'repos' : 'explore';
+    if ($node['type'] === 'blob') {
+        renderLayout($node['name'] . ' · ' . $repo['name'], $active, renderBlob($repo, $rd, $ref, $commitOid, $path, $node));
+    } else {
+        renderLayout($repo['name'], $active, renderCode($repo, $rd, $ref, $commitOid, $path, $node));
+    }
+    exit;
+}
+
+/* ── Uebrige Ansichten ───────────────────────────────────────────────── */
+$view = (string)($_GET['view'] ?? ($loggedIn ? 'repos' : 'explore'));
+switch ($view) {
+case 'login':
+    if ($loggedIn) {
+        redirect('/web.php');
+    }
+    renderLogin('');
+    break;
+
+case 'explore':
+    $q = trim((string)($_GET['q'] ?? ''));
+    renderLayout('Entdecken', 'explore', renderExplore($q), $q);
+    break;
+
+case 'settings':
+    requireLogin();
+    $newToken = $_SESSION['new_token'] ?? null;
+    unset($_SESSION['new_token']);
+    renderLayout('Einstellungen', 'settings', renderSettings($newToken));
+    break;
+
+case 'users':
+    requireAdmin();
+    renderLayout('Benutzer', 'users', renderUsers());
+    break;
+
+default:
+    requireLogin();
+    renderLayout('Meine Repositories', 'repos', renderMyRepos());
 }

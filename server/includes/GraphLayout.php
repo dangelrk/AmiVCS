@@ -21,8 +21,10 @@ class GraphLayout
      * Returns ['rows'=>list of decorated+laned commit rows (newest/
      * highest-priority date first), 'max_lanes'=>int]. Each row:
      *   oid, tree, parents, mtime, author, message, decoration,
-     *   lane, parent_lanes, active_lanes. */
-    public static function build(array $refs, callable $readCommit): array
+     *   lane, parent_lanes, active_lanes.
+     * $limit > 0 stops the walk after that many commits (the WebUI pages
+     * through big histories); lanes stay correct for the rows returned. */
+    public static function build(array $refs, callable $readCommit, int $limit = 0): array
     {
         $queued  = [];
         $visited = [];
@@ -59,6 +61,9 @@ class GraphLayout
             if ($c === null) continue;
             $commits[$cur] = $c;
             $order[] = $cur;
+            if ($limit > 0 && count($order) >= $limit) {
+                break;
+            }
 
             foreach ($c['parents'] as $p) {
                 if (isset($queued[$p])) continue;

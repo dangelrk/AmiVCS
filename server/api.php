@@ -19,6 +19,9 @@ if ((empty($https) || $https === 'off')
 require __DIR__ . '/includes/Version.php';
 require __DIR__ . '/includes/Response.php';
 require __DIR__ . '/includes/DB.php';
+require __DIR__ . '/includes/Throttle.php';
+require __DIR__ . '/includes/Users.php';
+require __DIR__ . '/includes/AppPasswords.php';
 require __DIR__ . '/includes/Auth.php';
 require __DIR__ . '/includes/Repos.php';
 require __DIR__ . '/includes/ObjectStore.php';

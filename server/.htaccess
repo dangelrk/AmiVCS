@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Ronny Krueger
+# Startseite; die Clients rufen nur api.php auf, die Weboberflaeche ist web.php
+DirectoryIndex index.php
 <Files "config.php">
     Require all denied
 </Files>
-<FilesMatch "^(config\.php\.example)$">
+<FilesMatch "^(config\.php\.example|\.user\.ini)$">
     Require all denied
 </FilesMatch>
 # includes/ itself is blocked by includes/.htaccess -- <DirectoryMatch> is

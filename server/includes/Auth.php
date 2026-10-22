@@ -3,36 +3,127 @@
 // Copyright (C) 2026 Ronny Krueger
 if (!defined('AMIVCS_SERVER')) { http_response_code(403); exit; }
 
-/* Own users table, entirely separate from AmiCloud's -- an AMIVCS account
- * has no relation to an AmiCloud account even if the same person holds
- * both (plan section 2's separation table). */
+/* Eigene Benutzertabelle, getrennt von AmiCloud: ein AMIVCS-Konto hat
+ * nichts mit einem AmiCloud-Konto zu tun, auch wenn dieselbe Person
+ * beide hat. Uebernommen aus AmiCloud (App-Passwoerter, Login-Bremse,
+ * Session-Epoche), docs/design/webui-plan.md. */
 class Auth
 {
     public static int    $user_id  = 0;
     public static string $username = '';
+    public static bool   $is_admin = false;
+    public static ?array $user     = null;
 
+    /* bcrypt mit denselben Kosten wie Users::BCRYPT_COST; wird bei
+     * unbekanntem Benutzer geprueft, damit die Antwortzeit nicht verraet,
+     * ob es den Namen gibt. */
+    const DUMMY_HASH = '$2y$10$juFV3MtL9EZJJ/MebYw4kOPtPB8pbD3PEkVK5rU4Mq/9fikZ10n02';
+
+    /* Benutzername, Speicherpfad und Rechte kommen immer aus der DB-Zeile,
+     * nie aus der Eingabe: die Collation ist case-insensitiv, "BOB" wuerde
+     * sonst bobs Zeile, aber ein anderes Speicherverzeichnis treffen. 0 =
+     * anonymer Besucher (nur oeffentliche Repos, web.php/index.php). */
+    public static function setUser(array $row): void
+    {
+        self::$user_id  = (int)$row['id'];
+        self::$username = (string)$row['username'];
+        self::$is_admin = (bool)(int)$row['is_admin'];
+        self::$user     = $row;
+    }
+
+    /* Kontopasswort pruefen; null = unbekannt oder falsch. */
+    private static function checkPassword(string $name, string $pass): ?array
+    {
+        $row = Users::byName($name);
+        $ok  = password_verify($pass, $row ? $row['pass_hash'] : self::DUMMY_HASH);
+        return ($ok && $row && (int)$row['active']) ? $row : null;
+    }
+
+    /* API: Basic-Auth mit Kontopasswort ODER App-Passwort. App-Passwoerter
+     * werden am Format erkannt und nur per SHA-256 geprueft -- sonst liefe
+     * vorher bei jedem Amiga-Request ein bcrypt mit. */
     public static function requireBasicAuth(): void
     {
-        $user = $_SERVER['PHP_AUTH_USER'] ?? '';
-        $pass = $_SERVER['PHP_AUTH_PW']   ?? '';
+        $user = substr((string)($_SERVER['PHP_AUTH_USER'] ?? ''), 0, 64);
+        $pass = (string)($_SERVER['PHP_AUTH_PW'] ?? '');
 
         if ($user === '' || $pass === '') {
             header('WWW-Authenticate: Basic realm="AMIVCS"');
             Response::error(401, 'Authentication required');
         }
 
-        $stmt = DB::get()->prepare(
-            'SELECT id, pass_hash FROM users WHERE username = ? AND active = 1 LIMIT 1'
-        );
-        $stmt->execute([$user]);
-        $row = $stmt->fetch();
+        $fails = Throttle::failures($user);
+        if (Throttle::blocked($fails)) {
+            header('Retry-After: 900');
+            Response::error(429, 'Too many failed logins');
+        }
 
-        if (!$row || !password_verify($pass, $row['pass_hash'])) {
+        if (preg_match(Users::APP_PW_RE, $pass)) {
+            $row = Users::byName($user);
+            if (!$row || !(int)$row['active'] || !AppPasswords::verify((int)$row['id'], $pass)) {
+                $row = null;
+            }
+        } else {
+            $row = self::checkPassword($user, $pass);
+        }
+
+        if ($row === null) {
+            Throttle::fail($user);
             header('WWW-Authenticate: Basic realm="AMIVCS"');
             Response::error(401, 'Invalid credentials');
         }
+        if ($fails[0] > 0) {
+            Throttle::clear($user);
+        }
+        self::setUser($row);
+    }
 
-        self::$user_id  = (int)$row['id'];
-        self::$username = $user;
+    /* Web-Login: nur das Kontopasswort, keine App-Passwoerter. Liefert die
+     * Benutzerzeile oder eine Fehlermeldung. */
+    public static function webLogin(string $user, string $pass)
+    {
+        $user  = substr(trim($user), 0, 64);
+        $fails = Throttle::failures($user);
+        if (Throttle::blocked($fails)) {
+            return 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.';
+        }
+        $row = ($user === '' || $pass === '') ? null : self::checkPassword($user, $pass);
+        if ($row === null) {
+            Throttle::fail($user);
+            return 'Ungültige Zugangsdaten.';
+        }
+        if ($fails[0] > 0) {
+            Throttle::clear($user);
+        }
+        Users::touchLogin((int)$row['id']);
+        return $row;
+    }
+
+    /* Web-Session -> Benutzer, bei JEDEM Request aus der DB: geloeschte,
+     * deaktivierte Benutzer und Sessions von vor einem Passwortwechsel
+     * (session_epoch) sind sofort ungueltig; Admin-Recht nie aus der
+     * Session. */
+    public static function loadSessionUser(): bool
+    {
+        if (!isset($_SESSION['user_id'])) {
+            return false;
+        }
+        $row = Users::find((int)$_SESSION['user_id']);
+        if (!$row || !(int)$row['active']
+            || (int)$row['session_epoch'] !== (int)($_SESSION['epoch'] ?? -1)) {
+            $_SESSION = [];
+            session_regenerate_id(true);
+            return false;
+        }
+        self::setUser($row);
+        return true;
+    }
+
+    public static function startSession(array $row): void
+    {
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = (int)$row['id'];
+        $_SESSION['epoch']   = (int)$row['session_epoch'];
+        $_SESSION['csrf']    = bin2hex(random_bytes(16));
     }
 }

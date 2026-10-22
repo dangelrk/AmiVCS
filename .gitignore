@@ -3,6 +3,7 @@
 # CMake-/Dist-Ausgaben unter build/
 obj/
 bin/
+!server/bin/
 lib/
 build/
 *.o

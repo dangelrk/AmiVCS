@@ -48,6 +48,7 @@ class RefStore
             $db->prepare('INSERT INTO refs (repo_id, name, oid) VALUES (?, ?, ?)')
                ->execute([$repoId, $name, $new]);
         }
+        $db->prepare('UPDATE repos SET pushed_at = NOW() WHERE id = ?')->execute([$repoId]);
 
         Response::ok(['name' => $name, 'oid' => $new]);
     }
