@@ -32,21 +32,29 @@ class RefStore
         $repoId = Repos::resolve($repoName);
         $db = DB::get();
 
-        $stmt = $db->prepare('SELECT oid FROM refs WHERE repo_id = ? AND name = ?');
-        $stmt->execute([$repoId, $name]);
-        $row = $stmt->fetch();
-        $current = $row ? $row['oid'] : '';
-
-        if ($current !== $old) {
-            Response::error(409, "ref '$name' is at '$current', not '$old' -- pull and merge first");
-        }
-
-        if ($row) {
-            $db->prepare('UPDATE refs SET oid = ?, updated_at = NOW() WHERE repo_id = ? AND name = ?')
-               ->execute([$new, $repoId, $name]);
+        /* Echtes Compare-and-Swap in einer Anweisung: zwei gleichzeitige
+         * Pushes mit demselben "old" koennen nicht beide gewinnen. */
+        if ($old !== '') {
+            $stmt = $db->prepare('UPDATE refs SET oid = ?, updated_at = NOW() WHERE repo_id = ? AND name = ? AND oid = ?');
+            $stmt->execute([$new, $repoId, $name, $old]);
+            $ok = $stmt->rowCount() === 1;
         } else {
-            $db->prepare('INSERT INTO refs (repo_id, name, oid) VALUES (?, ?, ?)')
-               ->execute([$repoId, $name, $new]);
+            try {
+                $db->prepare('INSERT INTO refs (repo_id, name, oid) VALUES (?, ?, ?)')
+                   ->execute([$repoId, $name, $new]);
+                $ok = true;
+            } catch (PDOException $e) {
+                if ($e->getCode() !== '23000') {
+                    throw $e;
+                }
+                $ok = false;   /* gibt es schon (Duplicate Key) */
+            }
+        }
+        if (!$ok) {
+            $stmt = $db->prepare('SELECT oid FROM refs WHERE repo_id = ? AND name = ?');
+            $stmt->execute([$repoId, $name]);
+            $current = (string)($stmt->fetchColumn() ?: '');
+            Response::error(409, "ref '$name' is at '$current', not '$old' -- pull and merge first");
         }
         $db->prepare('UPDATE repos SET pushed_at = NOW() WHERE id = ?')->execute([$repoId]);
 

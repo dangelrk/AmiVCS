@@ -36,7 +36,9 @@ AmiVCS v{$GLOBALS['ver']} – Verwaltung
 
   user:list
   user:add [--admin] [--display=NAME] [--email=ADR] [--password-stdin] <name>
-  user:passwd [--password-stdin] <name>
+  user:passwd [--password-stdin] [--keep-tokens] <name>
+                                           widerruft auch die App-Passwörter
+  user:revoke-tokens <name>                alle App-Passwörter widerrufen
   user:admin <name> on|off
   user:disable <name>
   user:enable <name>
@@ -141,7 +143,15 @@ case 'user:passwd':
     $u = userOrFail($pos[0]);
     $err = Users::setPassword((int)$u['id'], askNewPassword($stdinPw));
     if ($err !== null) fail($err);
-    echo "Passwort von {$u['username']} geändert; offene Web-Sitzungen sind beendet.\n";
+    $n = isset($opts['keep-tokens']) ? 0 : AppPasswords::revokeAll((int)$u['id']);
+    echo "Passwort von {$u['username']} geändert; offene Web-Sitzungen sind beendet"
+       . ($n > 0 ? ", $n App-Passwort/-Passwörter widerrufen" : '') . ".\n";
+    break;
+
+case 'user:revoke-tokens':
+    if (count($pos) !== 1) { usage(); exit(1); }
+    $u = userOrFail($pos[0]);
+    echo AppPasswords::revokeAll((int)$u['id']) . " App-Passwort/-Passwörter von {$u['username']} widerrufen.\n";
     break;
 
 case 'user:admin':

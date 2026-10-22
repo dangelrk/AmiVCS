@@ -32,9 +32,19 @@ class Repos
         return rtrim(AMIVCS_STORAGE_PATH, '/') . '/' . $owner . '/' . $name;
     }
 
+    /* API: Speicherpfad aus dem GESPEICHERTEN Namen. Die Collation
+     * vergleicht ohne Gross/Klein -- "MyRepo" findet das Repo "myrepo";
+     * mit dem eingegebenen Namen landeten Objekte sonst in einem
+     * Schattenordner, den weder WebUI noch Loeschen kennen. */
     public static function storagePath(string $name): string
     {
-        return self::storageDir(Auth::$username, self::sanitizeName($name));
+        $stmt = DB::get()->prepare('SELECT name FROM repos WHERE owner_id = ? AND name = ?');
+        $stmt->execute([Auth::$user_id, self::sanitizeName($name)]);
+        $stored = $stmt->fetchColumn();
+        if ($stored === false) {
+            Response::error(404, 'No such repository');
+        }
+        return self::storageDir(Auth::$username, (string)$stored);
     }
 
     /* Shared by the API's create-repo and the WebUI. null = ok, else a
@@ -165,11 +175,17 @@ class Repos
     {
         $dir  = self::storageDir($repo['owner'], $repo['name']);
         $base = realpath(rtrim(AMIVCS_STORAGE_PATH, '/') . '/' . $repo['owner']);
+        if (is_link($dir)) {
+            return 'Der Speicherordner ist ein symbolischer Link – Löschen abgebrochen.';
+        }
         if (is_dir($dir)) {
             if ($base === false || !self::validName($repo['name']) || realpath(dirname($dir)) !== $base) {
                 return 'Speicherordner liegt nicht am erwarteten Ort – Löschen abgebrochen.';
             }
             self::deleteTree($dir);
+            if (is_dir($dir)) {
+                return 'Der Speicherordner konnte nicht vollständig gelöscht werden.';
+            }
         }
         DB::get()->prepare('DELETE FROM repos WHERE id = ?')->execute([(int)$repo['id']]);
         return null;

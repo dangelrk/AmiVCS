@@ -40,7 +40,8 @@ function renderSettings(?array $newToken): string
       <input id="pwNew" type="password" name="new" autocomplete="new-password" minlength="8" required>
       <label for="pwNew2">Wiederholen</label>
       <input id="pwNew2" type="password" name="new2" autocomplete="new-password" minlength="8" required>
-      <p class="form-hint">Andere angemeldete Browser werden abgemeldet. App-Passwörter bleiben gültig.</p>
+      <span></span><label class="check"><input type="checkbox" name="revoke_tokens" value="1" checked> Alle App-Passwörter widerrufen</label>
+      <p class="form-hint">Andere angemeldete Browser werden abgemeldet. Widerrufene Geräte brauchen danach ein neues App-Passwort.</p>
       <div class="form-actions"><button type="submit" class="btn btn-primary">Passwort ändern</button></div>
     </form>
   </section>
@@ -62,6 +63,7 @@ function renderSettings(?array $newToken): string
     <form method="post" action="/web.php" class="inline-form">
       <?= csrfField() ?><input type="hidden" name="do" value="apppw_create">
       <input type="text" name="name" maxlength="64" placeholder="Gerätename, z. B. A1200" required aria-label="Gerätename">
+      <input type="password" name="current" placeholder="Ihr Kontopasswort" required autocomplete="current-password" aria-label="Kontopasswort zur Bestätigung">
       <button type="submit" class="btn btn-primary"><?= icon('key') ?>App-Passwort erstellen</button>
     </form>
 

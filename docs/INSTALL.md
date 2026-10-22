@@ -291,7 +291,7 @@ Clients empfiehlt sich je Gerät ein **App-Passwort** (Weboberfläche →
 *Persönliche Einstellungen*). Nach 5 Fehlversuchen pro Benutzer und IP
 sperrt der Server 15 Minuten (HTTP 429).
 
-**Nachrüsten einer bestehenden Installation:** `sql/migrate_001.sql` als
+**Nachrüsten einer bestehenden Installation:** `sql/migrate_001.sql` und `sql/migrate_002.sql` als
 MariaDB-root einspielen (der Datenbankbenutzer `amivcs` darf kein
 `ALTER`), danach einen vorhandenen Benutzer zum Administrator machen:
 `sudo -u apache php bin/amivcs-admin.php user:admin bob on`.

@@ -8,7 +8,11 @@ if (!defined('AMIVCS_SERVER')) { http_response_code(403); exit; }
 
 function h(string $s): string
 {
-    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+    /* Namen, Autoren und Nachrichten vom Amiga sind oft ISO-8859-1 */
+    if (!mb_check_encoding($s, 'UTF-8')) {
+        $s = mb_convert_encoding($s, 'UTF-8', 'ISO-8859-1');
+    }
+    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function fmtSize(int $bytes): string

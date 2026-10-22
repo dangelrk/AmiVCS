@@ -179,21 +179,31 @@ if ($isPost) {
 
     case 'password':
         $new = (string)($_POST['new'] ?? '');
-        if (!password_verify((string)($_POST['current'] ?? ''), Auth::$user['pass_hash'])) {
-            $err = 'Das aktuelle Passwort ist falsch.';
-        } elseif ($new !== (string)($_POST['new2'] ?? '')) {
+        $err = Auth::confirmPassword((string)($_POST['current'] ?? ''));
+        if ($err === null && $new !== (string)($_POST['new2'] ?? '')) {
             $err = 'Die neuen Passwörter stimmen nicht überein.';
-        } else {
-            $err = Users::setPassword($uid, $new);
         }
+        $err = $err ?? Users::setPassword($uid, $new);
+        $msg = 'Passwort geändert. Andere Browser-Sitzungen wurden abgemeldet.';
         if ($err === null) {
             Auth::startSession(Users::find($uid));
+            if (!empty($_POST['revoke_tokens'])) {
+                $n   = AppPasswords::revokeAll($uid);
+                $msg .= $n > 0 ? " $n App-Passwort/-Passwörter widerrufen." : '';
+            }
         }
-        flash($err ?? 'Passwort geändert. Andere Browser-Sitzungen wurden abgemeldet.', $err ? 'error' : 'info');
+        flash($err ?? $msg, $err ? 'error' : 'info');
         redirect(webUrl(['view' => 'settings']));
 
     case 'apppw_create':
         $name = trim((string)($_POST['name'] ?? ''));
+        /* Mit Kontopasswort: eine gestohlene Sitzung soll sich keinen
+         * dauerhaften API-Zugang verschaffen koennen. */
+        $err = Auth::confirmPassword((string)($_POST['current'] ?? ''));
+        if ($err !== null) {
+            flash($err, 'error');
+            redirect(webUrl(['view' => 'settings']) . '#devices');
+        }
         [$token, $err] = AppPasswords::create($uid, $name);
         if ($err !== null) {
             flash($err, 'error');
@@ -224,6 +234,9 @@ if ($isPost) {
         $err = $err ?? Users::updateAdmin($id, !empty($_POST['is_admin']), !empty($_POST['active']));
         if ($err === null && (string)($_POST['password'] ?? '') !== '') {
             $err = Users::setPassword($id, (string)$_POST['password']);
+            if ($err === null && !empty($_POST['revoke_tokens'])) {
+                AppPasswords::revokeAll($id);
+            }
             if ($err === null && $id === $uid) {
                 Auth::startSession(Users::find($uid));
             }
@@ -281,7 +294,7 @@ if (isset($_GET['r'])) {
     if ($view === 'history') {
         $ref = (string)($_GET['ref'] ?? '');
         renderLayout('Historie · ' . $repo['name'], $repo['is_owner'] ? 'repos' : 'explore',
-                     renderHistory($repo, $rd, $ref, max(0, (int)($_GET['page'] ?? 0))));
+                     renderHistory($repo, $rd, $ref, min(200, max(0, (int)($_GET['page'] ?? 0)))));
         exit;
     }
 

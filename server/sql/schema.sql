@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS objects (
 CREATE TABLE IF NOT EXISTS refs (
     id         BIGINT UNSIGNED  AUTO_INCREMENT PRIMARY KEY,
     repo_id    INT UNSIGNED     NOT NULL,
-    name       VARCHAR(191)     NOT NULL,          -- e.g. "refs/heads/main"
+    name       VARBINARY(191)   NOT NULL,          -- e.g. "refs/heads/main", binaer (migrate_002)
     oid        CHAR(32)         NOT NULL,
     updated_at DATETIME         DEFAULT CURRENT_TIMESTAMP,
 

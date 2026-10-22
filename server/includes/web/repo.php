@@ -11,6 +11,9 @@ const DISPLAY_MAX_BYTES = 1048576;  // groessere Dateien nur zum Download
 const DIFF_MAX_BYTES    = 524288;
 const DIFF_MAX_LINES    = 5000;
 const HISTORY_PAGE      = 50;
+const TREE_MAX_ENTRIES  = 2000;     // Code-Ansicht zeigt hoechstens so viele Eintraege
+const DIFF_MAX_FILES    = 300;      // so viele Dateien bekommen einen Zeilen-Diff
+const DIFF_TOTAL_BYTES  = 4194304;  // Gesamtbudget der Diffs einer Commit-Seite
 
 function repoHeader(array $repo, string $tab, ?string $ref = null): string
 {
@@ -112,6 +115,9 @@ function renderCode(array $repo, RepoReader $rd, string $ref, string $commitOid,
 {
     $c       = $rd->commit($commitOid);
     $entries = $rd->tree($node['oid']) ?? [];
+    $hidden  = max(0, count($entries) - TREE_MAX_ENTRIES);
+    $entries = array_slice($entries, 0, TREE_MAX_ENTRIES);
+    $rd->prefetchTypes(array_column($entries, 'oid'));
     $readme  = null;
     foreach ($entries as $e) {
         if (!$e['is_dir'] && preg_match('/^read\s?me(\.(txt|md|1st|guide))?$/i', $e['name'])) {
@@ -149,6 +155,9 @@ function renderCode(array $repo, RepoReader $rd, string $ref, string $commitOid,
   <?php endforeach; ?>
   <?php if ($entries === []): ?>
     <tr class="empty-row"><td colspan="2"><div class="empty"><strong>Leeres Verzeichnis</strong></div></td></tr>
+  <?php endif; ?>
+  <?php if ($hidden > 0): ?>
+    <tr class="empty-row"><td colspan="2"><p class="diff-note"><?= $hidden ?> weitere Einträge nicht angezeigt – bitte als ZIP laden oder klonen.</p></td></tr>
   <?php endif; ?>
   </tbody>
 </table>
@@ -364,7 +373,15 @@ function renderCommit(array $repo, RepoReader $rd, string $oid): string
     $files   = $rd->changedFiles($oid);
     $diffs   = [];
     $plus    = $minus = 0;
+    $budget  = DIFF_TOTAL_BYTES;
     foreach ($files as $i => $f) {
+        $size = ($f['old'] ? $rd->blobSize($f['old']) : 0) + ($f['new'] ? $rd->blobSize($f['new']) : 0);
+        if ($i >= DIFF_MAX_FILES || $size > $budget) {
+            /* Budget erschoepft: nur noch die Dateiliste */
+            $diffs[$i] = ['kind' => 'skipped', 'hunks' => [], 'plus' => 0, 'minus' => 0, 'latin1' => false];
+            continue;
+        }
+        $budget   -= $size;
         $diffs[$i] = fileDiff($rd, $f['old'], $f['new']);
         $plus  += $diffs[$i]['plus'];
         $minus += $diffs[$i]['minus'];
@@ -394,6 +411,9 @@ function renderCommit(array $repo, RepoReader $rd, string $oid): string
 
 <p class="diffstat"><?= count($files) ?> <?= count($files) === 1 ? 'Datei' : 'Dateien' ?> geändert ·
   <span class="plus">+<?= $plus ?></span> <span class="minus">−<?= $minus ?></span></p>
+<?php if ($rd->truncated): ?>
+<p class="diff-note">Dieser Commit ist zu groß für die vollständige Anzeige – die Liste ist gekürzt.</p>
+<?php endif; ?>
 
 <?php foreach ($files as $i => $f):
     $d = $diffs[$i];
@@ -412,6 +432,8 @@ function renderCommit(array $repo, RepoReader $rd, string $oid): string
     <p class="diff-note">Binärdatei <?= $f['status'] === 'M' ? 'geändert' : ($f['status'] === 'A' ? 'hinzugefügt' : 'gelöscht') ?>.</p>
   <?php elseif ($d['kind'] === 'toolarge'): ?>
     <p class="diff-note">Diff zu groß für die Anzeige.</p>
+  <?php elseif ($d['kind'] === 'skipped'): ?>
+    <p class="diff-note">Diff nicht angezeigt – zu viele Änderungen in diesem Commit.</p>
   <?php elseif ($d['hunks'] === []): ?>
     <p class="diff-note">Leere Datei.</p>
   <?php else: ?>

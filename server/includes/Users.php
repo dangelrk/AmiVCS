@@ -216,6 +216,9 @@ class Users
          * treffen. */
         $name = (string)$row['username'];
         $dir  = self::userDir($name);
+        if (is_link($dir)) {
+            return 'Der Speicherordner ist ein symbolischer Link – Löschen abgebrochen.';
+        }
         if (preg_match(self::NAME_RE, $name) && is_dir($dir)) {
             $base = realpath(AMIVCS_STORAGE_PATH);
             if ($base === false || realpath(dirname($dir)) !== $base || realpath($dir) === $base) {

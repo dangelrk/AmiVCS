@@ -82,6 +82,7 @@ function renderUsers(): string
     <label for="euPass">Neues Passwort</label>
     <input id="euPass" name="password" type="password" minlength="8" autocomplete="new-password" placeholder="leer = unverändert">
     <span></span><label class="check"><input type="checkbox" name="is_admin" value="1"> Administrator</label>
+    <span></span><label class="check"><input type="checkbox" name="revoke_tokens" value="1" checked> Beim neuen Passwort alle App-Passwörter widerrufen</label>
     <span></span><label class="check"><input type="checkbox" name="active" value="1"> Aktiv (darf sich anmelden)</label>
     <div class="dlg-actions">
       <button type="button" class="btn" data-close-dialog>Abbrechen</button>

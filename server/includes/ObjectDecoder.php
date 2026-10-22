@@ -82,6 +82,9 @@ class ObjectDecoder
         $tree = bin2hex(substr($data, $pos, 16));
         $pos += 16;
 
+        if ($pos >= strlen($data)) {
+            throw new RuntimeException('truncated commit parent count');
+        }
         $nparents = ord($data[$pos]);
         $pos++;
         $parents = [];

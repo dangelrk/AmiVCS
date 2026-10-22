@@ -52,6 +52,7 @@ class Auth
             Response::error(401, 'Authentication required');
         }
 
+        Throttle::lock($user);
         $fails = Throttle::failures($user);
         if (Throttle::blocked($fails)) {
             header('Retry-After: 900');
@@ -75,6 +76,7 @@ class Auth
         if ($fails[0] > 0) {
             Throttle::clear($user);
         }
+        Throttle::unlock($user);
         self::setUser($row);
     }
 
@@ -83,20 +85,51 @@ class Auth
     public static function webLogin(string $user, string $pass)
     {
         $user  = substr(trim($user), 0, 64);
-        $fails = Throttle::failures($user);
-        if (Throttle::blocked($fails)) {
-            return 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.';
-        }
-        $row = ($user === '' || $pass === '') ? null : self::checkPassword($user, $pass);
-        if ($row === null) {
-            Throttle::fail($user);
-            return 'Ungültige Zugangsdaten.';
-        }
-        if ($fails[0] > 0) {
-            Throttle::clear($user);
+        Throttle::lock($user);
+        try {
+            $fails = Throttle::failures($user);
+            if (Throttle::blocked($fails)) {
+                return 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.';
+            }
+            $row = ($user === '' || $pass === '') ? null : self::checkPassword($user, $pass);
+            if ($row === null) {
+                Throttle::fail($user);
+                return 'Ungültige Zugangsdaten.';
+            }
+            if ($fails[0] > 0) {
+                Throttle::clear($user);
+            }
+        } finally {
+            Throttle::unlock($user);
         }
         Users::touchLogin((int)$row['id']);
         return $row;
+    }
+
+    /* Aktuelles Kontopasswort des angemeldeten Benutzers pruefen (vor
+     * Passwortwechsel und neuem App-Passwort), mit derselben Bremse wie
+     * der Login -- eine gestohlene Sitzung soll es nicht durchprobieren
+     * koennen. null = ok, sonst Fehlermeldung. */
+    public static function confirmPassword(string $pass): ?string
+    {
+        $user = self::$username;
+        Throttle::lock($user);
+        try {
+            $fails = Throttle::failures($user);
+            if (Throttle::blocked($fails)) {
+                return 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.';
+            }
+            if (!password_verify($pass, (string)self::$user['pass_hash'])) {
+                Throttle::fail($user);
+                return 'Das aktuelle Passwort ist falsch.';
+            }
+            if ($fails[0] > 0) {
+                Throttle::clear($user);
+            }
+        } finally {
+            Throttle::unlock($user);
+        }
+        return null;
     }
 
     /* Web-Session -> Benutzer, bei JEDEM Request aus der DB: geloeschte,

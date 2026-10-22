@@ -16,6 +16,18 @@ class RepoReader
     const TYPE_TREE   = 1;
     const TYPE_COMMIT = 2;
     const MAX_DEPTH   = 64;
+    /* Rechenbudget je Request: ein Tree darf mehrfach auf denselben
+     * Untertree zeigen, die Knotenzahl waechst dann mit 2^Tiefe.
+     * MAX_DEPTH allein begrenzt das nicht. */
+    const MAX_TREE_VISITS = 20000;
+    const MAX_CHANGED     = 5000;
+    const MAX_ZIP_ENTRIES = 20000;
+    const ZIP_SLOTS       = 2;
+
+    private int $visits = 0;
+    /* true, wenn ein Budget erschoepft wurde und Ergebnisse unvollstaendig sind */
+    public bool $truncated = false;
+    private $zipSlot = null;
 
     private array  $repo;
     private string $dir;
@@ -32,6 +44,43 @@ class RepoReader
     public static function isOid(string $s): bool
     {
         return (bool)preg_match('/^[0-9a-f]{32}$/', $s);
+    }
+
+    /* Typen vieler Objekte mit einer Abfrage holen (Code-Ansicht) */
+    public function prefetchTypes(array $oids): void
+    {
+        $oids = array_values(array_filter(array_unique($oids), function ($o) {
+            return self::isOid($o) && !array_key_exists($o, $this->types);
+        }));
+        foreach (array_chunk($oids, 500) as $chunk) {
+            $ph   = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = DB::get()->prepare("SELECT oid, type FROM objects WHERE repo_id = ? AND oid IN ($ph)");
+            $stmt->execute(array_merge([(int)$this->repo['id']], $chunk));
+            foreach ($chunk as $o) {
+                $this->types[$o] = null;
+            }
+            foreach ($stmt->fetchAll() as $r) {
+                $this->types[$r['oid']] = (int)$r['type'];
+            }
+        }
+    }
+
+    private function spend(): bool
+    {
+        if (++$this->visits > self::MAX_TREE_VISITS) {
+            $this->truncated = true;
+            return false;
+        }
+        return true;
+    }
+
+    /* Darf ein Tree-Name als Pfad in ein ZIP? Kein "."/"..", keine
+     * Trenner (/ \ und Amiga ":"), keine Steuerzeichen -- sonst koennte
+     * ein Entpacker ausserhalb des Zielordners schreiben (ZIP-Slip). */
+    public static function safeName(string $name): bool
+    {
+        return $name !== '' && $name !== '.' && $name !== '..'
+            && !preg_match('#[/\\\\:\x00-\x1f\x7f]#', $name);
     }
 
     public function type(string $oid): ?int
@@ -228,6 +277,10 @@ class RepoReader
         if ($old === $new || $depth > self::MAX_DEPTH) {
             return;
         }
+        if (!$this->spend() || count($out) >= self::MAX_CHANGED) {
+            $this->truncated = true;
+            return;
+        }
         $a = [];
         foreach (($old === null ? [] : ($this->tree($old) ?? [])) as $e) {
             $a[$e['name']] = $e;
@@ -292,6 +345,18 @@ class RepoReader
         if (!class_exists('ZipArchive')) {
             return 'ZIP-Download ist auf diesem Server nicht verfügbar (PHP-Erweiterung zip fehlt).';
         }
+        /* Hoechstens ZIP_SLOTS gleichzeitige ZIP-Erstellungen (CPU, /tmp) */
+        for ($i = 0; $i < self::ZIP_SLOTS && $this->zipSlot === null; $i++) {
+            $fp = @fopen(sys_get_temp_dir() . '/amivcs-zip-' . $i . '.lock', 'c');
+            if ($fp && flock($fp, LOCK_EX | LOCK_NB)) {
+                $this->zipSlot = $fp;
+            } elseif ($fp) {
+                fclose($fp);
+            }
+        }
+        if ($this->zipSlot === null) {
+            return 'Gerade werden zu viele ZIP-Dateien erstellt. Bitte gleich noch einmal versuchen.';
+        }
         $tmp = tempnam(sys_get_temp_dir(), 'amivcszip');
         register_shutdown_function(function () use ($tmp) {
             @unlink($tmp);
@@ -301,26 +366,37 @@ class RepoReader
             return 'ZIP-Datei konnte nicht erstellt werden.';
         }
         $total = 0;
-        $ok = $this->zipTree($zip, $treeOid, $rootName . '/', $total, 0);
+        $count = 0;
+        $ok = $this->zipTree($zip, $treeOid, $rootName . '/', $total, $count, 0);
         $zip->close();
         if (!$ok) {
-            return 'Das Repository ist größer als 1 GB – bitte mit amivcs clone holen.';
+            return 'Das Repository ist zu groß für einen ZIP-Download (über 1 GB oder '
+                 . self::MAX_ZIP_ENTRIES . ' Einträge) – bitte mit amivcs clone holen.';
         }
         return $tmp;
     }
 
-    private function zipTree(ZipArchive $zip, string $treeOid, string $prefix, int &$total, int $depth): bool
+    private function zipTree(ZipArchive $zip, string $treeOid, string $prefix, int &$total, int &$count, int $depth): bool
     {
         if ($depth > self::MAX_DEPTH) {
             return true;
         }
+        if (!$this->spend() || ++$count > self::MAX_ZIP_ENTRIES) {
+            return false;
+        }
         $zip->addEmptyDir(rtrim($prefix, '/'));
         foreach ($this->tree($treeOid) ?? [] as $e) {
+            if (!self::safeName($e['name'])) {
+                continue;
+            }
             if ($e['is_dir']) {
-                if (!$this->zipTree($zip, $e['oid'], $prefix . $e['name'] . '/', $total, $depth + 1)) {
+                if (!$this->zipTree($zip, $e['oid'], $prefix . $e['name'] . '/', $total, $count, $depth + 1)) {
                     return false;
                 }
                 continue;
+            }
+            if (++$count > self::MAX_ZIP_ENTRIES) {
+                return false;
             }
             $p = $this->blobPath($e['oid']);
             if ($p === null) {
@@ -331,6 +407,7 @@ class RepoReader
                 return false;
             }
             $zip->addFile($p, $prefix . $e['name']);
+            $zip->setCompressionName($prefix . $e['name'], ZipArchive::CM_STORE);
         }
         return true;
     }

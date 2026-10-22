@@ -50,6 +50,16 @@ class AppPasswords
         return $stmt->fetchAll();
     }
 
+    /* Nach Passwortwechsel/-reset: alle Geraete muessen sich neu
+     * einrichten (sonst behielte z. B. ein Dieb der Web-Sitzung ein
+     * selbst angelegtes App-Passwort). */
+    public static function revokeAll(int $uid): int
+    {
+        $stmt = DB::get()->prepare('DELETE FROM app_passwords WHERE user_id = ?');
+        $stmt->execute([$uid]);
+        return $stmt->rowCount();
+    }
+
     public static function revoke(int $uid, int $id): void
     {
         DB::get()->prepare('DELETE FROM app_passwords WHERE id = ? AND user_id = ?')->execute([$id, $uid]);
