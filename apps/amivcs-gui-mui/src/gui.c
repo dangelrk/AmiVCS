@@ -58,6 +58,10 @@ static Object *g_stage_all_toggle;
 
 static Object *g_input_window, *g_input_string, *g_input_ok, *g_input_cancel;
 static Object *g_progress_window, *g_progress_text, *g_cancel_button;
+/* Put to sleep during clone/push/pull instead of the whole application:
+ * MUIA_Application_Sleep also froze the progress window and its
+ * "Abbrechen" button (found running amicloud-commander in Amiberry). */
+static Object *g_main_window;
 
 static VcsGuiSession g_session;
 static AcConfig      g_cfg;
@@ -186,12 +190,12 @@ static void begin_remote_op(void)
     g_session.progress_userdata = NULL;
     set(g_progress_text, MUIA_Text_Contents, "");
     set(g_progress_window, MUIA_Window_Open, TRUE);
-    set(g_app, MUIA_Application_Sleep, TRUE);
+    if (g_main_window) set(g_main_window, MUIA_Window_Sleep, TRUE);
 }
 
 static void end_remote_op(void)
 {
-    set(g_app, MUIA_Application_Sleep, FALSE);
+    if (g_main_window) set(g_main_window, MUIA_Window_Sleep, FALSE);
     set(g_progress_window, MUIA_Window_Open, FALSE);
     g_session.progress_cb = NULL;
 }
@@ -662,6 +666,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     End;
 
     if (!g_app) return 20;
+    g_main_window = window;
 
     DoMethod(g_app, OM_ADDMEMBER, g_progress_window);
     build_input_dialog();

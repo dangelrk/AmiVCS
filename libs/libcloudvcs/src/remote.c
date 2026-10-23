@@ -140,6 +140,11 @@ static void build_auth(const AcConfig *cfg, char *out, size_t sz)
  * Every other API action is idempotent (objects are content-addressed). */
 #define REQUEST_TRIES 3
 
+/* 1 if the last api_request() ended because the progress hook said stop
+ * (a GUI's Cancel button) -- callers report that as "cancelled", not as
+ * a broken connection. */
+static int g_request_aborted = 0;
+
 static HttpResponse *api_request(const AcConfig *cfg, const char *method, const char *query,
                                  const void *data, long len, int retry)
 {
@@ -149,6 +154,7 @@ static HttpResponse *api_request(const AcConfig *cfg, const char *method, const 
 
     build_url(cfg, url, sizeof(url), query);
     build_auth(cfg, auth, sizeof(auth));
+    g_request_aborted = 0;
 
     for (attempt = 0; attempt < (retry ? REQUEST_TRIES : 1); attempt++) {
         http_response_free(resp);
@@ -159,6 +165,7 @@ static HttpResponse *api_request(const AcConfig *cfg, const char *method, const 
             ui_notify(UI_WARN, "amivcs: network error, retrying (%d/%d)", attempt + 2, REQUEST_TRIES);
     }
     if (resp && (resp->status_code == 0 || resp->aborted)) {
+        g_request_aborted = resp->aborted;
         if (!resp->aborted) ui_notify(UI_ERROR, "amivcs: network error");
         http_response_free(resp);
         return NULL;
@@ -370,7 +377,7 @@ static int fetch_objects(VcsRepo *repo, const AcConfig *cfg, const char *repo_na
             vcs_oid_to_hex(&it.oid, hex);
             snprintf(query, sizeof(query), "action=get-object&repo=%s&oid=%s", repo_name, hex);
             if (!api_get_raw(cfg, query, &data, &len)) {
-                if (ui_break_pending()) *cancelled = 1;
+                if (g_request_aborted || ui_break_pending()) *cancelled = 1;
                 ok = 0;
                 break;
             }
