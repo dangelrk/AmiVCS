@@ -905,7 +905,7 @@ und keinen Eintrag in DEVS:DOSDrivers. Repositories sind ganz normale
 Verzeichnisse auf Ihren Laufwerken.
 
 Wer einen Cloud-Speicher als Laufwerk sucht, findet ihn in den
-Schwesterprojekten AmiCloud (CLOUD:) und AmiOwnCloud (OWNCLOUD:), siehe
+Schwesterprojekten AmiCloud (AMICLOUD:) und AmiOwnCloud (OWNCLOUD:), siehe
 @{" Autor und Kontakt " link Autor}.
 
 @{" Zurück " link WebUI}  @{" Index " link Main}
@@ -1064,9 +1064,9 @@ Projektseite, Quelltext, Fehlermeldungen und Wünsche:
 Schwesterprojekte:
 
   https://github.com/dangelrk/AmiCloudCore  gemeinsame Bibliotheken
-  https://github.com/dangelrk/AmiCloud      Cloud-Server, CLOUD:
+  https://github.com/dangelrk/AmiCloud      Cloud-Server, AMICLOUD:
   https://github.com/dangelrk/AmiOwnCloud   OwnCloud/Nextcloud,
-                                            OWNCLOUD:, AmiCloudSync
+                                            OWNCLOUD:, AmiOwnCloudSync
 
 @{" Zurück " link Lizenz}  @{" Index " link Main}
 @{" Weiter " link Historie}

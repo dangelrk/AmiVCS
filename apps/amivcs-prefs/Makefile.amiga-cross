@@ -5,7 +5,7 @@
 # docs/BUILD.md. GadTools/Intuition only (see core/common/
 # src/prefsgui.c) -- no MUI, so no MUI_INC/mui_stubs.[ch] and no -lamiga
 # (GadTools/Commodities have proper VBCC-native inline stubs in the NDK,
-# same reasoning as AmiOwnCloud's apps/amicloud-sync-cx/Makefile.amiga-cross).
+# same reasoning as AmiOwnCloud's apps/amiowncloud-sync-cx/Makefile.amiga-cross).
 #
 # No oml on the host, so this links directly against the lib .o files
 # (compiled into obj/amiga/ alongside this app's own objects) instead of

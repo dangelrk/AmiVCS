@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Ronny Krueger
 # amivcs -- AmigaOS 3.x (VBCC), CROSS-compiled from a host (macOS/Linux/
 # Windows) using the toolchain described in docs/BUILD.md.
-# Mirrors AmiCloud's apps/cloudsync/Makefile.amiga-cross (reason: no oml on the
+# Mirrors AmiCloud's apps/amicloud-sync/Makefile.amiga-cross (reason: no oml on the
 # host, so this links directly against the libs' .o files instead of
 # .lib archives) with libcloudvcs's sources in place of libcloudsync's.
 #

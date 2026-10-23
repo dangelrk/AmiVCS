@@ -39,7 +39,7 @@ const char amiga_ver[] = "$VER: amivcs-gui " AC_VERSION " (27.09.2026)";
 /* Debug toggle (-v / DEBUG tooltype) and repo path (a plain CLI argument,
  * or a REPO=<path> tooltype) -- read together since both need the same
  * WBStartup/icon.library dance for a Workbench launch (wbstartup.h,
- * factored out of here and amicloud-commander-mui/amicloud-sync-cx,
+ * factored out of here and amicloud-commander-mui/amiowncloud-sync-cx,
  * which each had their own copy of exactly this). repo_path is left
  * untouched (caller pre-clears it) if neither source supplies one --
  * gui_run() then falls back to the current directory, exactly like a

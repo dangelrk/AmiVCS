@@ -75,9 +75,9 @@ die C-Bibliotheken mit:
 - [AmiCloudCore](https://github.com/dangelrk/AmiCloudCore) – gemeinsame
   Bibliotheken und Build-Logik (hier als `core/` eingebunden)
 - [AmiCloud](https://github.com/dangelrk/AmiCloud) – eigener Cloud-Server,
-  CLI, Dateimanager und `CLOUD:`-Handler
+  CLI, Dateimanager und `AMICLOUD:`-Handler
 - [AmiOwnCloud](https://github.com/dangelrk/AmiOwnCloud) – OwnCloud/
-  Nextcloud per WebDAV: `OWNCLOUD:`-Handler und AmiCloudSync
+  Nextcloud per WebDAV: `OWNCLOUD:`-Handler und AmiOwnCloudSync
 
 AmiVCS ist von AmiCloud vollständig getrennt: eigener Server, eigene
 Datenbank, eigene Konfigurationsdatei, eigene Zugangsdaten.

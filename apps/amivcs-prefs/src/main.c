@@ -5,7 +5,7 @@
  * amivcs-prefs -- Preferences editor for amivcs.cfg (amivcs CLI,
  * amivcs-gui-mui/-qt). GadTools window built on core/common's
  * prefsgui.h toolbox (see repo plan "Drei getrennte Prefs-Programme");
- * own program, no dependency on amicloud-prefs or amicloudsync-prefs --
+ * own program, no dependency on amicloud-prefs or amiowncloud-sync-prefs --
  * AMIVCS and AmiCloud share no server, no credentials (see
  * config-examples/README.md and docs/adr/09_ADR_VCS_Design.md).
  *
