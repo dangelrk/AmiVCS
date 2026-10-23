@@ -52,7 +52,12 @@ static void progress_line(const char *label, long done, long total, int final)
 }
 
 #define REMOTE_CONFIG_FILE "config"
-#define HAS_BATCH 100
+/* OIDs per action=has query. Each costs 33 characters in the URL; at 100
+ * the query (~3.4 KB) overran the 2048-byte URL buffers (AC_MAX_URL) --
+ * cut short on PC, and on the Amiga every push with more than ~55
+ * objects failed with "request header too large". 50 stays below 2 KB
+ * including server URL and a 128-character repository name. */
+#define HAS_BATCH 50
 
 /* ------------------------------------------------------------------ */
 /* <amivcs_dir>/config -- just enough to remember which server-side repo */
