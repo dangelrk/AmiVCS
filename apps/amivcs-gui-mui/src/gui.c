@@ -20,6 +20,7 @@
 #include "gui.h"
 #include "historylist.h"
 #include "mui_stubs.h"
+#include "ui_hooks.h"
 #include "localfs.h"
 #include "http.h"
 
@@ -706,6 +707,9 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         case ID_ABOUT:          do_about(); break;
         default: break;
         }
+        /* A Ctrl-C (only possible when started from a Shell) cancels the
+         * transfer it hit, see ui_hooks.h -- never every later one. */
+        ui_break_clear();
         if (running && sigs) Wait(sigs);
     }
 

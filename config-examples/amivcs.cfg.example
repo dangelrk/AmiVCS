@@ -30,3 +30,8 @@ pass=geheim
 # TLS-Zertifikat des Servers pruefen (1 = ja, Standard; 0 = nur zum
 # Testen mit selbstsignierten Zertifikaten):
 #verify_ssl=1
+
+# Netz-Timeout in Sekunden (Standard 120): so lange darf eine Verbindung
+# ganz ohne Datenfluss bleiben. Die Dauer von clone/push/pull ist nie
+# begrenzt; bei sehr langsamen Leitungen (Modem) hoeher setzen:
+#timeout=120

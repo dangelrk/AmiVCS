@@ -33,6 +33,7 @@ am Anfang sind Kommentare. Der Parser stammt aus
 | `user` (auch `username`) | Benutzername am Server **und** Commit-Autor in `amivcs log`; `amivcs --author <name>` überschreibt ihn für einen Aufruf |
 | `pass` (auch `password`) | Passwort am Server – am besten ein App-Passwort aus der Weboberfläche, das sich je Gerät widerrufen lässt |
 | `verify_ssl` | `1` (Standard) prüft das TLS-Zertifikat, `0` nur zum Testen |
+| `timeout` | Netz-Timeout in Sekunden (Standard `120`): so lange darf eine Verbindung ganz ohne Datenfluss bleiben; nie eine Grenze für einen ganzen `clone`/`push`/`pull` |
 
 Der gemeinsame Parser versteht außerdem `basepath`, `debug`, `gmt_offset`
 und `dst`; AmiVCS wertet diese Schlüssel nicht aus.

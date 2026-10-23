@@ -119,6 +119,47 @@ static void build_url(const AcConfig *cfg, char *out, size_t sz, const char *que
 static void build_auth(const AcConfig *cfg, char *out, size_t sz)
 {
     snprintf(out, sz, "%s:%s", cfg->username, cfg->password);
+    /* Every request builds its credentials here first -- the one spot
+     * that sees the config right before talking to the server. */
+    http_set_timeout(cfg->timeout);
+}
+
+/* One request, repeated up to REQUEST_TRIES times while it fails at the
+ * transport level (no response, or a body that broke off -- status 0)
+ * and retry is allowed. Over a modem a single dropped connection among
+ * the thousands of requests of a clone is to be expected; the HTTP layer
+ * already fails only after its idle timeout, so no extra pause here.
+ * Never repeated: a Ctrl-C/cancel, and requests whose repetition could
+ * do harm -- update-ref is a compare-and-swap that would report a false
+ * conflict if the first attempt went through but its answer got lost.
+ * Every other API action is idempotent (objects are content-addressed). */
+#define REQUEST_TRIES 3
+
+static HttpResponse *api_request(const AcConfig *cfg, const char *method, const char *query,
+                                 const void *data, long len, int retry)
+{
+    char url[2048], auth[256];
+    HttpResponse *resp = NULL;
+    int attempt;
+
+    build_url(cfg, url, sizeof(url), query);
+    build_auth(cfg, auth, sizeof(auth));
+
+    for (attempt = 0; attempt < (retry ? REQUEST_TRIES : 1); attempt++) {
+        http_response_free(resp);
+        resp = http_request(method, url, auth, (const char *)data, len, cfg->verify_ssl);
+        if (resp && (resp->status_code != 0 || resp->aborted)) break;
+        if (ui_break_pending()) break;
+        if (retry && attempt + 1 < REQUEST_TRIES)
+            ui_notify(UI_WARN, "amivcs: network error, retrying (%d/%d)", attempt + 2, REQUEST_TRIES);
+    }
+    if (resp && (resp->status_code == 0 || resp->aborted)) {
+        if (!resp->aborted) ui_notify(UI_ERROR, "amivcs: network error");
+        http_response_free(resp);
+        return NULL;
+    }
+    if (!resp) ui_notify(UI_ERROR, "amivcs: network error");
+    return resp;
 }
 
 static int json_is_ok(JSON_Object *obj)
@@ -136,18 +177,16 @@ static void report_json_error(JSON_Object *obj, const char *fallback)
 /* GET query, parse the JSON body. *out_val must be freed with
  * json_value_free() by the caller on success. Returns 1 on success
  * (regardless of the JSON envelope's own status -- callers check
- * json_is_ok() themselves), 0 on a transport/parse failure. */
-static int api_get_json(const AcConfig *cfg, const char *query, JSON_Value **out_val, JSON_Object **out_obj)
+ * json_is_ok() themselves), 0 on a transport/parse failure. retry: see
+ * api_request(). */
+static int api_get_json(const AcConfig *cfg, const char *query, JSON_Value **out_val, JSON_Object **out_obj,
+                        int retry)
 {
-    char url[2048], auth[256];
     HttpResponse *resp;
     JSON_Value *val;
 
-    build_url(cfg, url, sizeof(url), query);
-    build_auth(cfg, auth, sizeof(auth));
-
-    resp = http_request("GET", url, auth, NULL, 0, cfg->verify_ssl);
-    if (!resp) { ui_notify(UI_ERROR, "amivcs: network error"); return 0; }
+    resp = api_request(cfg, "GET", query, NULL, 0, retry);
+    if (!resp) return 0;
 
     val = resp->body ? json_parse_string(resp->body) : NULL;
     http_response_free(resp);
@@ -159,19 +198,16 @@ static int api_get_json(const AcConfig *cfg, const char *query, JSON_Value **out
     return 1;
 }
 
-/* POST upload_data, parse the JSON body -- same contract as api_get_json(). */
+/* POST upload_data, parse the JSON body -- same contract as api_get_json();
+ * the only POST is put-object, which is idempotent, so always retried. */
 static int api_post_json(const AcConfig *cfg, const char *query, const void *data, long len,
                          JSON_Value **out_val, JSON_Object **out_obj)
 {
-    char url[2048], auth[256];
     HttpResponse *resp;
     JSON_Value *val;
 
-    build_url(cfg, url, sizeof(url), query);
-    build_auth(cfg, auth, sizeof(auth));
-
-    resp = http_request("POST", url, auth, (const char *)data, len, cfg->verify_ssl);
-    if (!resp) { ui_notify(UI_ERROR, "amivcs: network error"); return 0; }
+    resp = api_request(cfg, "POST", query, data, len, 1);
+    if (!resp) return 0;
 
     val = resp->body ? json_parse_string(resp->body) : NULL;
     http_response_free(resp);
@@ -191,14 +227,10 @@ static int api_post_json(const AcConfig *cfg, const char *query, const void *dat
  * already know the object should exist, e.g. right after action=has). */
 static int api_get_raw(const AcConfig *cfg, const char *query, void **out_data, long *out_len)
 {
-    char url[2048], auth[256];
     HttpResponse *resp;
 
-    build_url(cfg, url, sizeof(url), query);
-    build_auth(cfg, auth, sizeof(auth));
-
-    resp = http_request("GET", url, auth, NULL, 0, cfg->verify_ssl);
-    if (!resp) { ui_notify(UI_ERROR, "amivcs: network error"); return 0; }
+    resp = api_request(cfg, "GET", query, NULL, 0, 1);
+    if (!resp) return 0;
     if (resp->status_code < 200 || resp->status_code >= 300 || !resp->body) {
         ui_notify(UI_ERROR, "amivcs: object fetch failed (HTTP %d)", resp->status_code);
         http_response_free(resp);
@@ -223,7 +255,7 @@ int vcs_remote_create_repo(const AcConfig *cfg, const char *repo_name)
     int ok;
 
     snprintf(query, sizeof(query), "action=create-repo&repo=%s", repo_name);
-    if (!api_get_json(cfg, query, &val, &obj)) return 0;
+    if (!api_get_json(cfg, query, &val, &obj, 0)) return 0;
     ok = json_is_ok(obj);
     if (!ok) report_json_error(obj, "create-repo failed");
     json_value_free(val);
@@ -242,7 +274,7 @@ static int fetch_remote_refs(const AcConfig *cfg, const char *repo_name, VcsRefL
     out->n = out->cap = 0;
 
     snprintf(query, sizeof(query), "action=refs&repo=%s", repo_name);
-    if (!api_get_json(cfg, query, &val, &obj)) return 0;
+    if (!api_get_json(cfg, query, &val, &obj, 1)) return 0;
     if (!json_is_ok(obj)) { report_json_error(obj, "refs request failed"); json_value_free(val); return 0; }
 
     arr = json_object_get_array(obj, "refs");
@@ -259,94 +291,171 @@ static int fetch_remote_refs(const AcConfig *cfg, const char *repo_name, VcsRefL
     return 1;
 }
 
-/* Fetches oid (of known expected_type -- see the file header note) if not
- * already present locally, decoding it (from whichever copy, local or
- * just-fetched) to enqueue its children. Recurses depth-first; visited
- * avoids re-walking shared subtrees/history. *fetched is bumped once per
- * actual network fetch (not for objects already found locally) and
- * drives the live "Receiving objects: N" progress line -- there's no
- * upfront total here (the dumb server has no "how many objects total"
- * endpoint), so this is a running count, not a percentage.
+/* Fetches root (of known type -- see the file header note) and everything
+ * reachable from it that isn't present locally yet. Walks the graph with
+ * an explicit work stack instead of recursion: the walk follows parent
+ * links, so a recursive version went one stack frame deeper per commit
+ * of linear history -- about a hundred commits overran the Amiga's
+ * 64 KB stack (vbcc does no stack checking, so that crashed). visited
+ * avoids re-walking shared subtrees/history. Objects already present
+ * locally are still walked: an interrupted clone/pull stores an object
+ * before its children, so a local commit doesn't mean a complete one.
+ * *fetched is bumped once per actual network fetch and drives the live
+ * "Receiving objects: N" progress line -- there's no upfront total
+ * here (the dumb server has no "how many objects total" endpoint), so
+ * this is a running count, not a percentage.
  *
- * *cancelled is checked at the top of every call (so an already-running
- * recursion unwinds promptly once set) and set the moment ui_progress()
- * returns 0 -- a GUI frontend's cancel button, or the CLI's default
- * console hook, which never cancels (see ui_hooks.c). Same threading
- * pattern as core/common/panel.c's CopyCtx.cancelled. */
-static int fetch_object_recursive(VcsRepo *repo, const AcConfig *cfg, const char *repo_name,
-                                  const VcsOid *oid, VcsObjType expected_type, VcsOidSet *visited,
-                                  long *fetched, int *cancelled)
+ * *cancelled is set the moment ui_progress() returns 0 -- a GUI
+ * frontend's cancel button, or Ctrl-C in the CLI. Same pattern as
+ * core/common/panel.c's CopyCtx.cancelled. */
+typedef struct {
+    VcsOid     oid;
+    VcsObjType type;
+} FetchItem;
+
+typedef struct {
+    FetchItem *items;
+    int        n, cap;
+} FetchStack;
+
+static int fetch_push(FetchStack *st, const VcsOid *oid, VcsObjType type)
 {
-    void *data;
-    long len;
-    int ok = 1;
-
-    if (*cancelled) return 0;
-    if (vcs_oid_is_zero(oid) || vcs_oidset_contains(visited, oid)) return 1;
-    vcs_oidset_add(visited, oid);
-
-    if (vcsobjstore_exists(&repo->store, oid)) {
-        VcsObjType type;
-        if (!vcsobjstore_read(&repo->store, oid, &type, &data, &len)) return 0;
-    } else {
-        char hex[VCS_OID_HEX], query[300];
-        VcsOid got_oid;
-        char hex_check[VCS_OID_HEX];
-
-        vcs_oid_to_hex(oid, hex);
-        snprintf(query, sizeof(query), "action=get-object&repo=%s&oid=%s", repo_name, hex);
-        if (!api_get_raw(cfg, query, &data, &len)) return 0;
-
-        md5_buffer_hex(data, (size_t)len, hex_check);
-        if (!vcs_oid_from_hex(hex_check, &got_oid) || !vcs_oid_equal(&got_oid, oid)) {
-            ui_notify(UI_ERROR, "amivcs: fetched object %s doesn't match its content (corrupt transfer?)", hex);
-            free(data);
-            return 0;
-        }
-
-        {
-            VcsOid stored_oid;
-            if (!vcsobjstore_write(&repo->store, expected_type, data, len, &stored_oid)) { free(data); return 0; }
-        }
-
-        (*fetched)++;
-        progress_line("Receiving objects", *fetched, 0, 0);
-        if (!ui_progress(*fetched, -1, "Receiving objects")) { *cancelled = 1; free(data); return 0; }
+    if (vcs_oid_is_zero(oid)) return 1;
+    if (st->n == st->cap) {
+        int ncap = st->cap ? st->cap * 2 : 64;
+        FetchItem *ni = (FetchItem *)realloc(st->items, (size_t)ncap * sizeof(FetchItem));
+        if (!ni) { ui_notify(UI_ERROR, "amivcs: out of memory"); return 0; }
+        st->items = ni;
+        st->cap = ncap;
     }
+    st->items[st->n].oid = *oid;
+    st->items[st->n].type = type;
+    st->n++;
+    return 1;
+}
 
-    switch (expected_type) {
-    case VCS_OBJ_COMMIT: {
-        VcsCommit c;
-        int i;
-        vcs_commit_init(&c);
-        if (vcs_commit_decode(data, len, &c)) {
-            ok = fetch_object_recursive(repo, cfg, repo_name, &c.tree, VCS_OBJ_TREE, visited, fetched, cancelled);
-            for (i = 0; ok && i < c.nparents; i++) {
-                ok = fetch_object_recursive(repo, cfg, repo_name, &c.parents[i], VCS_OBJ_COMMIT, visited, fetched, cancelled);
+static int fetch_objects(VcsRepo *repo, const AcConfig *cfg, const char *repo_name,
+                         const VcsOid *root, VcsObjType root_type, VcsOidSet *visited,
+                         long *fetched, int *cancelled)
+{
+    FetchStack st;
+    int ok;
+
+    st.items = NULL;
+    st.n = st.cap = 0;
+    ok = fetch_push(&st, root, root_type);
+
+    while (ok && st.n > 0) {
+        FetchItem it = st.items[--st.n];
+        void *data;
+        long len;
+
+        if (*cancelled) { ok = 0; break; }
+        if (vcs_oidset_contains(visited, &it.oid)) continue;
+        vcs_oidset_add(visited, &it.oid);
+
+        if (vcsobjstore_exists(&repo->store, &it.oid)) {
+            VcsObjType type;
+            if (!vcsobjstore_read(&repo->store, &it.oid, &type, &data, &len)) { ok = 0; break; }
+        } else {
+            char hex[VCS_OID_HEX], query[300];
+            VcsOid got_oid, stored_oid;
+            char hex_check[VCS_OID_HEX];
+
+            vcs_oid_to_hex(&it.oid, hex);
+            snprintf(query, sizeof(query), "action=get-object&repo=%s&oid=%s", repo_name, hex);
+            if (!api_get_raw(cfg, query, &data, &len)) {
+                if (ui_break_pending()) *cancelled = 1;
+                ok = 0;
+                break;
             }
-        }
-        vcs_commit_free(&c);
-        break;
-    }
-    case VCS_OBJ_TREE: {
-        VcsTree tree;
-        int i;
-        vcs_tree_init(&tree);
-        if (vcs_tree_decode(data, len, &tree)) {
-            for (i = 0; ok && i < tree.n; i++) {
-                ok = fetch_object_recursive(repo, cfg, repo_name, &tree.items[i].oid,
-                                            tree.items[i].is_dir ? VCS_OBJ_TREE : VCS_OBJ_BLOB, visited, fetched, cancelled);
+
+            md5_buffer_hex(data, (size_t)len, hex_check);
+            if (!vcs_oid_from_hex(hex_check, &got_oid) || !vcs_oid_equal(&got_oid, &it.oid)) {
+                ui_notify(UI_ERROR, "amivcs: fetched object %s doesn't match its content (corrupt transfer?)", hex);
+                free(data);
+                ok = 0;
+                break;
             }
+            if (!vcsobjstore_write(&repo->store, it.type, data, len, &stored_oid)) { free(data); ok = 0; break; }
+
+            (*fetched)++;
+            progress_line("Receiving objects", *fetched, 0, 0);
+            if (!ui_progress(*fetched, -1, "Receiving objects")) { *cancelled = 1; free(data); ok = 0; break; }
         }
-        vcs_tree_free(&tree);
-        break;
-    }
-    case VCS_OBJ_BLOB:
-        break;
+
+        switch (it.type) {
+        case VCS_OBJ_COMMIT: {
+            VcsCommit c;
+            int i;
+            vcs_commit_init(&c);
+            if (vcs_commit_decode(data, len, &c)) {
+                /* Pushed last = walked first: the tree before history. */
+                for (i = c.nparents - 1; ok && i >= 0; i--)
+                    ok = fetch_push(&st, &c.parents[i], VCS_OBJ_COMMIT);
+                if (ok) ok = fetch_push(&st, &c.tree, VCS_OBJ_TREE);
+            }
+            vcs_commit_free(&c);
+            break;
+        }
+        case VCS_OBJ_TREE: {
+            VcsTree tree;
+            int i;
+            vcs_tree_init(&tree);
+            if (vcs_tree_decode(data, len, &tree)) {
+                for (i = tree.n - 1; ok && i >= 0; i--)
+                    ok = fetch_push(&st, &tree.items[i].oid,
+                                    tree.items[i].is_dir ? VCS_OBJ_TREE : VCS_OBJ_BLOB);
+            }
+            vcs_tree_free(&tree);
+            break;
+        }
+        case VCS_OBJ_BLOB:
+            break;
+        }
+        free(data);
     }
 
-    free(data);
+    free(st.items);
     return ok;
+}
+
+/* <amivcs_dir>/clone-pending holds the repository name while a clone is
+ * still fetching. If the clone breaks off (modem line dropped, Ctrl-C),
+ * running the same clone again finds it and resumes -- every object
+ * already fetched stays, fetch_objects() only loads what's missing --
+ * instead of failing with "already an AMIVCS repository". */
+#define CLONE_PENDING_FILE "clone-pending"
+
+static int clone_pending(const char *amivcs_dir, const char *repo_name)
+{
+    char path[1024], line[300];
+    FILE *fp;
+    int match = 0;
+
+    localfs_join(path, sizeof(path), amivcs_dir, CLONE_PENDING_FILE);
+    fp = fopen(path, "r");
+    if (!fp) return 0;
+    if (fgets(line, sizeof(line), fp)) {
+        size_t n = strlen(line);
+        while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = '\0';
+        match = strcmp(line, repo_name) == 0;
+    }
+    fclose(fp);
+    return match;
+}
+
+static void set_clone_pending(const char *amivcs_dir, const char *repo_name)
+{
+    char path[1024];
+    FILE *fp;
+
+    localfs_join(path, sizeof(path), amivcs_dir, CLONE_PENDING_FILE);
+    if (!repo_name) { remove(path); return; }
+    fp = fopen(path, "w");
+    if (!fp) return;
+    fprintf(fp, "%s\n", repo_name);
+    fclose(fp);
 }
 
 int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *local_dir)
@@ -363,26 +472,33 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
         return 0;
     }
     if (!vcs_repo_init(local_dir)) {
-        ui_notify(UI_ERROR, "amivcs: '%s' is already an AMIVCS repository", local_dir);
-        return 0;
+        if (!vcs_repo_open(&repo, local_dir) || !clone_pending(repo.amivcs_dir, repo_name)) {
+            ui_notify(UI_ERROR, "amivcs: '%s' is already an AMIVCS repository", local_dir);
+            return 0;
+        }
+        ui_notify(UI_INFO, "Resuming interrupted clone of '%s'.", repo_name);
+    } else {
+        if (!vcs_repo_open(&repo, local_dir)) return 0;
+        set_clone_pending(repo.amivcs_dir, repo_name);
     }
-    if (!vcs_repo_open(&repo, local_dir)) return 0;
 
     if (!fetch_remote_refs(cfg, repo_name, &remote_refs)) return 0;
     if (remote_refs.n == 0) {
         ui_notify(UI_INFO, "Cloned empty repository '%s'.", repo_name);
         vcs_refs_free(&remote_refs);
         save_remote_repo(repo.amivcs_dir, repo_name);
+        set_clone_pending(repo.amivcs_dir, NULL);
         return 1;
     }
 
     vcs_oidset_init(&visited);
     for (i = 0; i < remote_refs.n; i++) {
         if (strcmp(remote_refs.items[i].name, VCS_REF_PREFIX "main") == 0) main_idx = i;
-        if (!fetch_object_recursive(&repo, cfg, repo_name, &remote_refs.items[i].oid, VCS_OBJ_COMMIT, &visited, &fetched, &cancelled)) {
+        if (!fetch_objects(&repo, cfg, repo_name, &remote_refs.items[i].oid, VCS_OBJ_COMMIT, &visited, &fetched, &cancelled)) {
             vcs_oidset_free(&visited);
             vcs_refs_free(&remote_refs);
-            if (cancelled) ui_notify(UI_WARN, "amivcs: clone cancelled");
+            ui_notify(UI_WARN, "amivcs: clone %s -- run the same clone again to resume",
+                      cancelled ? "cancelled" : "interrupted");
             return 0;
         }
     }
@@ -412,6 +528,7 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
     }
 
     save_remote_repo(repo.amivcs_dir, repo_name);
+    set_clone_pending(repo.amivcs_dir, NULL);
     vcs_refs_free(&remote_refs);
     return 1;
 }
@@ -429,7 +546,7 @@ static int ensure_repo_exists(const AcConfig *cfg, const char *repo_name)
     int ok;
 
     snprintf(query, sizeof(query), "action=create-repo&repo=%s", repo_name);
-    if (!api_get_json(cfg, query, &val, &obj)) return 0;
+    if (!api_get_json(cfg, query, &val, &obj, 1)) return 0;
     ok = json_is_ok(obj) || (int)json_object_get_number(obj, "code") == 409;
     if (!ok) report_json_error(obj, "create-repo failed");
     json_value_free(val);
@@ -595,7 +712,7 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
             pos += snprintf(query + pos, sizeof(query) - (size_t)pos, "%s%s", j ? "," : "", hex);
         }
 
-        if (!api_get_json(cfg, query, &val, &obj)) { free(types); free(have_flags); vcs_oidset_free(&reachable); return 0; }
+        if (!api_get_json(cfg, query, &val, &obj, 1)) { free(types); free(have_flags); vcs_oidset_free(&reachable); return 0; }
         if (!json_is_ok(obj)) { report_json_error(obj, "has request failed"); json_value_free(val); free(types); free(have_flags); vcs_oidset_free(&reachable); return 0; }
 
         {
@@ -685,7 +802,8 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
         snprintf(query, sizeof(query), "action=update-ref&repo=%s&name=%s&old=%s&new=%s",
                 resolved_name, fullname, remote_old_hex, hex);
 
-        if (!api_get_json(cfg, query, &val, &obj)) return 0;
+        /* No retry: a compare-and-swap, see api_request(). */
+        if (!api_get_json(cfg, query, &val, &obj, 0)) return 0;
         ok = json_is_ok(obj);
         if (!ok) {
             report_json_error(obj, "update-ref failed");
@@ -735,7 +853,7 @@ int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, c
     vcs_refs_free(&remote_refs);
 
     vcs_oidset_init(&visited);
-    ok = fetch_object_recursive(repo, cfg, resolved_name, &theirs_commit, VCS_OBJ_COMMIT, &visited, &fetched, &cancelled);
+    ok = fetch_objects(repo, cfg, resolved_name, &theirs_commit, VCS_OBJ_COMMIT, &visited, &fetched, &cancelled);
     vcs_oidset_free(&visited);
     if (!ok) {
         if (cancelled) ui_notify(UI_WARN, "amivcs: pull cancelled");

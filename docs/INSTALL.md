@@ -257,6 +257,21 @@ sudo systemctl reload httpd
 Unter PHP-FPM setzt die mitgelieferte `.user.ini` die Upload-Grenzen
 passend zu 100 MB; unter `mod_php` dieselben Werte in die `php.ini`.
 
+Für Amigas an langsamen Leitungen (Modem; der TLS-Handshake braucht auf
+einer 68k-CPU 10–60 Sekunden) sind die Apache-Vorgaben knapp. Empfohlen,
+global (die Handshake- und Header-Werte wirken bei namensbasierten vHosts
+nur auf Server-Ebene), z. B. in `/etc/httpd/conf.d/01-slow-clients.conf`:
+
+```apache
+Timeout 120
+RequestReadTimeout handshake=120 header=60-120,MinRate=200 body=60,MinRate=200
+KeepAliveTimeout 30
+MaxKeepAliveRequests 1000
+```
+
+Ein `clone` besteht aus einer Anfrage je Objekt; ohne längeres
+Keep-Alive kostet fast jede einen neuen Handshake.
+
 Test:
 
 ```sh

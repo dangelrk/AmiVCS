@@ -125,7 +125,7 @@
 <div class="wrap">
 
 <h1>AmiVCS</h1>
-<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 27.09.2026 (Programmversion 0.1)</p>
+<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 23.10.2026 (Programmversion 0.1)</p>
 
 <p>AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
 für AmigaOS 3.x und den PC (macOS/Linux/Windows). Fast alles läuft rein
@@ -298,7 +298,8 @@ eine Einstellung pro Zeile als <code>schlüssel=wert</code>, Zeilen mit
 <pre>server=https://amivcs.example.com
 user=bob
 pass=geheim
-#verify_ssl=1</pre>
+#verify_ssl=1
+#timeout=120</pre>
 
 <table>
 <tr><th>Schlüssel</th><th>Bedeutung</th></tr>
@@ -306,6 +307,7 @@ pass=geheim
 <tr><td><code>user</code> (auch <code>username</code>)</td><td>Benutzername am Server <strong>und</strong> Commit-Autor (<code>amivcs log</code>); ohne <code>user</code> heißt der Autor „unknown“</td></tr>
 <tr><td><code>pass</code> (auch <code>password</code>)</td><td>Passwort am Server (im Klartext in der Datei)</td></tr>
 <tr><td><code>verify_ssl</code></td><td><code>1</code> = Zertifikat prüfen (Standard), <code>0</code> = nicht prüfen, nur zum Testen</td></tr>
+<tr><td><code>timeout</code></td><td>Netz-Timeout in Sekunden (Standard 120): so lange darf eine Verbindung ganz ohne Datenfluss bleiben. Die Dauer von <code>clone</code>, <code>push</code> oder <code>pull</code> ist nie begrenzt.</td></tr>
 </table>
 
 <p>Der gemeinsame Parser kennt außerdem <code>basepath</code>,
@@ -380,10 +382,17 @@ AmiSSL). Der Fortschritt wird laufend angezeigt.</p>
 
 <table>
 <tr><th>Befehl</th><th>Wirkung</th></tr>
-<tr><td><code>clone &lt;repo&gt; [verz]</code></td><td>holt das Server-Repository in ein neues Verzeichnis (Standard: Name des Repositorys), legt alle Branches an, checkt <code>main</code> aus (sonst den ersten Branch) und merkt sich den Namen in <code>.amivcs/config</code></td></tr>
+<tr><td><code>clone &lt;repo&gt; [verz]</code></td><td>holt das Server-Repository in ein neues Verzeichnis (Standard: Name des Repositorys), legt alle Branches an, checkt <code>main</code> aus (sonst den ersten Branch) und merkt sich den Namen in <code>.amivcs/config</code>. Ein abgebrochener <code>clone</code> wird mit demselben Aufruf fortgesetzt.</td></tr>
 <tr><td><code>push [&lt;repo&gt;]</code></td><td>lädt den aktuellen Branch hoch (nur fehlende Objekte, dann den Branch-Zeiger). Mit <code>&lt;repo&gt;</code> wird dieses Server-Repository benutzt, gemerkt und bei Bedarf angelegt; ohne gilt das gemerkte</td></tr>
 <tr><td><code>pull [&lt;branch&gt;]</code></td><td>holt den Branch (Standard: gleichnamig zum aktuellen) und führt ihn wie <code>merge</code> zusammen</td></tr>
 </table>
+
+<p>Über eine langsame oder wacklige Leitung (Modem): Scheitert eine
+einzelne Anfrage an der Verbindung, versucht <code>amivcs</code> sie bis
+zu zweimal neu. <kbd>Ctrl-C</kbd> bricht <code>clone</code>,
+<code>push</code> und <code>pull</code> ab; <code>pull</code> und
+<code>push</code> lassen sich danach einfach wiederholen, <code>clone</code>
+setzt fort.</p>
 
 <p>Repository-Namen: Buchstaben, Ziffern, <code>_</code>, <code>.</code>,
 <code>-</code>, höchstens 128 Zeichen. Jeder Benutzer sieht nur seine
@@ -709,6 +718,7 @@ jeder Anfrage (Kontopasswort oder App-Passwort; nach 5 Fehlversuchen
 <tr><td><code>… requires server=/user=/pass= in the config file</code></td><td><code>amivcs.cfg</code> fehlt oder ist unvollständig (<a href="#konfiguration">Kapitel 4</a>)</td></tr>
 <tr><td><code>no remote repository configured -- give one explicitly</code></td><td>einmal <code>amivcs push &lt;name&gt;</code> aufrufen</td></tr>
 <tr><td><code>rejected -- the server has commits you don't have; pull and merge first</code></td><td>jemand hat vorher gepusht: <code>amivcs pull</code>, ggf. <a href="#konflikte">Konflikte</a> lösen, erneut <code>push</code></td></tr>
+<tr><td><code>network error, retrying</code> / <code>clone</code> bricht ab</td><td>Die Leitung ist abgerissen oder hing länger als <code>timeout</code> Sekunden (Standard 120) ohne Daten. <code>amivcs</code> versucht jede Anfrage bis zu dreimal; bei sehr langsamen Leitungen <code>timeout=300</code> setzen. Einen abgebrochenen <code>clone</code> mit demselben Aufruf fortsetzen.</td></tr>
 <tr><td><code>network error</code>, Meldungen zu bsdsocket.library/AmiSSL</td><td>TCP/IP-Stack online? AmiSSL 5 installiert? Auf dem Amiga nur <code>https://</code>. Diese Meldungen der gemeinsamen HTTP-Bibliothek beginnen mit <code>amicloudcore:</code></td></tr>
 <tr><td>HTTP 401</td><td>Benutzer/Passwort falsch oder Konto gesperrt</td></tr>
 <tr><td>Zertifikatsfehler</td><td>Zertifikat des Servers prüfen; <code>verify_ssl=0</code> nur zum Testen</td></tr>
@@ -752,6 +762,7 @@ Schwesterprojekte:
 
 <table>
 <tr><th>Datum</th><th>Änderung</th></tr>
+<tr><td>23.10.2026</td><td>langsame Verbindungen: <code>timeout</code>, Wiederholung fehlgeschlagener Anfragen, Fortsetzen eines abgebrochenen <code>clone</code>, <kbd>Ctrl-C</kbd></td></tr>
 <tr><td>27.09.2026</td><td>eigenes Repository „AmiVCS“; Handbuch überarbeitet (Installation, Install-Skript, Konfiguration, Fehlersuche)</td></tr>
 <tr><td>12.07.2026</td><td>amivcs 0.1: init, status, commit, log, branch, switch, checkout, merge, gc, cat-file; Server; clone/push/pull</td></tr>
 <tr><td>13.07.2026</td><td>Vormerkbereich (add/remove/commit -a), Mehrbranch-Historie, amivcs-gui (Qt und MUI), Web-Oberfläche</td></tr>
@@ -760,7 +771,7 @@ Schwesterprojekte:
 </table>
 
 <footer>
-AmiVCS-Handbuch · Stand 27.09.2026 · Amiga-Fassung:
+AmiVCS-Handbuch · Stand 23.10.2026 · Amiga-Fassung:
 <code>AmiVCS.guide</code> (AmigaGuide) ·
 <a href="#">nach oben</a>
 </footer>

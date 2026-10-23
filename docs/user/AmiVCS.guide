@@ -1,5 +1,5 @@
 @database "AmiVCS.guide"
-@$VER: AmiVCS.guide 0.4 (22.10.2026)
+@$VER: AmiVCS.guide 0.5 (23.10.2026)
 @author "Ronny Krueger"
 @(c) "2026 Ronny Krueger, GPL-3.0-or-later"
 @wordwrap
@@ -289,6 +289,7 @@ am Anfang sind Kommentare.
   user=bob
   pass=geheim
   #verify_ssl=1
+  #timeout=120
 
 Die Schlüssel:
 
@@ -302,6 +303,9 @@ Die Schlüssel:
                der Web-Oberfläche. Andere Schreibweise: password
   verify_ssl   1 = Zertifikat des Servers prüfen (Standard),
                0 = nicht prüfen, nur zum Testen!
+  timeout      Netz-Timeout in Sekunden, Standard 120: so lange
+               darf eine Verbindung ganz ohne Datenfluss bleiben.
+               Die Dauer von clone, push oder pull ist nie begrenzt.
 
 Der gemeinsame Parser kennt außerdem basepath, debug, gmt_offset und
 dst; AmiVCS wertet diese nicht aus.
@@ -490,7 +494,9 @@ clone <repo> [verzeichnis]
     Angabe: gleicher Name wie <repo>) und legt dort alle Branches des
     Servers an. Ausgecheckt wird "main", falls vorhanden, sonst der
     erste Branch. Der Name <repo> wird in .amivcs/config gemerkt.
-    Dieser Befehl darf überall aufgerufen werden.
+    Dieser Befehl darf überall aufgerufen werden. Bricht ein clone ab
+    (Leitung weg, Ctrl-C), setzt derselbe Aufruf ihn fort: bereits
+    geholte Objekte bleiben, nur der Rest wird geladen.
 
 push [<repo>]
     Lädt den aktuellen Branch hoch: alle Objekte, die der Server noch
@@ -503,6 +509,11 @@ pull [<branch>]
     Holt <branch> (ohne Angabe: gleichnamig zum aktuellen Branch) vom
     Server und führt ihn genauso zusammen wie "merge": Fast-forward,
     3-Wege-Merge oder Abbruch bei Konflikt.
+
+Über eine langsame oder wacklige Leitung (Modem): Scheitert eine
+einzelne Anfrage an der Verbindung, versucht amivcs sie bis zu zweimal
+neu. Ctrl-C bricht clone, push und pull ab; pull und push lassen sich
+danach einfach wiederholen, clone setzt fort.
 
 Repository-Namen auf dem Server: Buchstaben, Ziffern, "_", "." und
 "-", höchstens 128 Zeichen. Jeder Benutzer sieht nur seine eigenen
@@ -950,6 +961,12 @@ HTTP 401 (Invalid credentials)
 Zertifikatsfehler
     Zertifikat des Servers prüfen. verify_ssl=0 nur zum Testen.
 
+"network error, retrying" / clone bricht ab
+    Die Leitung ist abgerissen oder hing länger als timeout Sekunden
+    (Standard 120) ohne Daten. amivcs versucht jede Anfrage bis zu
+    dreimal; bei sehr langsamen Leitungen timeout=300 setzen. Einen
+    abgebrochenen clone mit demselben Aufruf fortsetzen.
+
 amivcs-gui startet nicht (Requester statt Fenster)
     MUI 3.8 oder neuer fehlt. Der Requester nennt den Grund.
 
@@ -1059,6 +1076,10 @@ Schwesterprojekte:
 
 Versionsgeschichte
 ------------------
+
+Handbuch 0.5 (23.10.2026)
+  - Langsame Verbindungen: timeout, Wiederholung fehlgeschlagener
+    Anfragen, Fortsetzen eines abgebrochenen clone, Ctrl-C.
 
 Handbuch 0.4 (22.10.2026)
   - Web-Oberfläche mit Dateibaum, Diffs, öffentlichen

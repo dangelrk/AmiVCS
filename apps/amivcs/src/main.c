@@ -49,7 +49,7 @@ const char amiga_ver[] = "$VER: amivcs " AC_VERSION " (27.09.2026)";
 static int noop_progress(long done, long total, const char *name)
 {
     (void)done; (void)total; (void)name;
-    return 1;
+    return !ui_break_pending(); /* Ctrl-C cancels a clone/pull/push */
 }
 
 static void usage(const char *prog)
