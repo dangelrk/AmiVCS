@@ -277,13 +277,14 @@ make release
 
 baut `make dist-amiga` und legt in `build/release/` die Dateien für
 Aminet/GitHub ab: `AmiVCS-<version>.lha` und `AmiVCS-<version>.readme` (aus
-`install/amiga/aminet.readme`, `@VERSION@` wird ersetzt). Version und
-Datum stehen nur in `core/libcloudcore/include/cloudcore/version.h`
-(`AC_VERSION`, `AC_DATE`): daraus bauen alle Programme ihre `$VER`-Angabe,
-und `make dist-amiga` setzt beide in die Installer-Skripte ein (`@VERSION@`,
+`install/amiga/aminet.readme`, `@VERSION@` wird ersetzt). Die Version steht nur in
+`core/libcloudcore/include/cloudcore/version.h` (`AC_VERSION`), das Datum
+ist immer der Tag des Bauens (`make` übergibt `-DAC_BUILD_DATE=TT.MM.JJJJ`,
+`make release` baut alle Amiga-Programme neu). Daraus bauen alle Programme
+ihre `$VER`-Angabe, und `make dist-amiga` setzt beide in die Installer-Skripte ein (`@VERSION@`,
 `@DATE@`, für die Shell-Variante `@VER_MAJOR@`/`@VER_REVN@`). Weil die
 Installer nur ersetzen, wenn die Version im Archiv nicht älter ist, **vor
-jedem Release `AC_VERSION` erhöhen** (und `AC_DATE` anpassen). Ist Lhasa
+jedem Release `AC_VERSION` erhöhen**. Ist Lhasa
 installiert, prüft `lha t` das Archiv gleich mit.
 
 Weitere

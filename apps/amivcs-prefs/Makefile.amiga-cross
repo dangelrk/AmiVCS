@@ -78,3 +78,8 @@ clean:
 	rm -f $(TARGET_BIN)
 
 .PHONY: all clean
+
+# Build date for the $VER string (dd.mm.yyyy, see core version.h);
+# the top-level make passes the same date to every program.
+AC_BUILD_DATE ?= $(shell date +%d.%m.%Y)
+CFLAGS += -DAC_BUILD_DATE=$(AC_BUILD_DATE)
