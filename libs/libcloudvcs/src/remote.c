@@ -559,7 +559,7 @@ static int ensure_repo_exists(const AcConfig *cfg, const char *repo_name)
 
     snprintf(query, sizeof(query), "action=create-repo&repo=%s", repo_name);
     if (!api_get_json(cfg, query, &val, &obj, 1)) return 0;
-    ok = json_is_ok(obj) || (int)json_object_get_number(obj, "code") == 409;
+    ok = json_is_ok(obj) || AC_DTOL(json_object_get_number(obj, "code")) == 409;
     if (!ok) report_json_error(obj, "create-repo failed");
     json_value_free(val);
     return ok;
