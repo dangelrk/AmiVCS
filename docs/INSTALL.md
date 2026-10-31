@@ -23,7 +23,7 @@ und Zugangsdaten sind nur für `clone`, `push` und `pull` nötig.
 
 | Was | Wofür |
 |---|---|
-| AmigaOS 3.x, 68000 oder besser | alle Programme (übersetzt für 68000, keine FPU nötig) |
+| AmigaOS 3.x, 68020 oder besser | alle Programme (übersetzt für 68020 seit 0.2, keine FPU nötig) |
 | TCP/IP-Stack mit `bsdsocket.library` (z. B. Roadshow, AmiTCP, Miami) | Clone/Push/Pull in `amivcs` und `amivcs-gui` – lokal wird er nicht gebraucht |
 | AmiSSL 5 (`amisslmaster.library`) | wie oben; alle Serververbindungen laufen über HTTPS |
 | MUI 3.8 oder neuer (`muimaster.library` ≥ 19) | nur `amivcs-gui` |

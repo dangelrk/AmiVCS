@@ -31,6 +31,14 @@ If NOT EXISTS Install-Datei
   Quit 10
 EndIf
 
+; Ab Version 0.2 für den 68020 übersetzt; CPU CHECK meldet WARN (5),
+; wenn kein 68020 oder neuer vorhanden ist.
+CPU CHECK 68020 >NIL:
+If WARN
+  Echo "AmiVCS @VERSION@ braucht mindestens einen 68020."
+  Quit 10
+EndIf
+
 Echo ""
 Echo "AmiVCS @VERSION@ - Installation"
 Echo "==============================="

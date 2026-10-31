@@ -56,7 +56,7 @@ try {
     <section class="feature">
       <h2>amivcs</h2>
       <p>Kommandozeile mit <code>init</code>, <code>add</code>, <code>commit</code>,
-         <code>log</code>, <code>branch</code>, <code>merge</code> – läuft schon auf dem 68000.</p>
+         <code>log</code>, <code>branch</code>, <code>merge</code> – läuft schon auf dem 68020.</p>
     </section>
     <section class="feature">
       <h2>amivcs-gui</h2>

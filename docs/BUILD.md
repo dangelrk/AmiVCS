@@ -118,7 +118,7 @@ Dieser Weg ist bisher nicht erprobt; Rückmeldungen sind willkommen.
 ## 4. Amiga: Cross-Compile mit vbcc
 
 Die Amiga-Programme werden mit **vbcc** für AmigaOS 3.x und eine
-68000-CPU übersetzt (Gleitkomma über `-lmieee`, keine FPU nötig). Das
+68020-CPU übersetzt (seit 0.2; Gleitkomma über `-lmieee`, keine FPU nötig). Das
 funktioniert von macOS, Linux und Windows aus.
 
 ### Toolchain-Layout

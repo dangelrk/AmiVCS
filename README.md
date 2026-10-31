@@ -8,7 +8,7 @@ not a Git clone, but borrows Git's proven ideas (commit/tree/blob,
 branches, staging, 3-way merge).*
 
 AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung,
-die auf einem Amiga mit 68000-CPU genauso läuft wie auf einem aktuellen
+die auf einem Amiga mit 68020-CPU genauso läuft wie auf einem aktuellen
 PC. Fast alle Befehle (`init`, `status`, `add`, `commit`, `log`,
 `branch`, `switch`, `merge`, `gc` …) arbeiten rein lokal im
 Arbeitsverzeichnis – ein Server wird nur für `clone`/`push`/`pull`

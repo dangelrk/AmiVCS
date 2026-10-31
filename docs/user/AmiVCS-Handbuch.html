@@ -134,7 +134,7 @@ lokal im Arbeitsverzeichnis; ein Server wird nur für
 AmiVCS ist <strong>kein Git-Nachbau</strong>: Es übernimmt bewährte
 Grundideen (Commit, Tree und Blob, Branches, dateiweises Vormerken,
 3-Wege-Merge), verzichtet aber bewusst auf Rebase, Cherry-Pick, Stash,
-Reflog und Ähnliches. Ziel ist ein System, das auf einem 68000 ohne
+Reflog und Ähnliches. Ziel ist ein System, das auf einem 68020 ohne
 FPU flüssig läuft und das man komplett verstehen kann.</p>
 
 <pre>  PC-Client (libcurl)  ─┐   HTTPS   ┌──────────────────────────────────┐
@@ -190,7 +190,7 @@ eigene Konfigurationsdatei, eigene Zugangsdaten.</p>
 
 <table>
 <tr><th>Was</th><th>Wofür</th></tr>
-<tr><td>AmigaOS 3.x, 68000 oder besser</td><td>alle Amiga-Programme (keine FPU nötig)</td></tr>
+<tr><td>AmigaOS 3.x, 68020 oder besser</td><td>alle Amiga-Programme (keine FPU nötig)</td></tr>
 <tr><td>TCP/IP-Stack mit <code>bsdsocket.library</code> (z. B. Roadshow, AmiTCP, Miami)</td><td><code>clone</code>/<code>push</code>/<code>pull</code> in <code>amivcs</code> und <code>amivcs-gui</code></td></tr>
 <tr><td>AmiSSL 5 (<code>amisslmaster.library</code>)</td><td>wie oben – alle Verbindungen laufen über HTTPS</td></tr>
 <tr><td>MUI 3.8 oder neuer (<code>muimaster.library</code> ≥ 19)</td><td>nur <code>amivcs-gui</code> auf dem Amiga</td></tr>

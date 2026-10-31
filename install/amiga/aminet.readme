@@ -29,7 +29,7 @@ Existing settings are never overwritten.
 
 Requirements
 ------------
-- AmigaOS 3.x, 68000 or better, no FPU needed
+- AmigaOS 3.x, 68020 or better (since 0.2), no FPU needed
 - MUI 3.8 or newer for amivcs-gui
 - for clone/push/pull only: TCP/IP stack with bsdsocket.library,
   AmiSSL 5 and an AmiVCS server
