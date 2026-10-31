@@ -1090,6 +1090,10 @@ Schwesterprojekte:
 Versionsgeschichte
 ------------------
 
+Programmversion 0.2 (31.10.2026)
+  - Mindestens 68020 erforderlich (AmiSSL 5 braucht ihn ohnehin).
+  - Gemeinsamer Kern aktualisiert.
+
 Handbuch 0.5 (23.10.2026)
   - Langsame Verbindungen: timeout, Wiederholung fehlgeschlagener
     Anfragen, Fortsetzen eines abgebrochenen clone, Ctrl-C.
