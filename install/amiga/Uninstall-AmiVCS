@@ -3,7 +3,8 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ; Copyright (C) 2026 Ronny Krueger
 ;
-; Aufruf:  Execute Uninstall-AmiVCS
+; Aufruf: Icon Uninstall-AmiVCS doppelt anklicken (IconX), oder in einer
+; Shell:  Execute Uninstall-AmiVCS
 ;
 ; Löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AMIVCSPrefs und
 ; HELP:AmiVCS.guide. Die Einstellungen (ENV:/ENVARC:amivcs.cfg) werden
@@ -41,6 +42,9 @@ If NOT WARN
   If EXISTS HELP:AmiVCS.guide
     Delete HELP:AmiVCS.guide QUIET
     Echo "  HELP:AmiVCS.guide gelöscht."
+  EndIf
+  If EXISTS HELP:AmiVCS.guide.info
+    Delete HELP:AmiVCS.guide.info QUIET
   EndIf
 EndIf
 

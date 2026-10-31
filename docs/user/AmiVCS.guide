@@ -134,7 +134,8 @@ Installation auf dem Amiga
 
 Das Archiv AmiVCS.lha enthält die Schublade "AmiVCS":
 
-  Install-AmiVCS     Installationsskript
+  Install-AmiVCS     Installationsskript (Commodore-Installer)
+  Install-AmiVCS.shell  dasselbe als Shell-Skript
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             Kurzbeschreibung
   LICENSE            Lizenztext (GPLv3)
@@ -143,20 +144,35 @@ Das Archiv AmiVCS.lha enthält die Schublade "AmiVCS":
   Docs/              AmiVCS.guide (dieses Handbuch)
   Examples/          amivcs.cfg.example
 
-Auspacken und Installationsskript starten (im Shell-Fenster):
+Auspacken (z.B. im Shell-Fenster mit  lha x AmiVCS.lha RAM:) und in
+der Schublade das Icon Install-AmiVCS doppelt anklicken. Es startet
+den Installer (bei OS 3.2 in SYS:System, bei älteren Systemen von der
+Install-Diskette nach C: kopieren).
 
-  lha x AmiVCS.lha RAM:
+Ohne Installer gibt es dasselbe als Shell-Skript (Fragen mit y oder n
+beantworten):
+
   CD RAM:AmiVCS
-  Execute Install-AmiVCS
+  Execute Install-AmiVCS.shell
 
-Das Skript fragt jeden Schritt einzeln ab (Antwort y oder n):
+Aktualisieren: eine neuere Version installiert man genauso - Archiv
+auspacken, Installer erneut starten. Er vergleicht bei jedem Programm
+die installierte Version mit der im Archiv. Als Einsteiger oder
+Geübter Benutzer ersetzt er gleiche und ältere Versionen; eine
+NEUERE installierte Version bleibt stehen und wird am Ende genannt.
+Im Expertenmodus zeigt er bei jedem schon installierten Programm
+beide Versionen und fragt. Vorhandene Icons (mit eigenen Tooltypes
+und Positionen) bleiben erhalten. Die Shell-Variante fragt nur nach,
+wenn ein installiertes Programm neuer ist als das im Archiv.
+
+Der Installer fragt zuerst, welche Teile installiert werden sollen:
 
   - amivcs nach C:
   - amivcs-gui nach C:
-  - AMIVCSPrefs nach SYS:Prefs/
+  - AMIVCSPrefs (mit Icon) nach SYS:Prefs/
   - AmiVCS.guide nach HELP: (nur wenn der Assign HELP: existiert)
 
-Es warnt, wenn muimaster.library oder amisslmaster.library in LIBS:
+Er warnt, wenn muimaster.library oder amisslmaster.library in LIBS:
 fehlen, und bietet am Ende an, AMIVCSPrefs zu starten, falls es noch
 keine ENVARC:amivcs.cfg gibt. Vorhandene Konfigurationen werden nie
 überschrieben.
@@ -190,12 +206,8 @@ Im Shell-Fenster, aus der Schublade heraus:
 
   Copy C/amivcs C:
   Copy C/amivcs-gui C:
-  Copy C/AMIVCSPrefs SYS:Prefs/
-  Copy Docs/AmiVCS.guide HELP:
-
-Es werden keine Icons mitgeliefert. AMIVCSPrefs startet man im Shell
-mit "SYS:Prefs/AMIVCSPrefs"; auf der Workbench ist es nur sichtbar,
-wenn im Fenster "Alle Dateien anzeigen" eingeschaltet ist.
+  Copy C/AMIVCSPrefs(%|.info) SYS:Prefs/
+  Copy Docs/AmiVCS.guide(%|.info) HELP:
 
 Wer amivcs-gui von der Workbench aus starten möchte, legt sich ein
 Projekt-Icon an. amivcs-gui versteht diese Merkmale (Tooltypes):
@@ -212,7 +224,8 @@ Projekt-Icon an. amivcs-gui versteht diese Merkmale (Tooltypes):
 Deinstallation
 --------------
 
-Aus der Installationsschublade:
+In der Installationsschublade das Icon Uninstall-AmiVCS doppelt
+anklicken oder im Shell-Fenster:
 
   Execute Uninstall-AmiVCS
 

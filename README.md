@@ -38,7 +38,11 @@ make qt                       # amivcs-gui (Qt 6)  -> bin/pc/
 export VBCC=/pfad/zu/vbcc
 make amiga                    # Amiga-Programme    -> bin/amiga/
 make dist-amiga               # Installationsschublade build/dist/AmiVCS/
+make release                  # build/release/AmiVCS-<version>.lha + .readme
 ```
+
+Auf dem Amiga in der Schublade das Icon `Install-AmiVCS` doppelt anklicken
+(Commodore-Installer; ohne Installer `Execute Install-AmiVCS.shell`).
 
 Wurde ohne `--recurse-submodules` geklont: `git submodule update --init`.
 

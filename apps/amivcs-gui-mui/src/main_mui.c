@@ -34,7 +34,7 @@ extern int ac_verbose;
 extern int ac_errors_to_stderr;
 
 long __stack = 65536;
-const char amiga_ver[] = "$VER: amivcs-gui " AC_VERSION " (27.09.2026)";
+const char amiga_ver[] = "$VER: amivcs-gui " AC_VERSION " (" AC_DATE ")";
 
 /* Debug toggle (-v / DEBUG tooltype) and repo path (a plain CLI argument,
  * or a REPO=<path> tooltype) -- read together since both need the same

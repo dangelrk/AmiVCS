@@ -1,0 +1,45 @@
+Short:        Small version control system for OS3
+Author:       Ronny Krueger
+Uploader:     Ronny Krueger
+Type:         dev/misc
+Version:      @VERSION@
+Architecture: m68k-amigaos >= 3.0.0
+Requires:     MUI 3.8 (GUI); TCP/IP + AmiSSL 5 for clone/push/pull
+Distribution: Aminet
+Replaces:     dev/misc/AmiVCS.lha
+
+AmiVCS is a small, deliberately simple version control system for
+AmigaOS 3.x: commits, branches, staging and three-way merge, all local.
+An AmiVCS server is only needed for clone, push and pull; it also offers
+a web interface for browsing repositories, history and diffs.
+
+  amivcs        command line client
+  amivcs-gui    MUI front end (history graph, staging, diffs)
+  AMIVCSPrefs   settings editor (server, user, author name)
+
+The same programs (command line and a Qt GUI) exist for macOS, Linux and
+Windows; the server (PHP) is part of the source distribution.
+
+Installation
+------------
+Unpack the archive and double-click "Install-AmiVCS" (Commodore
+Installer, part of OS 3.2 in SYS:System). Without the Installer, use the
+shell script instead:  CD AmiVCS  and  Execute Install-AmiVCS.shell
+Existing settings are never overwritten.
+
+Requirements
+------------
+- AmigaOS 3.x, 68000 or better, no FPU needed
+- MUI 3.8 or newer for amivcs-gui
+- for clone/push/pull only: TCP/IP stack with bsdsocket.library,
+  AmiSSL 5 and an AmiVCS server
+
+Documentation and user interface are in German.
+Die Dokumentation (Docs/AmiVCS.guide) und die Programme sind deutsch.
+
+License
+-------
+GNU General Public License, version 3 or later. Contains the JSON parser
+Parson (MIT license, see THIRD-PARTY-NOTICES).
+
+Source: https://github.com/dangelrk/AmiVCS

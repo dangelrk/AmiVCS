@@ -1,0 +1,123 @@
+; $VER: Install-AmiVCS.shell @VERSION@ (@DATE@)
+; Install-AmiVCS.shell -- installiert AmiVCS aus der Installationsschublade
+; (Shell-Variante für Systeme ohne Installer; sonst Icon Install-AmiVCS).
+; SPDX-License-Identifier: GPL-3.0-or-later
+; Copyright (C) 2026 Ronny Krueger
+;
+; Aufruf im Shell-Fenster, aus der Schublade heraus:
+;     CD RAM:AmiVCS
+;     Execute Install-AmiVCS.shell
+;
+; Kopiert amivcs und amivcs-gui nach C:, AMIVCSPrefs nach SYS:Prefs/ und
+; das Handbuch nach HELP: (nur wenn HELP: existiert). Jeder Schritt wird
+; einzeln abgefragt. Vorhandene Einstellungen (ENV:/ENVARC:amivcs.cfg)
+; werden nie angelegt oder überschrieben. Ein erneuter Aufruf aktualisiert
+; eine vorhandene Installation; ist ein installiertes Programm neuer als
+; das im Archiv, fragt das Skript nach.
+
+FailAt 21
+
+; Version dieses Archivs (setzt make dist-amiga ein). Install-Datei
+; ersetzt damit installierte Programme nur nach Rückfrage, wenn sie
+; neuer sind als die im Archiv; vorhandene Icons bleiben erhalten.
+Set instver @VER_MAJOR@
+Set instrevn @VER_REVN@
+Set instfehler 0
+
+If NOT EXISTS Install-Datei
+  Echo "Install-AmiVCS.shell muss aus der Installationsschublade gestartet werden:"
+  Echo "  CD RAM:AmiVCS"
+  Echo "  Execute Install-AmiVCS.shell"
+  Quit 10
+EndIf
+
+Echo ""
+Echo "AmiVCS @VERSION@ - Installation"
+Echo "==============================="
+Echo "Jeder Schritt wird einzeln abgefragt: y = ja, n = nein."
+Echo ""
+
+; ---- Kommandozeile ----------------------------------------------------
+Ask "amivcs (Kommandozeile) nach C: kopieren? (y/n)"
+If WARN
+  Execute Install-Datei amivcs C:
+EndIf
+
+; ---- MUI-Oberfläche ---------------------------------------------------
+Ask "amivcs-gui (MUI-Oberfläche) nach C: kopieren? (y/n)"
+If WARN
+  Execute Install-Datei amivcs-gui C:
+  If NOT EXISTS LIBS:muimaster.library
+    Echo "  Hinweis: LIBS:muimaster.library fehlt - amivcs-gui braucht MUI."
+  EndIf
+EndIf
+
+; ---- Einstellungs-Editor ----------------------------------------------
+Ask "AMIVCSPrefs (Einstellungen) nach SYS:Prefs/ kopieren? (y/n)"
+If WARN
+  Execute Install-Datei AMIVCSPrefs SYS:Prefs/ ICON
+EndIf
+
+; ---- Handbuch ---------------------------------------------------------
+Assign >NIL: EXISTS HELP:
+If WARN
+  Echo "HELP: ist nicht zugewiesen - das Handbuch bleibt in Docs/AmiVCS.guide."
+Else
+  Ask "Handbuch AmiVCS.guide nach HELP: kopieren? (y/n)"
+  If WARN
+    Copy Docs/AmiVCS.guide HELP: CLONE QUIET
+    If WARN
+      Echo "FEHLER: Docs/AmiVCS.guide konnte nicht nach HELP: kopiert werden."
+      Set instfehler 1
+    Else
+      If NOT EXISTS HELP:AmiVCS.guide.info
+        Copy Docs/AmiVCS.guide.info HELP: CLONE QUIET
+      EndIf
+      Echo "  HELP:AmiVCS.guide installiert."
+    EndIf
+  EndIf
+EndIf
+
+; ---- Voraussetzungen für Serververbindungen ---------------------------
+If NOT EXISTS LIBS:amisslmaster.library
+  Echo ""
+  Echo "Hinweis: LIBS:amisslmaster.library fehlt. Für clone/push/pull"
+  Echo "(auch in amivcs-gui) werden AmiSSL 5 und ein TCP/IP-Stack benötigt."
+EndIf
+
+; ---- Einstellungen: nie überschreiben ----------------------------------
+Echo ""
+If EXISTS ENVARC:amivcs.cfg
+  Echo "ENVARC:amivcs.cfg ist vorhanden und bleibt unverändert."
+Else
+  Echo "Es gibt noch keine ENVARC:amivcs.cfg. Sie wird nur für clone,"
+  Echo "push und pull gebraucht (und für den Autornamen der Commits)."
+  If EXISTS SYS:Prefs/AMIVCSPrefs
+    Ask "AMIVCSPrefs jetzt starten, um Server und Benutzer einzutragen? (y/n)"
+    If WARN
+      SYS:Prefs/AMIVCSPrefs
+    EndIf
+  Else
+    Echo "Vorlage: Examples/amivcs.cfg.example nach ENVARC:amivcs.cfg"
+    Echo "kopieren, anpassen und zusätzlich nach ENV: kopieren."
+  EndIf
+EndIf
+
+Echo ""
+If $instfehler EQ 1
+  Echo "Fertig, aber mit FEHLERN (siehe oben) - bitte prüfen."
+Else
+  Echo "Fertig."
+EndIf
+UnSet instver
+UnSet instrevn
+UnSet instfehler
+UnSet instok
+Echo "Erste Schritte im Shell-Fenster:"
+Echo "  CD Work:MeinProjekt"
+Echo "  amivcs init"
+Echo "  amivcs commit -a -m *"Erster Stand*""
+Echo "  amivcs log"
+Echo "Handbuch: MultiView HELP:AmiVCS.guide (bzw. Docs/AmiVCS.guide)"
+Echo "Deinstallation: Execute Uninstall-AmiVCS"
+Quit 0

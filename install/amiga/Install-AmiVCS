@@ -1,115 +1,189 @@
-; $VER: Install-AmiVCS 0.1 (27.09.2026)
-; Install-AmiVCS -- installiert AmiVCS aus der Installationsschublade.
+; $VER: Install-AmiVCS @VERSION@ (@DATE@)
+; Installer-Skript für AmiVCS (AmigaOS 3.x, Commodore-Installer ab 43)
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ; Copyright (C) 2026 Ronny Krueger
 ;
-; Aufruf im Shell-Fenster, aus der Schublade heraus:
-;     CD RAM:AmiVCS
-;     Execute Install-AmiVCS
+; Start: Icon "Install-AmiVCS" doppelt anklicken, oder in der Shell
+;     CD AmiVCS
+;     Installer Install-AmiVCS
+; Ohne Installer gibt es dasselbe als Shell-Skript:
+;     Execute Install-AmiVCS.shell
 ;
-; Kopiert amivcs und amivcs-gui nach C:, AMIVCSPrefs nach SYS:Prefs/ und
-; das Handbuch nach HELP: (nur wenn HELP: existiert). Jeder Schritt wird
-; einzeln abgefragt. Vorhandene Einstellungen (ENV:/ENVARC:amivcs.cfg)
-; werden nie angelegt oder überschrieben.
+; Kopiert amivcs und amivcs-gui nach C:, AMIVCSPrefs nach SYS:Prefs und
+; das Handbuch nach HELP:. Einstellungen (ENV:/ENVARC:amivcs.cfg) werden
+; nie angelegt oder überschrieben.
+; Ein erneuter Start über eine vorhandene Installation aktualisiert sie:
+; Programme werden nur ersetzt, wenn die installierte Version nicht neuer
+; ist (im Expertenmodus fragt der Installer), vorhandene Icons bleiben.
 
-FailAt 21
+(set @app-name "AmiVCS")
+(set @default-dest "C:")
 
-If NOT EXISTS C/amivcs
-  Echo "Install-AmiVCS muss aus der Installationsschublade gestartet werden:"
-  Echo "  CD RAM:AmiVCS"
-  Echo "  Execute Install-AmiVCS"
-  Quit 10
-EndIf
+(onerror
+  (message "\nDie Installation wurde abgebrochen.\n\n"
+           "Bereits kopierte Dateien bleiben erhalten;\n"
+           "ein erneuter Start setzt sie wieder ein.")
+)
 
-Echo ""
-Echo "AmiVCS - Installation"
-Echo "====================="
-Echo "Jeder Schritt wird einzeln abgefragt: y = ja, n = nein."
-Echo ""
+; ---- Kopieren mit Versionsprüfung ----------------------------------------
+; P_KOPIE kopiert #datei aus der Schublade #qdir nach #ziel. Liegt dort
+; schon eine Datei gleichen Namens, vergleicht P_KOPIE die Versionen
+; ($VER, getversion):
+;   Einsteiger, Geübter Benutzer: ist die installierte Version NEUER als
+;     die im Archiv, bleibt sie stehen (gemerkt in #behalten); gleiche
+;     und ältere Versionen werden ersetzt.
+;   Experte: zeigt beide Versionen und fragt jedes Mal.
+; Mit #icon = 1 kommt das Icon mit, aber nur, wenn am Ziel noch keins
+; liegt - eigene Tooltypes und Positionen bleiben so erhalten.
+(set #behalten "")
+(set #v 0)
+(procedure P_VTEXT
+  (if (= #v 0) "unbekannt" (cat (/ #v 65536) "." (BITAND #v 65535))))
 
-; ---- Kommandozeile ----------------------------------------------------
-Ask "amivcs (Kommandozeile) nach C: kopieren? (y/n)"
-If WARN
-  Copy C/amivcs C: CLONE QUIET
-  If WARN
-    Echo "FEHLER: C/amivcs konnte nicht nach C: kopiert werden."
-  Else
-    Echo "  C:amivcs installiert."
-  EndIf
-EndIf
+(procedure P_KOPIE
+  (set #quelle (tackon #qdir #datei))
+  (set #zielpfad (tackon #ziel #datei))
+  (set #ersetzen 1)
+  (if (> (exists #zielpfad (noreq)) 0)
+    (
+      (set #vneu (getversion #quelle))
+      (set #valt (getversion #zielpfad))
+      (set #v #vneu) (set #tneu (P_VTEXT))
+      (set #v #valt) (set #talt (P_VTEXT))
+      (if (= @user-level 2)
+        (set #ersetzen
+          (askbool
+            (prompt #zielpfad "\nist schon vorhanden.\n\n"
+                    "Installiert: " #talt "\n"
+                    "Im Archiv: " #tneu
+                    (if (< #vneu #valt)
+                      "\n\nDie installierte Version ist NEUER!" "")
+                    "\n\nDurch die Datei aus dem Archiv ersetzen?")
+            (help "Ersetzen: die Datei aus diesem Archiv wird kopiert.\n\n"
+                  "Behalten: die installierte Datei bleibt unverändert.\n\n"
+                  "Außerhalb des Expertenmodus ersetzt der Installer "
+                  "gleiche und ältere Versionen ohne Nachfrage und "
+                  "behält neuere.\n\n" @askbool-help)
+            (choices "Ersetzen" "Behalten")
+            (default (if (< #vneu #valt) 0 1))))
+        (if (< #vneu #valt)
+          (
+            (set #ersetzen 0)
+            (set #behalten (cat #behalten #zielpfad " " #talt "\n"))
+          )))
+    ))
+  (if #ersetzen
+    (if (AND #icon (= 0 (exists (cat #zielpfad ".info") (noreq))))
+      (copyfiles
+        (prompt #datei " nach " #ziel " kopieren")
+        (help @copyfiles-help)
+        (source #quelle)
+        (dest #ziel)
+        (infos) (noposition))
+      (copyfiles
+        (prompt #datei " nach " #ziel " kopieren")
+        (help @copyfiles-help)
+        (source #quelle)
+        (dest #ziel))))
+)
 
-; ---- MUI-Oberfläche ---------------------------------------------------
-Ask "amivcs-gui (MUI-Oberfläche) nach C: kopieren? (y/n)"
-If WARN
-  Copy C/amivcs-gui C: CLONE QUIET
-  If WARN
-    Echo "FEHLER: C/amivcs-gui konnte nicht nach C: kopiert werden."
-  Else
-    Echo "  C:amivcs-gui installiert."
-  EndIf
-  If NOT EXISTS LIBS:muimaster.library
-    Echo "  Hinweis: LIBS:muimaster.library fehlt - amivcs-gui braucht MUI."
-  EndIf
-EndIf
+; P_KOPIE für eine Datei aus C/ (#icon 0) bzw. mit Icon (#icon 1)
+(procedure P_PROG  (set #qdir "C") (set #icon 0) (P_KOPIE))
+(procedure P_TOOL  (set #qdir "C") (set #icon 1) (P_KOPIE))
 
-; ---- Einstellungs-Editor ----------------------------------------------
-Ask "AMIVCSPrefs (Einstellungen) nach SYS:Prefs/ kopieren? (y/n)"
-If WARN
-  Copy C/AMIVCSPrefs SYS:Prefs/ CLONE QUIET
-  If WARN
-    Echo "FEHLER: C/AMIVCSPrefs konnte nicht nach SYS:Prefs/ kopiert werden."
-  Else
-    Echo "  SYS:Prefs/AMIVCSPrefs installiert."
-  EndIf
-EndIf
+; Meldung über behaltene neuere Dateien (am Ende der Installation;
+; (all): auch im Einsteigermodus, der sonst keine Meldungen zeigt)
+(procedure P_BEHALTEN
+  (if (> (strlen #behalten) 0)
+    (message "\nNicht ersetzt, weil die installierte\n"
+             "Version neuer ist als die im Archiv:\n\n" #behalten
+             (all))))
 
-; ---- Handbuch ---------------------------------------------------------
-Assign >NIL: EXISTS HELP:
-If WARN
-  Echo "HELP: ist nicht zugewiesen - das Handbuch bleibt in Docs/AmiVCS.guide."
-Else
-  Ask "Handbuch AmiVCS.guide nach HELP: kopieren? (y/n)"
-  If WARN
-    Copy Docs/AmiVCS.guide HELP: CLONE QUIET
-    If WARN
-      Echo "FEHLER: Docs/AmiVCS.guide konnte nicht nach HELP: kopiert werden."
-    Else
-      Echo "  HELP:AmiVCS.guide installiert."
-    EndIf
-  EndIf
-EndIf
+(if (= 0 (exists "C/amivcs" (noreq)))
+  (abort "Die AmiVCS-Programme wurden nicht gefunden.\n\n"
+         "Bitte den Installer aus der ausgepackten\n"
+         "AmiVCS-Schublade starten."))
 
-; ---- Voraussetzungen für Serververbindungen ---------------------------
-If NOT EXISTS LIBS:amisslmaster.library
-  Echo ""
-  Echo "Hinweis: LIBS:amisslmaster.library fehlt. Für clone/push/pull"
-  Echo "(auch in amivcs-gui) werden AmiSSL 5 und ein TCP/IP-Stack benötigt."
-EndIf
+; ---- Voraussetzungen -----------------------------------------------------
+(set #fehlt "")
+(if (= 0 (exists "LIBS:muimaster.library" (noreq)))
+  (set #fehlt (cat #fehlt "MUI (für amivcs-gui)\n")))
+(if (= 0 (exists "LIBS:amisslmaster.library" (noreq)))
+  (set #fehlt (cat #fehlt "AmiSSL 5 (für clone, push, pull)\n")))
 
-; ---- Einstellungen: nie überschreiben ----------------------------------
-Echo ""
-If EXISTS ENVARC:amivcs.cfg
-  Echo "ENVARC:amivcs.cfg ist vorhanden und bleibt unverändert."
-Else
-  Echo "Es gibt noch keine ENVARC:amivcs.cfg. Sie wird nur für clone,"
-  Echo "push und pull gebraucht (und für den Autornamen der Commits)."
-  If EXISTS SYS:Prefs/AMIVCSPrefs
-    Ask "AMIVCSPrefs jetzt starten, um Server und Benutzer einzutragen? (y/n)"
-    If WARN
-      SYS:Prefs/AMIVCSPrefs
-    EndIf
-  Else
-    Echo "Vorlage: Examples/amivcs.cfg.example nach ENVARC:amivcs.cfg"
-    Echo "kopieren, anpassen und zusätzlich nach ENV: kopieren."
-  EndIf
-EndIf
+(message "\nAmiVCS @VERSION@ - Versionsverwaltung\n\n"
+         "Commits, Branches und Merge laufen lokal.\n"
+         "clone/push/pull brauchen TCP/IP, AmiSSL 5\n"
+         "und einen AmiVCS-Server, amivcs-gui MUI."
+         (if (> (strlen #fehlt) 0)
+           (cat "\n\nNicht gefunden (Installation geht trotzdem):\n" #fehlt)
+           ""))
 
-Echo ""
-Echo "Fertig. Erste Schritte im Shell-Fenster:"
-Echo "  CD Work:MeinProjekt"
-Echo "  amivcs init"
-Echo "  amivcs commit -a -m *"Erster Stand*""
-Echo "  amivcs log"
-Echo "Handbuch: MultiView HELP:AmiVCS.guide (bzw. Docs/AmiVCS.guide)"
-Echo "Deinstallation: Execute Uninstall-AmiVCS"
-Quit 0
+; ---- Auswahl -------------------------------------------------------------
+(set #teile
+  (askoptions
+    (prompt "Welche Teile von AmiVCS sollen installiert werden?")
+    (help "amivcs: der Kommandozeilen-Client, nach C:.\n\n"
+          "amivcs-gui: die MUI-Oberfläche, nach C:. Aufruf im "
+          "Shell-Fenster, im Verzeichnis eines Repositories.\n\n"
+          "AMIVCSPrefs: Einstellungs-Editor für Server, Benutzer und "
+          "Autorname, mit Icon nach SYS:Prefs.\n\n"
+          "Handbuch: AmiVCS.guide nach HELP: (falls zugewiesen).\n\n"
+          @askoptions-help)
+    (choices "amivcs (Kommandozeile, C:)"
+             "amivcs-gui (MUI-Oberfläche, C:)"
+             "Einstellungen AMIVCSPrefs (SYS:Prefs)"
+             "Handbuch (HELP:)")
+    (default 15)))
+
+(if (= #teile 0)
+  (exit "Es wurde nichts ausgewählt - nichts installiert." (quiet)))
+
+(if (IN #teile 0)
+  ((set #ziel "C:") (set #datei "amivcs") (P_PROG)))
+(complete 25)
+
+(if (IN #teile 1)
+  ((set #ziel "C:") (set #datei "amivcs-gui") (P_PROG)))
+(complete 50)
+
+(if (IN #teile 2)
+  ((set #ziel "SYS:Prefs") (set #datei "AMIVCSPrefs") (P_TOOL)))
+(complete 75)
+
+(if (IN #teile 3)
+  (if (= 2 (exists "HELP:" (noreq)))
+    (
+      (set #qdir "Docs") (set #icon 1) (set #ziel "HELP:")
+      (set #datei "AmiVCS.guide") (P_KOPIE)
+    )
+    (message "\nHELP: ist nicht zugewiesen - das Handbuch\n"
+             "bleibt in Docs/AmiVCS.guide.")))
+(complete 90)
+
+; ---- Einstellungen: nie anlegen oder überschreiben -----------------------
+(if (= 0 (exists "ENVARC:amivcs.cfg" (noreq)))
+  (if (> (exists "SYS:Prefs/AMIVCSPrefs" (noreq)) 0)
+    (if (askbool
+          (prompt "Es gibt noch keine ENVARC:amivcs.cfg.\n"
+                  "Sie wird nur für clone, push und pull und\n"
+                  "für den Autornamen der Commits gebraucht.\n\n"
+                  "Jetzt AMIVCSPrefs starten?")
+          (help "AMIVCSPrefs schreibt ENV:amivcs.cfg und "
+                "ENVARC:amivcs.cfg. Ohne sie funktioniert alles "
+                "Lokale; als Autor wird dann der Standardname "
+                "eingetragen.\n\n" @askbool-help)
+          (choices "Starten" "Später")
+          (default 1))
+      (run "SYS:Prefs/AMIVCSPrefs"))))
+(complete 100)
+
+(P_BEHALTEN)
+(message "\nAmiVCS ist installiert.\n\n"
+         "Erste Schritte in der Shell:\n"
+         "CD Work:MeinProjekt\n"
+         "amivcs init\n"
+         "amivcs commit -a -m \"Erster Stand\"\n\n"
+         "Handbuch: Docs/AmiVCS.guide\n"
+         "Entfernen: Icon Uninstall-AmiVCS")
+(exit (quiet))

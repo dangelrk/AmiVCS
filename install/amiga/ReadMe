@@ -1,4 +1,4 @@
-AmiVCS 0.1 - Versionsverwaltung für AmigaOS 3.x
+AmiVCS @VERSION@ - Versionsverwaltung für AmigaOS 3.x
 ================================================
 
 AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
@@ -10,8 +10,10 @@ Windows.
 Inhalt der Schublade
 --------------------
 
-  Install-AmiVCS     Installationsskript
-  Uninstall-AmiVCS   Deinstallationsskript
+  Install-AmiVCS     Installationsskript (Commodore-Installer, Icon)
+  Install-AmiVCS.shell  dasselbe als Shell-Skript (ohne Installer)
+  Install-Datei         Hilfsskript der Shell-Variante
+  Uninstall-AmiVCS   Deinstallationsskript (Icon oder Execute)
   ReadMe             diese Datei
   LICENSE            GNU General Public License, Version 3
   THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
@@ -25,10 +27,19 @@ Installation
 ------------
 
   1. Archiv auspacken:     lha x AmiVCS.lha RAM:
-  2. In die Schublade:     CD RAM:AmiVCS
-  3. Skript starten:       Execute Install-AmiVCS
-  4. Fragen beantworten (y/n); nichts Vorhandenes wird überschrieben.
-  5. Handbuch lesen:       MultiView Docs/AmiVCS.guide
+  2. Icon Install-AmiVCS doppelt anklicken (braucht den Installer,
+     ab OS 3.2 in SYS:System). Ohne Installer im Shell-Fenster:
+       CD RAM:AmiVCS
+       Execute Install-AmiVCS.shell
+  3. Fragen beantworten; vorhandene Einstellungen bleiben unverändert.
+  4. Handbuch lesen:       MultiView Docs/AmiVCS.guide
+
+Aktualisieren
+-------------
+Neuere Version: Archiv auspacken und den Installer erneut starten.
+Programme werden nur ersetzt, wenn die installierte Version nicht
+neuer ist als die im Archiv (Experten werden jedes Mal gefragt).
+Vorhandene Icons, Einstellungen und DOSDriver bleiben erhalten.
 
 Voraussetzungen
 ---------------

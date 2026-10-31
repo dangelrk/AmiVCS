@@ -211,11 +211,12 @@ vorheriges <code>Stack</code> ist nicht nötig.</p>
 
 <h2 id="installation">2. Installation auf dem Amiga</h2>
 
-<p>Das Archiv <code>AmiVCS.lha</code> enthält die Schublade
+<p>Das Archiv <code>AmiVCS-0.1.lha</code> enthält die Schublade
 <code>AmiVCS</code>:</p>
 
 <pre>AmiVCS/
-  Install-AmiVCS     Installationsskript
+  Install-AmiVCS     Installationsskript (Commodore-Installer)
+  Install-AmiVCS.shell  dasselbe als Shell-Skript
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             Kurzbeschreibung
   LICENSE            Lizenztext (GPLv3)
@@ -224,12 +225,27 @@ vorheriges <code>Stack</code> ist nicht nötig.</p>
   Docs/              AmiVCS.guide
   Examples/          amivcs.cfg.example</pre>
 
-<pre>lha x AmiVCS.lha RAM:
-CD RAM:AmiVCS
-Execute Install-AmiVCS</pre>
+<p>Archiv auspacken, z.&nbsp;B. <code>lha x AmiVCS-0.1.lha RAM:</code>.</p>
+<p>Alle Teile haben Workbench-Icons. Zum Installieren in der Schublade das
+Icon <strong>Install-AmiVCS</strong> doppelt anklicken. Es startet den
+Commodore-Installer (bei AmigaOS&nbsp;3.2 in <code>SYS:System</code>, bei
+älteren Systemen von der Install-Diskette nach <code>C:</code> kopieren).
+Ohne Installer gibt es dasselbe als Shell-Skript:</p>
+<pre>CD RAM:AmiVCS
+Execute Install-AmiVCS.shell</pre>
 
-<p>Das Skript fragt jeden Schritt einzeln ab (Antwort <code>y</code> oder
-<code>n</code>): <code>amivcs</code> und <code>amivcs-gui</code> nach
+<p><strong>Aktualisieren:</strong> Eine neuere Version installiert man genauso –
+Archiv auspacken, Installer erneut starten. Er vergleicht bei jedem Programm
+die installierte Version mit der im Archiv. Als Einsteiger oder Geübter
+Benutzer ersetzt er gleiche und ältere Versionen; eine <em>neuere</em>
+installierte Version bleibt stehen und wird am Ende genannt. Im
+Expertenmodus zeigt er bei jedem schon installierten Programm beide Versionen
+und fragt. Vorhandene Icons (mit eigenen Tooltypes und Positionen) bleiben
+erhalten. Die Shell-Variante fragt nur nach, wenn ein installiertes Programm
+neuer ist als das im Archiv.</p>
+
+<p>Das Skript fragt, welche Teile installiert werden sollen (im Installer per
+Auswahlliste, im Shell-Skript mit <code>y</code> oder <code>n</code>): <code>amivcs</code> und <code>amivcs-gui</code> nach
 <code>C:</code>, <code>AMIVCSPrefs</code> nach <code>SYS:Prefs/</code>,
 das AmigaGuide-Handbuch nach <code>HELP:</code> (nur wenn der Assign
 existiert). Es warnt, wenn <code>muimaster.library</code> oder

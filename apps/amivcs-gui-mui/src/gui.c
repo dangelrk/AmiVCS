@@ -613,7 +613,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     g_app = ApplicationObject,
         MUIA_Application_Title,       "amivcs-gui",
-        MUIA_Application_Version,     "$VER: amivcs-gui " AC_VERSION " (27.09.2026)",
+        MUIA_Application_Version,     "$VER: amivcs-gui " AC_VERSION " (" AC_DATE ")",
         MUIA_Application_Copyright,   "(C) 2026 Ronny Krueger",
         MUIA_Application_Author,      "Ronny Krueger",
         MUIA_Application_Description, "AmiVCS git-gui-style frontend",

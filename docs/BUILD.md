@@ -40,7 +40,8 @@ Alle Ziele werden im Projektverzeichnis aufgerufen (`make help` zeigt sie):
 | `make pc` | Kommandozeilenprogramm `amivcs` für den Host → `bin/pc/` |
 | `make qt` | Qt-6-Oberfläche `amivcs-gui` per CMake (Build-Ordner `build/amivcs-gui-qt/`) → `bin/pc/` |
 | `make amiga` | Amiga-Programme `amivcs`, `amivcs-gui`, `AMIVCSPrefs` per vbcc-Cross-Compiler → `bin/amiga/` |
-| `make dist-amiga` | baut `make amiga` und legt die Installationsschublade `build/dist/AmiVCS/` an, dazu `build/AmiVCS.lha`, falls `lha` installiert ist |
+| `make dist-amiga` | baut `make amiga` und legt die Installationsschublade `build/dist/AmiVCS/` mit Icons an, dazu `build/AmiVCS.lha` |
+| `make release` | wie `dist-amiga`, dazu `build/release/AmiVCS-<version>.lha` und `.readme` |
 | `make build-amiga-script` | erzeugt das native Amiga-Buildskript `Build-Amiga` neu |
 | `make verify-amiga-script` | erzeugt `Build-Amiga` und baut es testweise auf dem Host mit vbcc nach |
 | `make check-guide` | AmigaGuide-Handbuch in `docs/user/` prüfen (Knoten, Verweise, Latin-1, Zeilenlänge) |
@@ -251,7 +252,8 @@ legt `build/dist/AmiVCS/` an:
 
 ```
 AmiVCS/
-  Install-AmiVCS     Installationsskript (aus install/amiga/)
+  Install-AmiVCS     Installationsskript (Installer, aus install/amiga/)
+  Install-AmiVCS.shell  dasselbe als Shell-Skript
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             Kurzbeschreibung
   LICENSE            GPLv3
@@ -260,12 +262,31 @@ AmiVCS/
   Examples/          amivcs.cfg.example
 ```
 
-Ist `lha` installiert, entsteht zusätzlich `build/AmiVCS.lha`. Dafür
-muss es ein `lha` sein, das Archive **anlegen** kann (z. B. „LHa for
-UNIX“). Das unter macOS/Homebrew verbreitete `lhasa` kann nur
-auspacken; dann gibt `make dist-amiga` nur einen Hinweis aus und
-erzeugt ausschließlich die Schublade. In dem Fall das Archiv auf dem
-Amiga packen. Weitere
+Zu allen Teilen der Schublade erzeugt `core/tools/mkicon.py` Workbench-Icons
+nach `install/amiga/icons.spec` (Bild, Standardprogramm, Tooltypes, Position).
+Gepackt wird mit `core/tools/lhapack.py` zu `build/AmiVCS.lha` – einem eigenen
+LHA-Packer (Methode `-lh5-`, Level-2-Köpfe) in reinem Python, weil es unter
+macOS keinen LHA-*Packer* gibt (Homebrews `lha` ist Lhasa und packt nur aus).
+Die Archive lassen sich mit Lhasa und mit dem `lha` von AmigaOS 3.2 auspacken.
+
+### Release
+
+```sh
+make release
+```
+
+baut `make dist-amiga` und legt in `build/release/` die Dateien für
+Aminet/GitHub ab: `AmiVCS-<version>.lha` und `AmiVCS-<version>.readme` (aus
+`install/amiga/aminet.readme`, `@VERSION@` wird ersetzt). Version und
+Datum stehen nur in `core/libcloudcore/include/cloudcore/version.h`
+(`AC_VERSION`, `AC_DATE`): daraus bauen alle Programme ihre `$VER`-Angabe,
+und `make dist-amiga` setzt beide in die Installer-Skripte ein (`@VERSION@`,
+`@DATE@`, für die Shell-Variante `@VER_MAJOR@`/`@VER_REVN@`). Weil die
+Installer nur ersetzen, wenn die Version im Archiv nicht älter ist, **vor
+jedem Release `AC_VERSION` erhöhen** (und `AC_DATE` anpassen). Ist Lhasa
+installiert, prüft `lha t` das Archiv gleich mit.
+
+Weitere
 Dateien lassen sich über `DIST_EXTRA` im Top-Level-`Makefile` hinzufügen
 (Format `quelle:zielschublade`). Wie die Schublade auf dem Amiga benutzt
 wird, steht in [INSTALL.md](INSTALL.md).

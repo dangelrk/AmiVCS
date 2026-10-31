@@ -43,13 +43,14 @@ Hinweise:
 
 ### Installation mit dem Install-Skript
 
-Das Archiv `AmiVCS.lha` (bzw. die Schublade aus `make dist-amiga`)
+Das Archiv `AmiVCS-<version>.lha` (bzw. die Schublade aus `make dist-amiga`)
 enthält:
 
 ```
 AmiVCS/
-  Install-AmiVCS     Installationsskript
-  Uninstall-AmiVCS   Deinstallationsskript
+  Install-AmiVCS     Installationsskript (Commodore-Installer, Icon)
+  Install-AmiVCS.shell  dasselbe als Shell-Skript
+  Uninstall-AmiVCS   Deinstallationsskript (Icon oder Execute)
   ReadMe             Kurzbeschreibung
   LICENSE            GPLv3
   THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
@@ -58,18 +59,21 @@ AmiVCS/
   Examples/          amivcs.cfg.example
 ```
 
-Auspacken und im Shell-Fenster:
+Archiv auspacken (z. B. `lha x AmiVCS-0.1.lha RAM:`). Zum Installieren in der Schublade das Icon **Install-AmiVCS** doppelt anklicken.
+Es startet den Commodore-Installer (bei AmigaOS 3.2 in `SYS:System`, bei
+älteren Systemen von der Install-Diskette nach `C:` kopieren); in einer
+Shell geht dasselbe mit `Installer Install-AmiVCS`. Ohne Installer gibt es dasselbe als
+Shell-Skript:
 
 ```
-lha x AmiVCS.lha RAM:
 CD RAM:AmiVCS
-Execute Install-AmiVCS
+Execute Install-AmiVCS.shell
 ```
 
-Das Skript fragt jeden Teil einzeln ab (Antwort `y` oder `n`) und
+Das Skript fragt, welche Teile installiert werden sollen, und
 
 - kopiert `amivcs` und `amivcs-gui` nach `C:`,
-- kopiert `AMIVCSPrefs` nach `SYS:Prefs/`,
+- kopiert `AMIVCSPrefs` samt Icon nach `SYS:Prefs/`,
 - kopiert `AmiVCS.guide` nach `HELP:` – nur, wenn der Assign `HELP:`
   existiert,
 - prüft, ob `muimaster.library` und `amisslmaster.library` in `LIBS:`
@@ -78,6 +82,24 @@ Das Skript fragt jeden Teil einzeln ab (Antwort `y` oder `n`) und
   `ENVARC:amivcs.cfg` existiert.
 
 Eine vorhandene Konfiguration wird **nie** überschrieben.
+
+### Aktualisieren
+
+Eine neuere Version installiert man genauso: Archiv auspacken und den
+Installer erneut starten. Er vergleicht bei jedem Programm die installierte
+Version mit der im Archiv (`$VER`-Angabe, `getversion`):
+
+- **Einsteiger / Geübter Benutzer:** gleiche und ältere Versionen werden
+  ersetzt. Ist die installierte Version *neuer*, bleibt sie stehen; der
+  Installer nennt sie am Ende.
+- **Experte:** für jedes schon installierte Programm zeigt der Installer beide
+  Versionen und fragt, ob ersetzt werden soll.
+
+Vorhandene Icons bleiben erhalten (eigene Tooltypes und Positionen gehen
+nicht verloren), ebenso Einstellungen und DOSDriver. Die Shell-Variante
+`Install-AmiVCS.shell` fragt nur nach, wenn ein installiertes Programm neuer ist
+als das im Archiv (Hilfsskript `Install-Datei`, Vergleich mit
+`Version … FILE`).
 
 ### Manuelle Installation
 
