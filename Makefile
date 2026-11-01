@@ -10,6 +10,9 @@ PC_DIRS    = apps/amivcs
 QT_DIRS    = apps/amivcs-gui-qt
 AMIGA_DIRS = apps/amivcs apps/amivcs-gui-mui apps/amivcs-prefs
 
+# Server-Paket (make server-release): Abschnitt aus docs/INSTALL.md
+SERVER_DOC_HEADING = \#\# 3. AmiVCS-Server einrichten
+
 # Without the AmiCloudCore submodule there is no core/mk/project.mk --
 # say so instead of make's bare "No such file or directory".
 ifeq ($(wildcard core/mk/project.mk),)
