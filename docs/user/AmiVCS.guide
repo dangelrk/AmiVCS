@@ -1090,6 +1090,10 @@ Schwesterprojekte:
 Versionsgeschichte
 ------------------
 
+Programmversion 0.5 (01.11.2026)
+  - Wird eine Anmeldung abgelehnt, versucht AmiVCS es mit
+    denselben Zugangsdaten 15 Minuten lang nicht erneut.
+
 Programmversion 0.4 (01.11.2026)
   - Der AmiVCS-Server liegt dem Archiv bei (Schublade Server).
   - Gemeinsamer Kern aktualisiert.
