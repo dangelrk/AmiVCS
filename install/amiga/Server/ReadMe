@@ -1,0 +1,15 @@
+AmiVCS-Server @VERSION@
+
+Diese Schublade enthält den AmiVCS-Server. Er läuft nicht auf dem
+Amiga, sondern auf einem eigenen Webserver (Linux o. ä.) mit PHP 7.4
+oder neuer und MariaDB/MySQL.
+Gebraucht wird er nur für clone, push und pull.
+
+  AmiVCS-Server-@VERSION@.tar.gz
+
+Das Archiv auf den Server kopieren und dort auspacken:
+
+  tar xzf AmiVCS-Server-@VERSION@.tar.gz
+
+Darin liegt die Installationsanleitung INSTALL.md: Neuinstallation,
+Aktualisieren einer älteren Fassung und die nötigen Migrationen.
