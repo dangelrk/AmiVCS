@@ -12,6 +12,8 @@ AMIGA_DIRS = apps/amivcs apps/amivcs-gui-mui apps/amivcs-prefs
 
 # Server-Paket (make server-release): Abschnitt aus docs/INSTALL.md
 SERVER_DOC_HEADING = \#\# 3. AmiVCS-Server einrichten
+# make server-test: Rundlauf mit der PC-CLI gegen die Probeinstallation
+SERVER_TEST = $(MAKE) pc >/dev/null && sh scripts/test_server.sh
 
 # Without the AmiCloudCore submodule there is no core/mk/project.mk --
 # say so instead of make's bare "No such file or directory".
