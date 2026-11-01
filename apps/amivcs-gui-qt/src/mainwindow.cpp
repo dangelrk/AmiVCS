@@ -8,6 +8,7 @@
 
 extern "C" {
 #include "config.h"
+#include "vcsname.h"
 }
 
 #include <QListWidget>
@@ -39,6 +40,17 @@ static QString kindLabel(char kind)
     case 'D': return QObject::tr("deleted");
     }
     return QString();
+}
+
+// A repository path for display: UTF-8, or ISO-8859-1 for a name an
+// older Amiga build stored in its local codeset (vcsname.h). The raw
+// bytes stay in the item's UserRole for add/remove.
+static QString shownPath(const char *path)
+{
+    char *u = vcs_text_utf8(path);
+    QString s = QString::fromUtf8(u ? u : path);
+    free(u);
+    return s;
 }
 
 static QString shortBranchName(const char *fullRefName)
@@ -194,14 +206,14 @@ void MainWindow::refreshUI()
     if (m_session.is_open) {
         for (int i = 0; i < m_session.unstaged.n; i++) {
             const VcsChange &c = m_session.unstaged.items[i];
-            auto *item = new QListWidgetItem(QStringLiteral("%1  %2").arg(kindLabel(c.kind), QString::fromUtf8(c.path)));
-            item->setData(Qt::UserRole, QString::fromUtf8(c.path));
+            auto *item = new QListWidgetItem(QStringLiteral("%1  %2").arg(kindLabel(c.kind), shownPath(c.path)));
+            item->setData(Qt::UserRole, QByteArray(c.path));   // raw repository bytes
             m_unstagedList->addItem(item);
         }
         for (int i = 0; i < m_session.staged.n; i++) {
             const VcsChange &c = m_session.staged.items[i];
-            auto *item = new QListWidgetItem(QStringLiteral("%1  %2").arg(kindLabel(c.kind), QString::fromUtf8(c.path)));
-            item->setData(Qt::UserRole, QString::fromUtf8(c.path));
+            auto *item = new QListWidgetItem(QStringLiteral("%1  %2").arg(kindLabel(c.kind), shownPath(c.path)));
+            item->setData(Qt::UserRole, QByteArray(c.path));   // raw repository bytes
             m_stagedList->addItem(item);
         }
 
@@ -246,7 +258,7 @@ void MainWindow::onStageSelected()
     QList<QListWidgetItem *> items = m_unstagedList->selectedItems();
     if (items.isEmpty() && m_unstagedList->currentItem()) items << m_unstagedList->currentItem();
     for (QListWidgetItem *item : items) {
-        QByteArray path = item->data(Qt::UserRole).toString().toUtf8();
+        QByteArray path = item->data(Qt::UserRole).toByteArray();
         vcsgui_add(&m_session, path.constData());
     }
     refreshUI();
@@ -257,7 +269,7 @@ void MainWindow::onUnstageSelected()
     QList<QListWidgetItem *> items = m_stagedList->selectedItems();
     if (items.isEmpty() && m_stagedList->currentItem()) items << m_stagedList->currentItem();
     for (QListWidgetItem *item : items) {
-        QByteArray path = item->data(Qt::UserRole).toString().toUtf8();
+        QByteArray path = item->data(Qt::UserRole).toByteArray();
         vcsgui_remove(&m_session, path.constData());
     }
     refreshUI();
@@ -276,7 +288,7 @@ void MainWindow::onCommit()
         QMessageBox::warning(this, tr("Commit"), tr("Enter a commit message first."));
         return;
     }
-    QByteArray msgUtf8 = msg.toUtf8();
+    QByteArray msgUtf8 = msg.normalized(QString::NormalizationForm_C).toUtf8();   // repository text: UTF-8 NFC
     VcsOid oid;
     if (!vcsgui_commit(&m_session, msgUtf8.constData(), m_stageAllCheck->isChecked() ? 1 : 0, &oid)) {
         QMessageBox::warning(this, tr("Commit"), QString::fromUtf8(vcsgui_last_message()));

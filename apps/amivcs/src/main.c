@@ -23,6 +23,8 @@
 #include "remote.h"
 #include "http.h"
 #include "ui_hooks.h"
+#include "charset.h"
+#include "vcsname.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -127,6 +129,10 @@ int main(int argc, char **argv)
         if (len > 0 && cfg.server[len - 1] == '/') cfg.server[len - 1] = '\0';
     }
 
+    /* names and texts in the repository are UTF-8; the local side is the
+     * file system's codeset (codesets.library, else ISO-8859-1; vcsname.h) */
+    cs_open(cfg.charset);
+
     if (i >= argc) { fprintf(stderr, "amivcs: no command given\n"); usage(argv[0]); }
     cmd = argv[i++];
 
@@ -179,12 +185,16 @@ int main(int argc, char **argv)
         if (!message) { fprintf(stderr, "amivcs: commit requires -m <message>\n"); rc = 1; }
         else {
             VcsOid oid;
-            if (!vcs_repo_commit(&repo, cfg.username, message, stage_all, &oid)) rc = 1;
+            char *author = vcs_text_from_local(cfg.username);
+            char *msg = vcs_text_from_local(message);
+            if (!author || !msg || !vcs_repo_commit(&repo, author, msg, stage_all, &oid)) rc = 1;
             else {
                 char hex[VCS_OID_HEX];
                 vcs_oid_to_hex(&oid, hex);
                 printf("committed %s\n", hex);
             }
+            free(author);
+            free(msg);
         }
 
     } else if (strcmp(cmd, "add") == 0) {
@@ -192,8 +202,11 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "-A") == 0) {
             rc = !vcs_index_add_all(&repo);
         } else {
+            vcs_repo_learn_names(&repo);
             for (; i < argc; i++) {
-                if (!vcs_index_add(&repo, argv[i])) {
+                char rp[1024];
+                vcs_path_from_local(argv[i], rp, sizeof(rp));
+                if (!vcs_index_add(&repo, rp)) {
                     fprintf(stderr, "amivcs: could not add '%s'\n", argv[i]);
                     rc = 1;
                 }
@@ -203,8 +216,11 @@ int main(int argc, char **argv)
     } else if (strcmp(cmd, "remove") == 0) {
         if (i >= argc) { fprintf(stderr, "amivcs: remove requires <path>...\n"); rc = 1; }
         else {
+            vcs_repo_learn_names(&repo);
             for (; i < argc; i++) {
-                if (!vcs_index_remove(&repo, argv[i])) {
+                char rp[1024];
+                vcs_path_from_local(argv[i], rp, sizeof(rp));
+                if (!vcs_index_remove(&repo, rp)) {
                     fprintf(stderr, "amivcs: could not remove '%s'\n", argv[i]);
                     rc = 1;
                 }
@@ -215,19 +231,28 @@ int main(int argc, char **argv)
         rc = !vcs_repo_log(&repo);
 
     } else if (strcmp(cmd, "branch") == 0) {
-        const char *name = (i < argc) ? argv[i] : NULL;
+        char *name = (i < argc) ? vcs_repo_branch_name(&repo, argv[i]) : NULL;   /* UTF-8 (or an older spelling) */
         rc = !vcs_repo_branch(&repo, name);
+        free(name);
 
     } else if (strcmp(cmd, "switch") == 0) {
         if (i >= argc) { fprintf(stderr, "amivcs: switch requires <branch>\n"); rc = 1; }
-        else rc = !vcs_repo_switch(&repo, argv[i]);
+        else {
+            char *b = vcs_repo_branch_name(&repo, argv[i]);
+            rc = !b || !vcs_repo_switch(&repo, b);
+            free(b);
+        }
 
     } else if (strcmp(cmd, "checkout") == 0) {
         rc = !vcs_repo_checkout(&repo);
 
     } else if (strcmp(cmd, "merge") == 0) {
         if (i >= argc) { fprintf(stderr, "amivcs: merge requires <branch>\n"); rc = 1; }
-        else rc = !vcs_repo_merge(&repo, argv[i]);
+        else {
+            char *b = vcs_repo_branch_name(&repo, argv[i]);
+            rc = !b || !vcs_repo_merge(&repo, b);
+            free(b);
+        }
 
     } else if (strcmp(cmd, "push") == 0 || strcmp(cmd, "pull") == 0) {
         const char *arg = (i < argc) ? argv[i] : NULL;
@@ -269,5 +294,6 @@ int main(int argc, char **argv)
         usage(argv[0]);
     }
 
+    cs_close();
     return rc;
 }

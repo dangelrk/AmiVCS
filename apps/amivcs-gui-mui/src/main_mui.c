@@ -23,6 +23,7 @@
 #include "mui_stubs.h"
 #include "progress.h"
 #include "wbstartup.h"
+#include "charset.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -139,7 +140,9 @@ int main(int argc, char *argv[])
     /* No http_init() here: like git, local work needs no network --
      * gui.c opens it on the first clone/push/pull (ensure_network()).
      * http_cleanup() is a no-op if that never happened. */
+    cs_open(cfg.charset);   /* repository texts are UTF-8 (vcsname.h) */
     rc = gui_run(&cfg, repo_path);
+    cs_close();
 
     http_cleanup();
     close_libs();

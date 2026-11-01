@@ -14,6 +14,7 @@
 #include "ignore.h"
 #include "treeutil.h"
 #include "localfs.h"
+#include "vcsname.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -166,12 +167,13 @@ static int rebuild_tree(VcsRepo *repo, const VcsOid *cur_tree_oid, const char *r
     return ok;
 }
 
+/* relpath: repository path (UTF-8, vcsname.h) */
 static int add_file(VcsRepo *repo, const char *relpath)
 {
     char abs_path[1024];
     VcsOid blob_oid, cur_tree, new_tree;
 
-    localfs_join(abs_path, sizeof(abs_path), repo->root, relpath);
+    if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, relpath)) return 0;
     if (!vcsobjstore_write_blob_file(&repo->store, abs_path, &blob_oid)) return 0;
 
     if (!vcs_index_load(repo->amivcs_dir, &cur_tree)) return 0;
@@ -194,19 +196,23 @@ static int add_dir_recursive(VcsRepo *repo, const char *relpath, const VcsIgnore
     LocalDirEntry de;
     int ok = 1;
 
-    localfs_join(abs_dir, sizeof(abs_dir), repo->root, relpath);
+    char rel_local[1024];
+
+    if (vcs_path_to_local(relpath, rel_local, sizeof(rel_local)) < 0) return 0;
+    localfs_join(abs_dir, sizeof(abs_dir), repo->root, rel_local);
     dir = localfs_opendir(abs_dir);
     if (!dir) return 0;
 
     while (ok && localfs_readdir(dir, &de)) {
-        char child_rel[1024];
-        if (relpath[0] == '\0') {
-            strncpy(child_rel, de.name, sizeof(child_rel) - 1);
-            child_rel[sizeof(child_rel) - 1] = '\0';
+        char child_local[1024], child_rel[1024];
+        if (rel_local[0] == '\0') {
+            strncpy(child_local, de.name, sizeof(child_local) - 1);
+            child_local[sizeof(child_local) - 1] = '\0';
         } else {
-            snprintf(child_rel, sizeof(child_rel), "%s/%s", relpath, de.name);
+            snprintf(child_local, sizeof(child_local), "%s/%s", rel_local, de.name);
         }
-        if (vcs_ignore_match(ig, child_rel, de.is_dir)) continue;
+        if (vcs_ignore_match(ig, child_local, de.is_dir)) continue;   /* patterns are local text */
+        if (!vcs_path_from_local(child_local, child_rel, sizeof(child_rel))) { ok = 0; break; }
         ok = de.is_dir ? add_dir_recursive(repo, child_rel, ig) : add_file(repo, child_rel);
     }
     localfs_closedir(dir);
@@ -217,7 +223,9 @@ int vcs_index_add(VcsRepo *repo, const char *relpath)
 {
     char abs_path[1024];
 
-    localfs_join(abs_path, sizeof(abs_path), repo->root, relpath);
+    /* the caller's name table maps relpath (vcs_repo_status_raw() or
+     * vcs_repo_learn_names() before it, vcsname.h) */
+    if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, relpath)) return 0;
     if (localfs_is_dir(abs_path)) {
         VcsIgnore ig;
         int ok;

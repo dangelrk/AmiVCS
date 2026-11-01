@@ -21,6 +21,8 @@
 #include "treeutil.h"
 #include "oidset.h"
 #include "localfs.h"
+#include "vcsname.h"
+#include "charset.h"
 #include "md5.h"
 #include "ui_hooks.h"
 
@@ -99,6 +101,12 @@ static void join_rel(char *out, size_t sz, const char *prefix, const char *name)
     }
 }
 
+static const char *base_name(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
 /* ------------------------------------------------------------------ */
 /* Persisting snapshot builder (commit()).                              */
 
@@ -118,11 +126,20 @@ static int snapshot_dir(VcsRepo *repo, const char *abs_dir, const char *rel_pref
     if (!dir) { vcs_tree_free(&tree); return 0; }
 
     while (localfs_readdir(dir, &de)) {
-        char abs_path[1024], rel_path[1024];
+        char abs_path[1024], rel_path[1024], rel_repo[1024];
         VcsOid oid;
 
         join_rel(rel_path, sizeof(rel_path), rel_prefix, de.name);
-        if (vcs_ignore_match(ig, rel_path, de.is_dir)) continue;
+        if (vcs_ignore_match(ig, rel_path, de.is_dir)) continue;   /* patterns are local text */
+        if (!vcs_path_from_local(rel_path, rel_repo, sizeof(rel_repo))) { ok = 0; break; }
+        if (vcs_tree_find(&tree, base_name(rel_repo))) {
+            /* two local spellings of one repository name (PC: NFC and
+             * NFD side by side) -- the first one stays */
+            ui_notify(UI_ERROR, "amivcs: %s is a second spelling of a name already in this "
+                      "directory -- rename or remove one of them", rel_path);
+            ok = 0;
+            break;
+        }
         localfs_join(abs_path, sizeof(abs_path), abs_dir, de.name);
 
         if (de.is_dir) {
@@ -130,7 +147,7 @@ static int snapshot_dir(VcsRepo *repo, const char *abs_dir, const char *rel_pref
         } else {
             if (!vcsobjstore_write_blob_file(&repo->store, abs_path, &oid)) { ok = 0; break; }
         }
-        vcs_tree_upsert(&tree, de.name, de.is_dir, &oid);
+        vcs_tree_upsert(&tree, base_name(rel_repo), de.is_dir, &oid);
     }
     localfs_closedir(dir);
 
@@ -144,11 +161,69 @@ static int snapshot_dir(VcsRepo *repo, const char *abs_dir, const char *rel_pref
     return ok;
 }
 
+/* Name table for one operation (vcsname.h): fresh, the pairs kept since
+ * a merge with conflicts, then the given trees (they override). */
+static void names_learn_flat(const VcsFlatList *f)
+{
+    int i;
+    for (i = 0; i < f->n; i++) vcs_names_learn(f->items[i].path);
+}
+
+void vcs_names_begin_flat(VcsRepo *repo, const VcsFlatList *a, const VcsFlatList *b)
+{
+    vcs_names_reset();
+    vcs_names_load(repo->amivcs_dir);
+    if (a) names_learn_flat(a);
+    if (b) names_learn_flat(b);
+}
+
+/* see treeutil.h */
+int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b)
+{
+    const char **paths;
+    int n = a->n + (b ? b->n : 0), i, k = 0, ok;
+    char x[256], y[256];
+    if (n == 0) return 1;
+    paths = (const char **)malloc(sizeof(char *) * (size_t)n);
+    if (!paths) return 1;
+    for (i = 0; i < a->n; i++) paths[k++] = a->items[i].path;
+    if (b) for (i = 0; i < b->n; i++) paths[k++] = b->items[i].path;
+    ok = vcs_names_check(paths, n, x, y, sizeof(x));
+    free(paths);
+    if (!ok) {
+        /* both names have the same local form -- that is the point; name
+         * the file once and why */
+        char local[1024];
+        if (vcs_path_to_local(x, local, sizeof(local)) < 0) local[0] = '\0';
+        ui_notify(UI_ERROR, "amivcs: two names in this tree would both be \"%s\" here "
+                  "(a character this codeset can't show) -- nothing was changed; rename one "
+                  "of them on a system that can show both", local);
+    }
+    return ok;
+}
+
+void vcs_repo_learn_names(VcsRepo *repo)
+{
+    VcsOid head_commit, tree;
+    VcsFlatList h, x;
+    vcs_flat_init(&h);
+    vcs_flat_init(&x);
+    if (vcs_head_resolve(repo->amivcs_dir, &head_commit)
+        && vcs_commit_tree(&repo->store, &head_commit, &tree))
+        vcs_flatten_committed_tree(&repo->store, &tree, "", &h);
+    if (vcs_index_load(repo->amivcs_dir, &tree))
+        vcs_flatten_committed_tree(&repo->store, &tree, "", &x);
+    vcs_names_begin_flat(repo, &h, &x);
+    vcs_flat_free(&h);
+    vcs_flat_free(&x);
+}
+
 int vcs_repo_snapshot_workdir(VcsRepo *repo, VcsOid *out_tree_oid)
 {
     VcsIgnore ig;
     int ok;
 
+    vcs_repo_learn_names(repo);
     vcs_ignore_load(repo->root, &ig);
     ok = snapshot_dir(repo, repo->root, "", &ig, out_tree_oid);
     vcs_ignore_free(&ig);
@@ -171,10 +246,11 @@ static int flatten_workdir(const char *abs_root, const char *abs_dir, const char
     if (!dir) return 0;
 
     while (localfs_readdir(dir, &de)) {
-        char abs_path[1024], rel_path[1024];
+        char abs_path[1024], rel_path[1024], rel_repo[1024];
 
         join_rel(rel_path, sizeof(rel_path), rel_prefix, de.name);
-        if (vcs_ignore_match(ig, rel_path, de.is_dir)) continue;
+        if (vcs_ignore_match(ig, rel_path, de.is_dir)) continue;   /* patterns are local text */
+        if (!vcs_path_from_local(rel_path, rel_repo, sizeof(rel_repo))) { localfs_closedir(dir); return 0; }
         localfs_join(abs_path, sizeof(abs_path), abs_dir, de.name);
 
         if (de.is_dir) {
@@ -184,7 +260,7 @@ static int flatten_workdir(const char *abs_root, const char *abs_dir, const char
             VcsOid oid;
             if (!md5_file_hex(abs_path, hex)) { localfs_closedir(dir); return 0; }
             if (!vcs_oid_from_hex(hex, &oid)) { localfs_closedir(dir); return 0; }
-            vcs_flat_append(out, rel_path, &oid);
+            vcs_flat_append(out, rel_repo, &oid);
         }
     }
     localfs_closedir(dir);
@@ -282,6 +358,7 @@ int vcs_repo_status_raw(VcsRepo *repo, VcsStatus *out)
     }
     vcs_flat_sort(&head_flat);
     vcs_flat_sort(&index_flat);
+    vcs_names_begin_flat(repo, &head_flat, &index_flat);
 
     vcs_ignore_load(repo->root, &ig);
     vcs_flat_init(&work_flat);
@@ -310,7 +387,9 @@ static void print_change_list(const VcsChangeList *list)
     for (i = 0; i < list->n; i++) {
         const char *label = list->items[i].kind == 'N' ? "new"
                            : list->items[i].kind == 'M' ? "modified" : "deleted";
-        printf("  %-9s %s\n", label, list->items[i].path);
+        char *shown = vcs_text_to_local(list->items[i].path);
+        printf("  %-9s %s\n", label, shown ? shown : list->items[i].path);
+        free(shown);
     }
 }
 
@@ -349,6 +428,7 @@ int vcs_repo_is_dirty(VcsRepo *repo)
         return -1;
     }
     vcs_flat_sort(&head_flat);
+    vcs_names_begin_flat(repo, &head_flat, NULL);
 
     vcs_ignore_load(repo->root, &ig);
     vcs_flat_init(&work_flat);
@@ -373,7 +453,7 @@ int vcs_repo_is_dirty(VcsRepo *repo)
 /* switch, and later merge's fast-forward path).                        */
 
 static int materialize_dir(VcsRepo *repo, const char *abs_dir, const char *rel_prefix,
-                           const VcsOid *tree_oid, VcsIgnore *ig)
+                           const char *rel_repo_prefix, const VcsOid *tree_oid, VcsIgnore *ig)
 {
     VcsObjType type;
     void *data;
@@ -395,16 +475,17 @@ static int materialize_dir(VcsRepo *repo, const char *abs_dir, const char *rel_p
     dir = localfs_opendir(abs_dir);
     if (dir) {
         while (localfs_readdir(dir, &de)) {
-            char rel_path[1024];
+            char rel_path[1024], rel_repo[1024];
             join_rel(rel_path, sizeof(rel_path), rel_prefix, de.name);
             if (vcs_ignore_match(ig, rel_path, de.is_dir)) continue;
-            if (vcs_tree_find(&tree, de.name)) continue;
+            if (!vcs_path_from_local(rel_path, rel_repo, sizeof(rel_repo))) continue;  /* too long: leave it */
+            if (vcs_tree_find(&tree, base_name(rel_repo))) continue;
             {
                 char abs_path[1024];
                 localfs_join(abs_path, sizeof(abs_path), abs_dir, de.name);
                 if (de.is_dir) {
                     VcsOid empty = VCS_OID_ZERO;
-                    if (!materialize_dir(repo, abs_path, rel_path, &empty, ig)) { ok = 0; break; }
+                    if (!materialize_dir(repo, abs_path, rel_path, rel_repo, &empty, ig)) { ok = 0; break; }
                     localfs_remove(abs_path);
                 } else {
                     localfs_remove(abs_path);
@@ -417,13 +498,23 @@ static int materialize_dir(VcsRepo *repo, const char *abs_dir, const char *rel_p
 
     /* Pass 2: create/update everything the tree calls for. */
     for (i = 0; i < tree.n; i++) {
-        char abs_path[1024], rel_path[1024];
-        localfs_join(abs_path, sizeof(abs_path), abs_dir, tree.items[i].name);
-        join_rel(rel_path, sizeof(rel_path), rel_prefix, tree.items[i].name);
+        char abs_path[1024], rel_path[1024], rel_repo[1024];
+        join_rel(rel_repo, sizeof(rel_repo), rel_repo_prefix, tree.items[i].name);
+        if (vcs_path_to_local(rel_repo, rel_path, sizeof(rel_path)) < 0) { ok = 0; break; }
+        {
+            /* a character this codeset lacks (an older name is fine) */
+            static char one[1024];   /* not across the recursion below */
+            if (vcs_utf8_valid(tree.items[i].name)
+                && vcs_path_to_local(tree.items[i].name, one, sizeof(one)) == 0
+                && strchr(one, CS_REPLACEMENT))
+                ui_notify(UI_WARN, "amivcs: name not representable in this codeset, written as %s",
+                          rel_path);
+        }
+        localfs_join(abs_path, sizeof(abs_path), abs_dir, base_name(rel_path));
 
         if (tree.items[i].is_dir) {
             if (!localfs_is_dir(abs_path) && !localfs_mkdir(abs_path)) { ok = 0; break; }
-            if (!materialize_dir(repo, abs_path, rel_path, &tree.items[i].oid, ig)) { ok = 0; break; }
+            if (!materialize_dir(repo, abs_path, rel_path, rel_repo, &tree.items[i].oid, ig)) { ok = 0; break; }
         } else {
             if (!vcsobjstore_extract_blob_to_file(&repo->store, &tree.items[i].oid, abs_path)) { ok = 0; break; }
         }
@@ -436,14 +527,42 @@ static int materialize_dir(VcsRepo *repo, const char *abs_dir, const char *rel_p
 int vcs_repo_materialize_tree(VcsRepo *repo, const VcsOid *tree_oid)
 {
     VcsIgnore ig;
+    VcsFlatList target;
     int ok;
+
+    /* the target's names only (vcsname.h); refuse a tree in which two
+     * names would be the same file here -- before anything is written */
+    vcs_flat_init(&target);
+    if (!vcs_flatten_committed_tree(&repo->store, tree_oid, "", &target)) {
+        vcs_flat_free(&target);
+        return 0;
+    }
+    vcs_names_reset();
+    names_learn_flat(&target);
+    if (!vcs_names_unique_flat(&target, NULL)) { vcs_flat_free(&target); return 0; }
+    vcs_flat_free(&target);
+
     vcs_ignore_load(repo->root, &ig);
-    ok = materialize_dir(repo, repo->root, "", tree_oid, &ig);
+    ok = materialize_dir(repo, repo->root, "", "", tree_oid, &ig);
     vcs_ignore_free(&ig);
+    if (ok) vcs_names_forget(repo->amivcs_dir);   /* HEAD's names say it all now */
     return ok;
 }
 
 /* ------------------------------------------------------------------ */
+
+/* vcs_names_prune() callback: repo_path is a file of f or a directory
+ * above one */
+static int path_in_flat(const char *repo_path, void *ctx)
+{
+    const VcsFlatList *f = (const VcsFlatList *)ctx;
+    size_t n = strlen(repo_path);
+    int i;
+    if (vcs_flat_find(f, repo_path)) return 1;
+    for (i = 0; i < f->n; i++)
+        if (strncmp(f->items[i].path, repo_path, n) == 0 && f->items[i].path[n] == '/') return 1;
+    return 0;
+}
 
 int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int stage_all, VcsOid *out_oid)
 {
@@ -478,8 +597,7 @@ int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int 
         commit.nparents = 1;
     }
     commit.mtime = (long)time(NULL);
-    strncpy(commit.author, (author && author[0]) ? author : "unknown", sizeof(commit.author) - 1);
-    commit.author[sizeof(commit.author) - 1] = '\0';
+    vcs_utf8_copy(commit.author, sizeof(commit.author), (author && author[0]) ? author : "unknown");
     commit.message = (char *)malloc(strlen(message ? message : "") + 1);
     if (!commit.message) { vcs_commit_free(&commit); return 0; }
     strcpy(commit.message, message ? message : "");
@@ -500,6 +618,17 @@ int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int 
         vcs_refs_free(&refs);
     }
 
+    /* pairs kept since a merge: the ones the new HEAD carries are done,
+     * a file not staged yet keeps its pair (vcsname.h) */
+    {
+        VcsFlatList f;
+        vcs_flat_init(&f);
+        if (vcs_flatten_committed_tree(&repo->store, &tree_oid, "", &f)) {
+            vcs_flat_sort(&f);
+            vcs_names_prune(repo->amivcs_dir, path_in_flat, &f);
+        }
+        vcs_flat_free(&f);
+    }
     if (out_oid) *out_oid = commit_oid;
     return 1;
 }
@@ -544,10 +673,14 @@ static void log_list_append(VcsLogList *list, const VcsOid *oid, const VcsCommit
     e->nparents = c->nparents;
     for (i = 0; i < c->nparents; i++) e->parents[i] = c->parents[i];
     e->mtime = c->mtime;
-    strncpy(e->author, c->author, sizeof(e->author) - 1);
-    e->author[sizeof(e->author) - 1] = '\0';
-    e->message = (char *)malloc(strlen(c->message ? c->message : "") + 1);
-    if (e->message) strcpy(e->message, c->message ? c->message : "");
+    /* always valid UTF-8 for the frontends (a legacy ISO-8859-1 author
+     * or message from an older Amiga build is converted, vcsname.h) */
+    {
+        char *a = vcs_text_utf8(c->author);
+        vcs_utf8_copy(e->author, sizeof(e->author), a ? a : "");
+        free(a);
+    }
+    e->message = vcs_text_utf8(c->message);
     e->decoration[0] = '\0';
 }
 
@@ -718,13 +851,38 @@ int vcs_repo_log(VcsRepo *repo)
         t = (time_t)log.items[i].mtime;
         strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", gmtime(&t));
 
-        printf("commit %s\n", hex);
-        printf("Author: %s\n", log.items[i].author);
-        printf("Date:   %s UTC\n", timebuf);
-        printf("\n    %s\n\n", log.items[i].message ? log.items[i].message : "");
+        {
+            char *author = vcs_text_to_local(log.items[i].author);
+            char *msg = vcs_text_to_local(log.items[i].message ? log.items[i].message : "");
+            printf("commit %s\n", hex);
+            printf("Author: %s\n", author ? author : log.items[i].author);
+            printf("Date:   %s UTC\n", timebuf);
+            printf("\n    %s\n\n", msg ? msg : "");
+            free(author);
+            free(msg);
+        }
     }
     vcs_loglist_free(&log);
     return 1;
+}
+
+char *vcs_repo_branch_name(VcsRepo *repo, const char *local_name)
+{
+    char *utf8 = vcs_text_from_local(local_name);
+    VcsRefList refs;
+    char full[256];
+    if (!utf8) return NULL;
+    if (strcmp(utf8, local_name) == 0 || !vcs_refs_load(repo->amivcs_dir, &refs)) return utf8;
+    snprintf(full, sizeof(full), "%s%s", VCS_REF_PREFIX, utf8);
+    if (!vcs_refs_find(&refs, full)) {
+        snprintf(full, sizeof(full), "%s%s", VCS_REF_PREFIX, local_name);
+        if (vcs_refs_find(&refs, full)) {          /* an older build's spelling */
+            char *raw = (char *)malloc(strlen(local_name) + 1);
+            if (raw) { strcpy(raw, local_name); free(utf8); utf8 = raw; }
+        }
+    }
+    vcs_refs_free(&refs);
+    return utf8;
 }
 
 int vcs_repo_branch(VcsRepo *repo, const char *name)
@@ -740,7 +898,11 @@ int vcs_repo_branch(VcsRepo *repo, const char *name)
         for (i = 0; i < refs.n; i++) {
             const char *short_name = refs.items[i].name + strlen(VCS_REF_PREFIX);
             int is_current = !head.detached && strcmp(short_name, head.branch) == 0;
-            printf("%s %s\n", is_current ? "*" : " ", short_name);
+            {
+                char *shown = vcs_text_to_local(short_name);
+                printf("%s %s\n", is_current ? "*" : " ", shown ? shown : short_name);
+                free(shown);
+            }
         }
         vcs_refs_free(&refs);
         return 1;

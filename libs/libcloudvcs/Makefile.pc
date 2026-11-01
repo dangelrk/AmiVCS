@@ -21,7 +21,7 @@ ARFLAGS = rcs
 OBJDIR = obj/pc
 LIBDIR = ../../lib/pc
 
-SRCS = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote
+SRCS = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote vcsname
 OBJS = $(SRCS:%=$(OBJDIR)/%.o)
 
 LIB = $(LIBDIR)/libcloudvcs.a

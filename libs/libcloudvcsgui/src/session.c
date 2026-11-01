@@ -10,6 +10,7 @@
  * time per process (true for both frontends: one main window, one repo).
  */
 #include "session.h"
+#include "vcsname.h"
 #include "ui_hooks.h"
 
 #include <stdlib.h>
@@ -74,8 +75,7 @@ void vcsgui_close(VcsGuiSession *s)
 
 void vcsgui_set_author(VcsGuiSession *s, const char *author)
 {
-    strncpy(s->author, author ? author : "", sizeof(s->author) - 1);
-    s->author[sizeof(s->author) - 1] = '\0';
+    vcs_utf8_copy(s->author, sizeof(s->author), author ? author : "");   /* whole characters */
 }
 
 int vcsgui_add(VcsGuiSession *s, const char *relpath)

@@ -44,7 +44,7 @@ OBJDIR = obj/amiga
 BINDIR = ../../bin/amiga
 TARGET_BIN = $(BINDIR)/amivcs
 
-CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress
+CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress charset
 CORE_OBJS = $(CORE_SRCS:%=$(OBJDIR)/core_%.o)
 FS_SRCS   = localfs_amiga localfs_util pattern_amiga
 FS_OBJS   = $(FS_SRCS:%=$(OBJDIR)/fs_%.o)
@@ -53,7 +53,7 @@ FS_OBJS   = $(FS_SRCS:%=$(OBJDIR)/fs_%.o)
 # http_amiga.c (http_request() etc.) is needed here.
 HTTP_SRCS = http_amiga
 HTTP_OBJS = $(HTTP_SRCS:%=$(OBJDIR)/http_%.o)
-VCS_SRCS  = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote
+VCS_SRCS  = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote vcsname
 VCS_OBJS  = $(VCS_SRCS:%=$(OBJDIR)/vcs_%.o)
 
 OWN_OBJS = $(OBJDIR)/main.o

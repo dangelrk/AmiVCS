@@ -22,3 +22,9 @@ $(error core/ fehlt -- das AmiCloudCore-Submodul holen: git submodule update --i
 endif
 
 include core/mk/project.mk
+
+# make test: Host-Unit-Tests (libcloudvcs/tests: Namen zwischen Repository
+# und lokalem Zeichensatz), ohne Netz
+.PHONY: test
+test:
+	$(MAKE) -C libs/libcloudvcs/tests

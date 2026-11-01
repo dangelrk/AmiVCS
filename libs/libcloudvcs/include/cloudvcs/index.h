@@ -52,6 +52,9 @@ int vcs_index_reset_to(const char *amivcs_dir, const VcsOid *tree_oid);
  * (ignore.h), same as status()/commit() -- an ignored child is skipped,
  * though relpath itself is still staged if named explicitly, ignored or
  * not. Returns 1 on success, 0 if relpath doesn't exist or on I/O error. */
+/* relpath here and below is a repository path (UTF-8, vcsname.h); a
+ * name the local codeset can't show needs the caller's name table
+ * (vcs_repo_status_raw() or vcs_repo_learn_names() first). */
 int vcs_index_add(VcsRepo *repo, const char *relpath);
 
 /* Removes relpath from the index tree ("git rm --cached" -- the working

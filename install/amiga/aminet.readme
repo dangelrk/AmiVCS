@@ -33,6 +33,8 @@ Requirements
 - for clone/push/pull only: TCP/IP stack with bsdsocket.library,
   AmiSSL 5 (util/libs/AmiSSL-v5-OS3.lha) and an AmiVCS server
   (included, see the drawer Server)
+- optional: codesets.library 6 or newer for umlauts in other charsets
+  than ISO-8859-1 (util/libs/codesets-6.22.lha)
 
 Documentation and user interface are in German.
 Die Dokumentation (Docs/AmiVCS.guide) und die Programme sind deutsch.

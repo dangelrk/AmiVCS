@@ -14,6 +14,7 @@
 
 #include "object.h"
 #include "objstore.h"
+#include "repo.h"
 
 typedef struct {
     char  *path; /* malloc'd, '/'-joined relative to repo root */
@@ -47,5 +48,13 @@ int vcs_commit_tree(const VcsObjStore *store, const VcsOid *commit_oid, VcsOid *
  * commits yet), which yields no entries. Returns 1 on success. */
 int vcs_flatten_committed_tree(const VcsObjStore *store, const VcsOid *tree_oid,
                                const char *rel_prefix, VcsFlatList *out);
+
+/* Name table for one operation (vcsname.h): fresh, .amivcs/localnames,
+ * then the paths of a and b (either may be NULL; they override). */
+void vcs_names_begin_flat(VcsRepo *repo, const VcsFlatList *a, const VcsFlatList *b);
+
+/* 1 if no two paths of a (and b, may be NULL) would be the same local
+ * file; else 0 after a UI_ERROR naming both. Learn them first. */
+int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b);
 
 #endif /* CLOUDVCS_TREEUTIL_H */

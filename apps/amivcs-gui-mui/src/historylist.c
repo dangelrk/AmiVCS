@@ -7,6 +7,7 @@
 #include <libraries/mui.h>
 
 #include "historylist.h"
+#include "vcsname.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,7 @@ static char g_disp_graph[64];
 static char g_disp_oid[16];
 static char g_disp_date[24];
 static char g_disp_msg[300];
+static char g_disp_author[64];
 
 static __saveds LONG history_display_func(__reg("a0") struct Hook *hook,
                                           __reg("a2") char **array,
@@ -84,7 +86,8 @@ static __saveds LONG history_display_func(__reg("a0") struct Hook *hook,
     }
     array[1] = g_disp_oid;
 
-    array[2] = hr->entry->author;
+    vcs_text_to_local_buf(hr->entry->author, g_disp_author, sizeof(g_disp_author));
+    array[2] = g_disp_author;
 
     {
         time_t t = (time_t)hr->entry->mtime;
@@ -98,12 +101,15 @@ static __saveds LONG history_display_func(__reg("a0") struct Hook *hook,
     }
     array[3] = g_disp_date;
 
-    if (hr->entry->decoration[0]) {
-        snprintf(g_disp_msg, sizeof(g_disp_msg), "[%s] %s", hr->entry->decoration,
-                hr->entry->message ? hr->entry->message : "");
-    } else {
-        strncpy(g_disp_msg, hr->entry->message ? hr->entry->message : "", sizeof(g_disp_msg) - 1);
-        g_disp_msg[sizeof(g_disp_msg) - 1] = '\0';
+    {
+        char msg[sizeof(g_disp_msg)];
+        vcs_text_to_local_buf(hr->entry->message ? hr->entry->message : "", msg, sizeof(msg));
+        if (hr->entry->decoration[0])
+            snprintf(g_disp_msg, sizeof(g_disp_msg), "[%s] %s", hr->entry->decoration, msg);
+        else {
+            strncpy(g_disp_msg, msg, sizeof(g_disp_msg) - 1);
+            g_disp_msg[sizeof(g_disp_msg) - 1] = '\0';
+        }
     }
     array[4] = g_disp_msg;
 

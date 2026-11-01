@@ -36,7 +36,7 @@ CFLAGS   = $(TARGET) -O2 -DAMIGA -DPLATFORM_AMIGA \
            -cpu=$(CPU)
 
 OBJDIR = obj/amiga
-SRCS   = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote
+SRCS   = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote vcsname
 OBJS   = $(SRCS:%=$(OBJDIR)/%.o)
 
 all: $(OBJDIR) $(OBJS)

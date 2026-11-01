@@ -23,6 +23,7 @@
 #include "ui_hooks.h"
 #include "localfs.h"
 #include "http.h"
+#include "vcsname.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,7 +86,9 @@ static __saveds LONG change_display_func(__reg("a0") struct Hook *hook,
     if (!c) { array[0] = "Change"; return 0; }
     {
         const char *label = c->kind == 'N' ? "new" : c->kind == 'M' ? "modified" : "deleted";
-        snprintf(g_disp_change, sizeof(g_disp_change), "%-9s %s", label, c->path);
+        char shown[256];
+        vcs_text_to_local_buf(c->path, shown, sizeof(shown));   /* repository path is UTF-8 */
+        snprintf(g_disp_change, sizeof(g_disp_change), "%-9s %s", label, shown);
     }
     array[0] = g_disp_change;
     return 0;
@@ -352,9 +355,14 @@ static void do_commit(void)
         MUI_Request(g_app, NULL, 0, "Commit", "_OK", "Enter a commit message first.");
         return;
     }
-    if (!vcsgui_commit(&g_session, (char *)text, g_stage_all_flag, &oid)) {
-        MUI_Request(g_app, NULL, 0, "Commit", "_OK", (char *)vcsgui_last_message());
-        return;
+    {
+        char *msg = vcs_text_from_local((char *)text);   /* repository text is UTF-8 */
+        int ok = msg && vcsgui_commit(&g_session, msg, g_stage_all_flag, &oid);
+        free(msg);
+        if (!ok) {
+            MUI_Request(g_app, NULL, 0, "Commit", "_OK", (char *)vcsgui_last_message());
+            return;
+        }
     }
     set(g_commit_string, MUIA_String_Contents, "");
     refresh_ui();
@@ -370,7 +378,10 @@ static void show_branch_list_hint(void)
     for (i = 0; i < g_session.branches.n && used < (int)sizeof(msg) - 64; i++) {
         const char *full = g_session.branches.items[i].name;
         const char *short_name = strncmp(full, "refs/heads/", 11) == 0 ? full + 11 : full;
-        int n = snprintf(msg + used, sizeof(msg) - (size_t)used, "  %s\n", short_name);
+        char shown[128];
+        int n;
+        vcs_text_to_local_buf(short_name, shown, sizeof(shown));
+        n = snprintf(msg + used, sizeof(msg) - (size_t)used, "  %s\n", shown);
         if (n > 0) used += n;
     }
     MUI_Request(g_app, NULL, 0, "Branches", "_OK", msg);
@@ -381,6 +392,10 @@ static void do_new_branch(void)
     char name[128];
     if (!ask_string("New branch name", "", name, sizeof(name))) return;
     if (!name[0]) return;
+    {   /* branch names are UTF-8 in the repository */
+        char *u = g_session.is_open ? vcs_repo_branch_name(&g_session.repo, name) : vcs_text_from_local(name);
+        if (u) { vcs_utf8_copy(name, sizeof(name), u); free(u); }
+    }
     if (!vcsgui_branch_create(&g_session, name)) {
         MUI_Request(g_app, NULL, 0, "New Branch", "_OK", (char *)vcsgui_last_message());
     }
@@ -397,6 +412,10 @@ static void do_switch_branch(void)
     show_branch_list_hint();
     if (!ask_string("Switch to branch", "", name, sizeof(name))) return;
     if (!name[0]) return;
+    {   /* branch names are UTF-8 in the repository */
+        char *u = g_session.is_open ? vcs_repo_branch_name(&g_session.repo, name) : vcs_text_from_local(name);
+        if (u) { vcs_utf8_copy(name, sizeof(name), u); free(u); }
+    }
     if (!vcsgui_switch(&g_session, name)) {
         MUI_Request(g_app, NULL, 0, "Switch Branch", "_OK", (char *)vcsgui_last_message());
     }
@@ -413,6 +432,10 @@ static void do_merge_branch(void)
     show_branch_list_hint();
     if (!ask_string("Merge which branch into the current one?", "", name, sizeof(name))) return;
     if (!name[0]) return;
+    {   /* branch names are UTF-8 in the repository */
+        char *u = g_session.is_open ? vcs_repo_branch_name(&g_session.repo, name) : vcs_text_from_local(name);
+        if (u) { vcs_utf8_copy(name, sizeof(name), u); free(u); }
+    }
     if (!vcsgui_merge(&g_session, name)) {
         MUI_Request(g_app, NULL, 0, "Merge", "_OK", (char *)vcsgui_last_message());
     } else {
@@ -558,7 +581,11 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     vcsgui_session_init(&g_session);
     g_cfg = *cfg;
-    vcsgui_set_author(&g_session, cfg->username[0] ? cfg->username : NULL);
+    {
+        char *author = cfg->username[0] ? vcs_text_from_local(cfg->username) : NULL;
+        vcsgui_set_author(&g_session, author);
+        free(author);
+    }
     if (repo_path && repo_path[0]) {
         strncpy(g_cwd, repo_path, sizeof(g_cwd) - 1);
         g_cwd[sizeof(g_cwd) - 1] = '\0';

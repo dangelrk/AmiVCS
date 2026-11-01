@@ -98,7 +98,7 @@ Voraussetzungen
 
 Für alle Amiga-Programme:
   - AmigaOS 3.x
-  - 68000 oder besser (keine FPU nötig)
+  - 68020 oder besser (keine FPU nötig)
 
 Zusätzlich für Serververbindungen (clone/push/pull in amivcs und
 amivcs-gui):
@@ -111,6 +111,12 @@ Zusätzlich für amivcs-gui:
   - MUI 3.8 oder neuer (muimaster.library Version 19)
 
 AMIVCSPrefs braucht nur Intuition und GadTools aus dem Betriebssystem.
+
+Optional: codesets.library ab Version 6 (Aminet util/libs/codesets)
+für Umlaute in Dateinamen, Autor und Commit-Text bei anderen
+Zeichensätzen als ISO-8859-1; fehlt sie, gilt ISO-8859-1. Im
+Repository steht alles in UTF-8, damit Amiga und PC dieselben Namen
+sehen.
 
 Wie bei git funktioniert alles Lokale ohne Netzwerk: amivcs und
 amivcs-gui öffnen TCP/IP-Stack und AmiSSL erst bei clone, push oder

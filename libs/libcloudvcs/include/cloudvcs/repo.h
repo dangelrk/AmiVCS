@@ -94,6 +94,18 @@ int vcs_repo_is_dirty(VcsRepo *repo);
  * success. */
 int vcs_repo_snapshot_workdir(VcsRepo *repo, VcsOid *out_tree_oid);
 
+/* Names: every path this API takes or returns is a repository path
+ * (UTF-8, vcsname.h); author and message too. vcs_repo_learn_names()
+ * walks HEAD's and the index's trees once, so vcsname.h can map a local
+ * name the codeset can't show exactly back to its repository name --
+ * call it before vcs_path_from_local() on a path the user typed. */
+void vcs_repo_learn_names(VcsRepo *repo);
+
+/* A branch name the user typed (local codeset) as the repository knows
+ * it: UTF-8, or the raw bytes if an older Amiga build created the branch
+ * that way. malloc'd; NULL only when out of memory. */
+char *vcs_repo_branch_name(VcsRepo *repo, const char *local_name);
+
 /* Materializes the given tree object into repo->root: writes/overwrites
  * files and directories to match the tree, and removes anything present
  * on disk but absent from the tree and not covered by .amivcsignore

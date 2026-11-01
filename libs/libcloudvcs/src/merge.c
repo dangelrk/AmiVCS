@@ -9,6 +9,7 @@
 #include "treeutil.h"
 #include "oidset.h"
 #include "localfs.h"
+#include "vcsname.h"
 #include "ui_hooks.h"
 
 #include <stdio.h>
@@ -112,7 +113,7 @@ static void ensure_parent_dir(const char *root, const char *relpath)
         if (len >= sizeof(reldir)) len = sizeof(reldir) - 1;
         memcpy(reldir, relpath, len);
         reldir[len] = '\0';
-        localfs_join(absdir, sizeof(absdir), root, reldir);
+        vcs_local_join(absdir, sizeof(absdir), root, reldir);
         localfs_mkdir_p(absdir);
     }
 }
@@ -229,6 +230,19 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
         vcs_flat_sort(&ours_flat);
         vcs_flat_sort(&theirs_flat);
 
+        /* names of both sides (vcsname.h); a theirs name that would be
+         * the same file as a different ours name here stops the merge
+         * before anything is written */
+        vcs_names_begin_flat(repo, &ours_flat, &theirs_flat);
+        if (!vcs_names_unique_flat(&ours_flat, &theirs_flat)) {
+            vcs_flat_free(&base_flat); vcs_flat_free(&ours_flat); vcs_flat_free(&theirs_flat);
+            return 0;
+        }
+        /* theirs' names written below must still be known when the merge
+         * (or, after conflicts, the user's commit) scans the tree -- saved
+         * before the first file is written */
+        vcs_names_save(repo->amivcs_dir);
+
         while (bi < base_flat.n || oi < ours_flat.n || ti < theirs_flat.n) {
             const char *path = NULL;
             const VcsFlatEntry *b = bi < base_flat.n ? &base_flat.items[bi] : NULL;
@@ -275,24 +289,28 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
                     break; /* working tree already matches ours */
                 case DELETE: {
                     char abs_path[1024];
-                    localfs_join(abs_path, sizeof(abs_path), repo->root, path);
+                    vcs_local_join(abs_path, sizeof(abs_path), repo->root, path);
                     localfs_remove(abs_path);
                     break;
                 }
                 case TAKE_THEIRS: {
                     char abs_path[1024];
                     ensure_parent_dir(repo->root, path);
-                    localfs_join(abs_path, sizeof(abs_path), repo->root, path);
+                    vcs_local_join(abs_path, sizeof(abs_path), repo->root, path);
                     vcsobjstore_extract_blob_to_file(&repo->store, theirs_oid, abs_path);
                     break;
                 }
                 case CONFLICT: {
                     conflicts++;
-                    ui_notify(UI_WARN, "conflict: %s", path);
+                    {
+                        char *shown = vcs_text_to_local(path);
+                        ui_notify(UI_WARN, "conflict: %s", shown ? shown : path);
+                        free(shown);
+                    }
                     if (in_theirs) {
                         char abs_path[1024], theirs_path[1040];
                         ensure_parent_dir(repo->root, path);
-                        localfs_join(abs_path, sizeof(abs_path), repo->root, path);
+                        vcs_local_join(abs_path, sizeof(abs_path), repo->root, path);
                         snprintf(theirs_path, sizeof(theirs_path), "%s.theirs", abs_path);
                         vcsobjstore_extract_blob_to_file(&repo->store, theirs_oid, theirs_path);
                     }
@@ -331,7 +349,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
         commit.parents[1] = theirs_commit;
         commit.nparents = 2;
         commit.mtime = (long)time(NULL);
-        strncpy(commit.author, "amivcs", sizeof(commit.author) - 1);
+        vcs_utf8_copy(commit.author, sizeof(commit.author), "amivcs");
         {
             char msg[192];
             snprintf(msg, sizeof(msg), "Merge branch '%s'", theirs_label);
@@ -351,6 +369,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
         if (!vcs_refs_save(repo->amivcs_dir, &refs)) { vcs_refs_free(&refs); return 0; }
         vcs_refs_free(&refs);
         vcs_index_reset_to(repo->amivcs_dir, &merged_tree);
+        vcs_names_forget(repo->amivcs_dir);
 
         ui_notify(UI_INFO, "Merge completed.");
     }
