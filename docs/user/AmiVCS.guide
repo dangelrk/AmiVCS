@@ -1090,6 +1090,10 @@ Schwesterprojekte:
 Versionsgeschichte
 ------------------
 
+Programmversion 0.3 (01.11.2026)
+  - Gemeinsamer Kern aktualisiert (Umlaute, JSON-Antworten
+    unabhängig von der Spracheinstellung).
+
 Programmversion 0.2 (31.10.2026)
   - Mindestens 68020 erforderlich (AmiSSL 5 braucht ihn ohnehin).
   - Gemeinsamer Kern aktualisiert.

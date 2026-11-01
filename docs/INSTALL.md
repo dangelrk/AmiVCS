@@ -59,7 +59,7 @@ AmiVCS/
   Examples/          amivcs.cfg.example
 ```
 
-Archiv auspacken (z. B. `lha x AmiVCS-0.2.lha RAM:`). Zum Installieren in der Schublade das Icon **Install-AmiVCS** doppelt anklicken.
+Archiv auspacken (z. B. `lha x AmiVCS-0.3.lha RAM:`). Zum Installieren in der Schublade das Icon **Install-AmiVCS** doppelt anklicken.
 Es startet den Commodore-Installer (bei AmigaOS 3.2 in `SYS:System`, bei
 älteren Systemen von der Install-Diskette nach `C:` kopieren); in einer
 Shell geht dasselbe mit `Installer Install-AmiVCS`. Ohne Installer gibt es dasselbe als
