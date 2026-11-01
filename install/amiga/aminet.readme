@@ -1,10 +1,10 @@
-Short:        Small version control system for OS3
+Short:        Small version control system
 Author:       Ronny Krueger
-Uploader:     Ronny Krueger (amitools@planet-rk.de)
+Uploader:     amitools@planet-rk.de (Ronny Krueger)
 Type:         dev/misc
 Version:      @VERSION@
 Architecture: m68k-amigaos >= 3.0.0
-Requires:     MUI 3.8 (GUI); TCP/IP + AmiSSL 5 for clone/push/pull
+Requires:     util/libs/mui38usr.lha; util/libs/AmiSSL-v5-OS3.lha
 Distribution: Aminet
 
 AmiVCS is a small, deliberately simple version control system for
@@ -29,9 +29,10 @@ Existing settings are never overwritten.
 Requirements
 ------------
 - AmigaOS 3.x, 68020 or better (since 0.2), no FPU needed
-- MUI 3.8 or newer for amivcs-gui
+- MUI 3.8 or newer for amivcs-gui (Aminet util/libs/mui38usr.lha)
 - for clone/push/pull only: TCP/IP stack with bsdsocket.library,
-  AmiSSL 5 and an AmiVCS server (included, see the drawer Server)
+  AmiSSL 5 (util/libs/AmiSSL-v5-OS3.lha) and an AmiVCS server
+  (included, see the drawer Server)
 
 Documentation and user interface are in German.
 Die Dokumentation (Docs/AmiVCS.guide) und die Programme sind deutsch.
