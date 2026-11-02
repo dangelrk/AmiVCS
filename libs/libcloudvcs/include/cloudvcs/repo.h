@@ -106,6 +106,14 @@ void vcs_repo_learn_names(VcsRepo *repo);
  * that way. malloc'd; NULL only when out of memory. */
 char *vcs_repo_branch_name(VcsRepo *repo, const char *local_name);
 
+/* Write lock: .amivcs/lock while a command changes the repository or the
+ * working tree, so the CLI, amivcs-gui and the IDE never write at the
+ * same time. Acquire returns 0 (after a UI_ERROR) if the file exists --
+ * another program is at work, or one was killed: then the message says
+ * to remove the file. Release removes it. */
+int  vcs_repo_lock(const char *amivcs_dir);
+void vcs_repo_unlock(const char *amivcs_dir);
+
 /* Materializes the given tree object into repo->root: writes/overwrites
  * files and directories to match the tree, and removes anything present
  * on disk but absent from the tree and not covered by .amivcsignore

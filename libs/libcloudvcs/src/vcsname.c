@@ -617,6 +617,16 @@ void vcs_text_to_local_buf(const char *s, char *out, size_t outsz)
     free(l);
 }
 
+const char *vcs_shown(const char *s)
+{
+    static char buf[4][512];
+    static int next;
+    char *b = buf[next];
+    next = (next + 1) & 3;
+    vcs_text_to_local_buf(s ? s : "", b, sizeof(buf[0]));
+    return b;
+}
+
 char *vcs_text_from_local(const char *s)
 {
     size_t n;

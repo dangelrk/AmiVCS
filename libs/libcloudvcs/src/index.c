@@ -219,6 +219,34 @@ static int add_dir_recursive(VcsRepo *repo, const char *relpath, const VcsIgnore
     return ok;
 }
 
+/* paths of f equal to relpath or below it ("" = all) */
+static int under(const char *path, const char *relpath)
+{
+    size_t n = strlen(relpath);
+    if (n == 0) return 1;
+    return strncmp(path, relpath, n) == 0 && (path[n] == '\0' || path[n] == '/');
+}
+
+/* index entries below relpath whose file is gone: stage their deletion */
+static int stage_missing_below(VcsRepo *repo, const char *relpath)
+{
+    VcsOid tree;
+    VcsFlatList xf;
+    int i, ok = 1;
+    if (!vcs_index_load(repo->amivcs_dir, &tree)) return 0;
+    vcs_flat_init(&xf);
+    if (!vcs_flatten_committed_tree(&repo->store, &tree, "", &xf)) { vcs_flat_free(&xf); return 0; }
+    for (i = 0; i < xf.n && ok; i++) {
+        char abs_path[1024];
+        if (!under(xf.items[i].path, relpath)) continue;
+        if (vcs_local_join(abs_path, sizeof(abs_path), repo->root, xf.items[i].path)
+            && !localfs_exists(abs_path))
+            ok = vcs_index_remove(repo, xf.items[i].path);
+    }
+    vcs_flat_free(&xf);
+    return ok;
+}
+
 int vcs_index_add(VcsRepo *repo, const char *relpath)
 {
     char abs_path[1024];
@@ -232,10 +260,69 @@ int vcs_index_add(VcsRepo *repo, const char *relpath)
         vcs_ignore_load(repo->root, &ig);
         ok = add_dir_recursive(repo, relpath, &ig);
         vcs_ignore_free(&ig);
+        if (ok) ok = stage_missing_below(repo, relpath);
         return ok;
     }
-    if (!localfs_exists(abs_path)) return 0;
+    if (!localfs_exists(abs_path)) {
+        /* gone from disk: stage its deletion (a file, or everything the
+         * index has below a deleted directory) */
+        VcsOid tree;
+        VcsFlatList xf;
+        int i, found = 0, ok = 1;
+        if (!vcs_index_load(repo->amivcs_dir, &tree)) return 0;
+        vcs_flat_init(&xf);
+        if (!vcs_flatten_committed_tree(&repo->store, &tree, "", &xf)) { vcs_flat_free(&xf); return 0; }
+        for (i = 0; i < xf.n && ok; i++)
+            if (under(xf.items[i].path, relpath)) { found = 1; ok = vcs_index_remove(repo, xf.items[i].path); }
+        vcs_flat_free(&xf);
+        return found && ok;
+    }
     return add_file(repo, relpath);
+}
+
+int vcs_index_set_blob(VcsRepo *repo, const char *relpath, const VcsOid *blob_oid)
+{
+    VcsOid cur_tree, new_tree;
+    if (!vcs_index_load(repo->amivcs_dir, &cur_tree)) return 0;
+    if (!rebuild_tree(repo, &cur_tree, relpath, blob_oid, &new_tree)) return 0;
+    return vcs_index_save(repo->amivcs_dir, &new_tree);
+}
+
+int vcs_index_unstage(VcsRepo *repo, const char *relpath)
+{
+    VcsOid head_commit, head_tree, index_tree;
+    VcsFlatList hf, xf;
+    int i, ok = 1;
+
+    head_tree = VCS_OID_ZERO;
+    if (vcs_head_resolve(repo->amivcs_dir, &head_commit) && !vcs_oid_is_zero(&head_commit)
+        && !vcs_commit_tree(&repo->store, &head_commit, &head_tree)) return 0;
+    if (!vcs_index_load(repo->amivcs_dir, &index_tree)) return 0;
+    vcs_flat_init(&hf);
+    vcs_flat_init(&xf);
+    if (!vcs_flatten_committed_tree(&repo->store, &head_tree, "", &hf)
+        || !vcs_flatten_committed_tree(&repo->store, &index_tree, "", &xf)) {
+        vcs_flat_free(&hf);
+        vcs_flat_free(&xf);
+        return 0;
+    }
+    vcs_flat_sort(&hf);
+    vcs_flat_sort(&xf);
+    /* staged additions/changes under relpath: back to HEAD or out */
+    for (i = 0; i < xf.n && ok; i++) {
+        const VcsFlatEntry *h;
+        if (!under(xf.items[i].path, relpath)) continue;
+        h = vcs_flat_find(&hf, xf.items[i].path);
+        if (!h) ok = vcs_index_remove(repo, xf.items[i].path);
+        else if (!vcs_oid_equal(&h->oid, &xf.items[i].oid)) ok = vcs_index_set_blob(repo, h->path, &h->oid);
+    }
+    /* staged deletions under relpath: HEAD's entry back */
+    for (i = 0; i < hf.n && ok; i++)
+        if (under(hf.items[i].path, relpath) && !vcs_flat_find(&xf, hf.items[i].path))
+            ok = vcs_index_set_blob(repo, hf.items[i].path, &hf.items[i].oid);
+    vcs_flat_free(&hf);
+    vcs_flat_free(&xf);
+    return ok;
 }
 
 int vcs_index_remove(VcsRepo *repo, const char *relpath)

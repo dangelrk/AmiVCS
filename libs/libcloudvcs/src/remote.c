@@ -20,6 +20,7 @@
 #include "treeutil.h"
 #include "oidset.h"
 #include "localfs.h"
+#include "vcsname.h"
 #include "http.h"
 #include "parson.h"
 #include "md5.h"
@@ -38,8 +39,11 @@
  * Gated by ac_console_progress (progress.h) exactly like every other
  * console progress output in this tree, so a future GUI frontend can
  * suppress it and render its own widget instead. final appends ", done.\n". */
+void (*vcs_progress_hook)(const char *label, long done, long total, int final) = NULL;
+
 static void progress_line(const char *label, long done, long total, int final)
 {
+    if (vcs_progress_hook) { vcs_progress_hook(label, done, total, final); return; }
     if (!ac_console_progress) return;
     if (total > 0) {
         long pct = (done * 100) / total;
@@ -536,7 +540,7 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
         if (!vcs_commit_tree(&repo.store, &remote_refs.items[main_idx].oid, &tree_oid)) { vcs_refs_free(&remote_refs); return 0; }
         if (!vcs_repo_materialize_tree(&repo, &tree_oid)) { vcs_refs_free(&remote_refs); return 0; }
         vcs_head_set_branch(repo.amivcs_dir, checkout_branch);
-        ui_notify(UI_INFO, "Cloned '%s' into %s, checked out '%s'.", repo_name, local_dir, checkout_branch);
+        ui_notify(UI_INFO, "Cloned '%s' into %s, checked out '%s'.", repo_name, local_dir, vcs_shown(checkout_branch));
     }
 
     save_remote_repo(repo.amivcs_dir, repo_name);
@@ -821,7 +825,7 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
             report_json_error(obj, "update-ref failed");
             ui_notify(UI_ERROR, "amivcs: push rejected -- pull and merge first");
         } else {
-            ui_notify(UI_INFO, "Pushed '%s' to '%s'.", head.branch, resolved_name);
+            ui_notify(UI_INFO, "Pushed '%s' to '%s'.", vcs_shown(head.branch), resolved_name);
         }
         json_value_free(val);
         return ok;
@@ -857,7 +861,7 @@ int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, c
     snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, branch_name);
     r = vcs_refs_find(&remote_refs, fullname);
     if (!r) {
-        ui_notify(UI_ERROR, "amivcs: no such remote branch '%s'", branch_name);
+        ui_notify(UI_ERROR, "amivcs: no such remote branch '%s'", vcs_shown(branch_name));
         vcs_refs_free(&remote_refs);
         return 0;
     }

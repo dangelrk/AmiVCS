@@ -24,7 +24,10 @@ endif
 include core/mk/project.mk
 
 # make test: Host-Unit-Tests (libcloudvcs/tests: Namen zwischen Repository
-# und lokalem Zeichensatz), ohne Netz
+# und lokalem Zeichensatz) und der CLI-Test (scripts/test_cli.sh: Ausgabe
+# fuer Programme, unstage, unversionierte Dateien, Sperre), ohne Netz
 .PHONY: test
 test:
 	$(MAKE) -C libs/libcloudvcs/tests
+	$(MAKE) pc >/dev/null
+	sh scripts/test_cli.sh

@@ -415,12 +415,15 @@ int vcs_repo_status(VcsRepo *repo)
 
 int vcs_repo_is_dirty(VcsRepo *repo)
 {
-    VcsOid head_tree;
+    VcsOid head_tree, index_tree;
     VcsFlatList head_flat, work_flat;
     VcsIgnore ig;
-    int changes;
+    int i, changes = 0;
 
     if (!resolve_head_tree(repo, &head_tree)) return -1;
+    /* staged but not committed counts too */
+    if (!vcs_index_load(repo->amivcs_dir, &index_tree)) return -1;
+    if (!vcs_oid_equal(&index_tree, &head_tree)) return 1;
 
     vcs_flat_init(&head_flat);
     if (!vcs_flatten_committed_tree(&repo->store, &head_tree, "", &head_flat)) {
@@ -441,110 +444,173 @@ int vcs_repo_is_dirty(VcsRepo *repo)
     vcs_ignore_free(&ig);
     vcs_flat_sort(&work_flat);
 
-    changes = diff_flat(&head_flat, &work_flat, NULL, NULL);
+    /* only what HEAD tracks: modified or deleted. A file HEAD doesn't
+     * know (not added yet, a .theirs copy) is no reason to refuse --
+     * vcs_repo_materialize_tree() leaves it alone and refuses only if
+     * the target would overwrite it. */
+    for (i = 0; i < head_flat.n && !changes; i++) {
+        const VcsFlatEntry *w = vcs_flat_find(&work_flat, head_flat.items[i].path);
+        if (!w || !vcs_oid_equal(&w->oid, &head_flat.items[i].oid)) changes = 1;
+    }
 
     vcs_flat_free(&head_flat);
     vcs_flat_free(&work_flat);
-    return changes != 0;
+    return changes;
 }
 
 /* ------------------------------------------------------------------ */
 /* Materialize a committed tree into the working directory (checkout/    */
 /* switch, and later merge's fast-forward path).                        */
 
-static int materialize_dir(VcsRepo *repo, const char *abs_dir, const char *rel_prefix,
-                           const char *rel_repo_prefix, const VcsOid *tree_oid, VcsIgnore *ig)
+/* parent directories of repo path p (local form), created as needed */
+static int ensure_parents(const char *root, const char *repo_path)
 {
-    VcsObjType type;
-    void *data;
-    long len;
-    VcsTree tree;
-    int i, ok = 1;
-    LocalDir *dir;
-    LocalDirEntry de;
-
-    vcs_tree_init(&tree);
-    if (!vcs_oid_is_zero(tree_oid)) {
-        if (!vcsobjstore_read(&repo->store, tree_oid, &type, &data, &len)) return 0;
-        if (type != VCS_OBJ_TREE || !vcs_tree_decode(data, len, &tree)) { free(data); return 0; }
-        free(data);
-    }
-
-    /* Pass 1: remove anything on disk that isn't in the tree and isn't
-     * ignored (an ignored path, e.g. build output, is simply left alone). */
-    dir = localfs_opendir(abs_dir);
-    if (dir) {
-        while (localfs_readdir(dir, &de)) {
-            char rel_path[1024], rel_repo[1024];
-            join_rel(rel_path, sizeof(rel_path), rel_prefix, de.name);
-            if (vcs_ignore_match(ig, rel_path, de.is_dir)) continue;
-            if (!vcs_path_from_local(rel_path, rel_repo, sizeof(rel_repo))) continue;  /* too long: leave it */
-            if (vcs_tree_find(&tree, base_name(rel_repo))) continue;
-            {
-                char abs_path[1024];
-                localfs_join(abs_path, sizeof(abs_path), abs_dir, de.name);
-                if (de.is_dir) {
-                    VcsOid empty = VCS_OID_ZERO;
-                    if (!materialize_dir(repo, abs_path, rel_path, rel_repo, &empty, ig)) { ok = 0; break; }
-                    localfs_remove(abs_path);
-                } else {
-                    localfs_remove(abs_path);
-                }
-            }
-        }
-        localfs_closedir(dir);
-    }
-    if (!ok) { vcs_tree_free(&tree); return 0; }
-
-    /* Pass 2: create/update everything the tree calls for. */
-    for (i = 0; i < tree.n; i++) {
-        char abs_path[1024], rel_path[1024], rel_repo[1024];
-        join_rel(rel_repo, sizeof(rel_repo), rel_repo_prefix, tree.items[i].name);
-        if (vcs_path_to_local(rel_repo, rel_path, sizeof(rel_path)) < 0) { ok = 0; break; }
-        {
-            /* a character this codeset lacks (an older name is fine) */
-            static char one[1024];   /* not across the recursion below */
-            if (vcs_utf8_valid(tree.items[i].name)
-                && vcs_path_to_local(tree.items[i].name, one, sizeof(one)) == 0
-                && strchr(one, CS_REPLACEMENT))
-                ui_notify(UI_WARN, "amivcs: name not representable in this codeset, written as %s",
-                          rel_path);
-        }
-        localfs_join(abs_path, sizeof(abs_path), abs_dir, base_name(rel_path));
-
-        if (tree.items[i].is_dir) {
-            if (!localfs_is_dir(abs_path) && !localfs_mkdir(abs_path)) { ok = 0; break; }
-            if (!materialize_dir(repo, abs_path, rel_path, rel_repo, &tree.items[i].oid, ig)) { ok = 0; break; }
-        } else {
-            if (!vcsobjstore_extract_blob_to_file(&repo->store, &tree.items[i].oid, abs_path)) { ok = 0; break; }
-        }
-    }
-
-    vcs_tree_free(&tree);
-    return ok;
+    char local[1024], abs_dir[1024];
+    char *slash;
+    if (vcs_path_to_local(repo_path, local, sizeof(local)) < 0) return 0;
+    slash = strrchr(local, '/');
+    if (!slash) return 1;
+    *slash = '\0';
+    localfs_join(abs_dir, sizeof(abs_dir), root, local);
+    return localfs_is_dir(abs_dir) || localfs_mkdir_p(abs_dir);
 }
 
+/* after deleting a file: remove its parent directories while they are
+ * empty (removing a non-empty directory fails, which ends the walk) */
+static void prune_parents(const char *root, const char *repo_path)
+{
+    char local[1024], abs_dir[1024];
+    char *slash;
+    if (vcs_path_to_local(repo_path, local, sizeof(local)) < 0) return;
+    while ((slash = strrchr(local, '/')) != NULL) {
+        *slash = '\0';
+        localfs_join(abs_dir, sizeof(abs_dir), root, local);
+        if (!localfs_remove(abs_dir)) break;
+    }
+}
+
+/* 1 if the working-tree file for repo_path holds exactly oid */
+static int disk_has(const char *root, const char *repo_path, const VcsOid *oid)
+{
+    char abs_path[1024], hex[VCS_OID_HEX];
+    VcsOid got;
+    if (!vcs_local_join(abs_path, sizeof(abs_path), root, repo_path)) return 0;
+    if (!localfs_exists(abs_path) || localfs_is_dir(abs_path)) return 0;
+    if (!md5_file_hex(abs_path, hex) || !vcs_oid_from_hex(hex, &got)) return 0;
+    return vcs_oid_equal(&got, oid);
+}
+
+/* see treeutil.h */
+int vcs_names_in_the_way(VcsRepo *repo, const VcsFlatList *from, const VcsFlatList *to)
+{
+    int i, bad = 0;
+    for (i = 0; i < to->n; i++) {
+        const char *p = to->items[i].path;
+        char abs_path[1024], prefix[1024];
+        const char *q;
+        if (vcs_flat_find(from, p)) continue;            /* tracked now: caller checked */
+        if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, p)) continue;
+        /* a file where the target needs a directory */
+        for (q = strchr(p, '/'); q && !bad; q = strchr(q + 1, '/')) {
+            char abs_pre[1024];
+            size_t n = (size_t)(q - p);
+            if (n >= sizeof(prefix)) break;
+            memcpy(prefix, p, n);
+            prefix[n] = '\0';
+            if (vcs_local_join(abs_pre, sizeof(abs_pre), repo->root, prefix)
+                && localfs_exists(abs_pre) && !localfs_is_dir(abs_pre)) {
+                char *shown = vcs_text_to_local(prefix);
+                ui_notify(UI_ERROR, "amivcs: %s is not under version control and would be "
+                          "replaced -- commit, move or delete it first", shown ? shown : prefix);
+                free(shown);
+                bad = 1;
+            }
+        }
+        if (bad) break;
+        if (localfs_exists(abs_path) && !disk_has(repo->root, p, &to->items[i].oid)) {
+            char *shown = vcs_text_to_local(p);
+            ui_notify(UI_ERROR, "amivcs: %s is not under version control and would be "
+                      "overwritten -- commit, move or delete it first", shown ? shown : p);
+            free(shown);
+            bad = 1;
+            break;
+        }
+    }
+    return !bad;
+}
+
+/* Brings the working tree from HEAD's tree to tree_oid, git-style: only
+ * files HEAD tracks are deleted or replaced; a file HEAD doesn't know is
+ * never touched, and the whole operation is refused (before anything is
+ * written) if the target would overwrite one. Ignored files stay too.
+ * The caller has made sure the tracked files are clean
+ * (vcs_repo_is_dirty()). */
 int vcs_repo_materialize_tree(VcsRepo *repo, const VcsOid *tree_oid)
 {
-    VcsIgnore ig;
-    VcsFlatList target;
-    int ok;
+    VcsOid head_tree;
+    VcsFlatList from, to;
+    int i, ok = 1;
 
-    /* the target's names only (vcsname.h); refuse a tree in which two
-     * names would be the same file here -- before anything is written */
-    vcs_flat_init(&target);
-    if (!vcs_flatten_committed_tree(&repo->store, tree_oid, "", &target)) {
-        vcs_flat_free(&target);
+    if (!resolve_head_tree(repo, &head_tree)) head_tree = VCS_OID_ZERO;
+    vcs_flat_init(&from);
+    vcs_flat_init(&to);
+    if (!vcs_flatten_committed_tree(&repo->store, &head_tree, "", &from)
+        || !vcs_flatten_committed_tree(&repo->store, tree_oid, "", &to)) {
+        vcs_flat_free(&from);
+        vcs_flat_free(&to);
         return 0;
     }
-    vcs_names_reset();
-    names_learn_flat(&target);
-    if (!vcs_names_unique_flat(&target, NULL)) { vcs_flat_free(&target); return 0; }
-    vcs_flat_free(&target);
+    vcs_flat_sort(&from);
+    vcs_flat_sort(&to);
 
-    vcs_ignore_load(repo->root, &ig);
-    ok = materialize_dir(repo, repo->root, "", "", tree_oid, &ig);
-    vcs_ignore_free(&ig);
+    /* names of both trees (vcsname.h); the target must not have two
+     * names that would be the same file here, and no unknown file may be
+     * in its way -- both checked before anything is written */
+    vcs_names_reset();
+    names_learn_flat(&from);
+    names_learn_flat(&to);
+    if (!vcs_names_unique_flat(&to, NULL) || !vcs_names_in_the_way(repo, &from, &to)) {
+        vcs_flat_free(&from);
+        vcs_flat_free(&to);
+        return 0;
+    }
+
+    /* 1. tracked files the target doesn't have */
+    for (i = 0; i < from.n; i++) {
+        char abs_path[1024];
+        if (vcs_flat_find(&to, from.items[i].path)) continue;
+        if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, from.items[i].path)) continue;
+        if (localfs_exists(abs_path)) localfs_remove(abs_path);
+        prune_parents(repo->root, from.items[i].path);
+    }
+
+    /* 2. everything the target has, where it differs or is missing */
+    for (i = 0; i < to.n && ok; i++) {
+        const char *p = to.items[i].path;
+        const VcsFlatEntry *was = vcs_flat_find(&from, p);
+        char abs_path[1024];
+        if (was && vcs_oid_equal(&was->oid, &to.items[i].oid) && disk_has(repo->root, p, &to.items[i].oid))
+            continue;
+        {
+            /* a character this codeset lacks (an older name is fine) */
+            char local[1024];
+            const char *base = strrchr(p, '/');
+            base = base ? base + 1 : p;
+            if (vcs_utf8_valid(base) && vcs_path_to_local(base, local, sizeof(local)) == 0
+                && strchr(local, CS_REPLACEMENT)) {
+                vcs_path_to_local(p, local, sizeof(local));
+                ui_notify(UI_WARN, "amivcs: name not representable in this codeset, written as %s",
+                          local);
+            }
+        }
+        if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, p)
+            || !ensure_parents(repo->root, p)
+            || !vcsobjstore_extract_blob_to_file(&repo->store, &to.items[i].oid, abs_path))
+            ok = 0;
+    }
+
+    vcs_flat_free(&from);
+    vcs_flat_free(&to);
     if (ok) vcs_names_forget(repo->amivcs_dir);   /* HEAD's names say it all now */
     return ok;
 }
@@ -866,6 +932,30 @@ int vcs_repo_log(VcsRepo *repo)
     return 1;
 }
 
+int vcs_repo_lock(const char *amivcs_dir)
+{
+    char path[1024];
+    FILE *fp;
+    localfs_join(path, sizeof(path), amivcs_dir, "lock");
+    if (localfs_exists(path)) {
+        ui_notify(UI_ERROR, "amivcs: another program is changing this repository (%s exists; "
+                  "remove it if nothing is running)", path);
+        return 0;
+    }
+    fp = fopen(path, "w");
+    if (!fp) { ui_notify(UI_ERROR, "amivcs: cannot create %s", path); return 0; }
+    fprintf(fp, "amivcs %ld\n", (long)time(NULL));
+    fclose(fp);
+    return 1;
+}
+
+void vcs_repo_unlock(const char *amivcs_dir)
+{
+    char path[1024];
+    localfs_join(path, sizeof(path), amivcs_dir, "lock");
+    remove(path);
+}
+
 char *vcs_repo_branch_name(VcsRepo *repo, const char *local_name)
 {
     char *utf8 = vcs_text_from_local(local_name);
@@ -914,7 +1004,7 @@ int vcs_repo_branch(VcsRepo *repo, const char *name)
 
         snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, name);
         if (vcs_refs_find(&refs, fullname)) {
-            ui_notify(UI_ERROR, "amivcs: branch '%s' already exists", name);
+            ui_notify(UI_ERROR, "amivcs: branch '%s' already exists", vcs_shown(name));
             vcs_refs_free(&refs);
             return 0;
         }
@@ -950,7 +1040,7 @@ int vcs_repo_switch(VcsRepo *repo, const char *branch)
     snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, branch);
     r = vcs_refs_find(&refs, fullname);
     if (!r) {
-        ui_notify(UI_ERROR, "amivcs: no such branch '%s'", branch);
+        ui_notify(UI_ERROR, "amivcs: no such branch '%s'", vcs_shown(branch));
         vcs_refs_free(&refs);
         return 0;
     }

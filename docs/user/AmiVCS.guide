@@ -77,7 +77,7 @@ Bestandteile:
   Server        Schlanker PHP-Server: speichert nur Objekte und
                 Branch-Zeiger. Dazu eine nur lesende Web-Oberfläche.
 
-Rein lokal (ohne Server) funktionieren: init, status, add, remove,
+Rein lokal (ohne Server) funktionieren: init, status, add, unstage,
 commit, log, branch, switch, checkout, merge, gc, cat-file.
 Nur clone, push und pull sprechen mit einem AmiVCS-Server.
 
@@ -390,10 +390,21 @@ Optionen (vor dem Befehl angeben):
   --author <name>   Commit-Autor für diesen Aufruf (statt "user" aus
                     der Konfigurationsdatei)
   -c <datei>        andere Konfigurationsdatei verwenden
+  --args-from <datei>
+                    weitere Argumente (Pfade, Branch-Namen) aus einer
+                    Datei, eines pro Zeile; spart Quoting in der Shell
+  --porcelain-out <datei>
+                    Ergebnis zusätzlich maschinenlesbar in die Datei
+                    (für Programme wie AmigaIDE; Format im HTML-
+                    Handbuch)
+
+Ändernde Befehle legen für ihre Dauer .amivcs/lock an. Läuft schon ein
+anderes Programm, ändert amivcs nichts und meldet das. Bleibt die
+Datei nach einem Absturz liegen, kann man sie löschen.
 
 Befehle im Überblick:
 
-  init, status, add, remove, commit, log, branch, switch, checkout,
+  init, status, add, unstage, commit, log, branch, switch, checkout,
   merge, gc, cat-file, version
       -> @{" lokale Befehle " link Lokal}
   clone, push, pull
@@ -407,7 +418,7 @@ aufgerufen werden (dort, wo ".amivcs" liegt). Anders als Git sucht
 amivcs nicht in übergeordneten Verzeichnissen. Ausnahmen: init und
 clone.
 
-Pfade in add/remove sind relativ zum Repository, z.B. "src/main.c".
+Pfade in add/unstage sind relativ zum Repository, z.B. "src/main.c".
 
 Rückgabewert: 0 bei Erfolg, sonst ungleich 0 (für Skripte mit
 "If WARN"/"If ERROR" auswertbar).
@@ -435,13 +446,21 @@ status
 add <pfad> ...
     Merkt Dateien oder ganze Verzeichnisse (rekursiv) für den
     nächsten Commit vor. Ein ausdrücklich genannter Pfad wird auch
-    dann vorgemerkt, wenn er einem Ignoriermuster entspricht.
+    dann vorgemerkt, wenn er einem Ignoriermuster entspricht. Eine
+    gelöschte Datei (oder ein Verzeichnis mit gelöschten Dateien)
+    merkt das Löschen vor.
 
 add -A
     Merkt alle Änderungen vor (neu, geändert, gelöscht).
 
-remove <pfad> ...
-    Nimmt Vormerkungen zurück. Die Datei selbst bleibt unverändert.
+unstage <pfad> ...
+    Nimmt Vormerkungen zurück: der Eintrag kehrt zum Stand des
+    letzten Commits zurück (neue Dateien fallen heraus). Die Datei
+    selbst bleibt unverändert. "remove" ist der alte Name dafür.
+
+commit -F <datei> [-a]
+    Wie commit -m, die Nachricht steht in der Datei (auch
+    mehrzeilig).
 
 commit -m <text> [-a]
     Speichert das Vorgemerkte als neuen Commit. Mit -a (oder --all)
@@ -463,7 +482,10 @@ branch <name>
 
 switch <branch>
     Wechselt den Branch und bringt das Arbeitsverzeichnis auf dessen
-    Stand. Wird verweigert, solange es ungesicherte Änderungen gibt.
+    Stand. Wird verweigert, solange es vorgemerkte oder ungesicherte
+    Änderungen an versionierten Dateien gibt. Nicht versionierte
+    Dateien bleiben unberührt; liegt eine davon dort, wo der Branch
+    eine Datei schreiben würde, wird vorher abgebrochen.
 
 checkout
     Stellt das Arbeitsverzeichnis auf den Stand des aktuellen Commits

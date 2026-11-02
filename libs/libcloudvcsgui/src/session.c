@@ -78,51 +78,59 @@ void vcsgui_set_author(VcsGuiSession *s, const char *author)
     vcs_utf8_copy(s->author, sizeof(s->author), author ? author : "");   /* whole characters */
 }
 
+/* writing operations hold .amivcs/lock (repo.h), so the CLI and the IDE
+ * never change the repository at the same time */
+#define LOCKED(call) do { int ok_; \
+        if (!vcs_repo_lock(s->repo.amivcs_dir)) return 0; \
+        ok_ = (call); \
+        vcs_repo_unlock(s->repo.amivcs_dir); \
+        if (!ok_) return 0; } while (0)
+
 int vcsgui_add(VcsGuiSession *s, const char *relpath)
 {
-    if (!vcs_index_add(&s->repo, relpath)) return 0;
+    LOCKED(vcs_index_add(&s->repo, relpath));
     return vcsgui_refresh(s);
 }
 
 int vcsgui_remove(VcsGuiSession *s, const char *relpath)
 {
-    if (!vcs_index_remove(&s->repo, relpath)) return 0;
+    LOCKED(vcs_index_unstage(&s->repo, relpath));   /* back to HEAD, not "stage a deletion" */
     return vcsgui_refresh(s);
 }
 
 int vcsgui_add_all(VcsGuiSession *s)
 {
-    if (!vcs_index_add_all(&s->repo)) return 0;
+    LOCKED(vcs_index_add_all(&s->repo));
     return vcsgui_refresh(s);
 }
 
 int vcsgui_commit(VcsGuiSession *s, const char *message, int stage_all, VcsOid *out_oid)
 {
-    if (!vcs_repo_commit(&s->repo, s->author, message, stage_all, out_oid)) return 0;
+    LOCKED(vcs_repo_commit(&s->repo, s->author, message, stage_all, out_oid));
     return vcsgui_refresh(s);
 }
 
 int vcsgui_branch_create(VcsGuiSession *s, const char *name)
 {
-    if (!vcs_repo_branch(&s->repo, name)) return 0;
+    LOCKED(vcs_repo_branch(&s->repo, name));
     return vcsgui_refresh(s);
 }
 
 int vcsgui_switch(VcsGuiSession *s, const char *branch)
 {
-    if (!vcs_repo_switch(&s->repo, branch)) return 0;
+    LOCKED(vcs_repo_switch(&s->repo, branch));
     return vcsgui_refresh(s);
 }
 
 int vcsgui_checkout(VcsGuiSession *s)
 {
-    if (!vcs_repo_checkout(&s->repo)) return 0;
+    LOCKED(vcs_repo_checkout(&s->repo));
     return vcsgui_refresh(s);
 }
 
 int vcsgui_merge(VcsGuiSession *s, const char *branch)
 {
-    if (!vcs_repo_merge(&s->repo, branch)) return 0;
+    LOCKED(vcs_repo_merge(&s->repo, branch));
     return vcsgui_refresh(s);
 }
 
@@ -205,7 +213,9 @@ int vcsgui_pull(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name, co
     if (!s->is_open) return 0;
     g_active_session = s;
     s->cancel_requested = 0;
+    if (!vcs_repo_lock(s->repo.amivcs_dir)) { g_active_session = NULL; return 0; }
     ok = vcs_remote_pull(&s->repo, cfg, repo_name, branch);
+    vcs_repo_unlock(s->repo.amivcs_dir);
     g_active_session = NULL;
 
     if (!ok) return 0;

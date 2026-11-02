@@ -57,4 +57,9 @@ void vcs_names_begin_flat(VcsRepo *repo, const VcsFlatList *a, const VcsFlatList
  * file; else 0 after a UI_ERROR naming both. Learn them first. */
 int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b);
 
+/* 1 if no file outside `from` (not under version control) sits where a
+ * path of `to` that `from` lacks would be written (a different file, or
+ * a file in place of a needed directory); else 0 after a UI_ERROR. */
+int vcs_names_in_the_way(VcsRepo *repo, const VcsFlatList *from, const VcsFlatList *to);
+
 #endif /* CLOUDVCS_TREEUTIL_H */

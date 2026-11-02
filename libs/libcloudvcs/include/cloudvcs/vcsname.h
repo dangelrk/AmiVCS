@@ -85,6 +85,9 @@ char *vcs_text_utf8(const char *s);
 char *vcs_text_to_local(const char *s);
 /* same into a buffer (display hooks), truncated to whole characters */
 void  vcs_text_to_local_buf(const char *s, char *out, size_t outsz);
+/* same for a message argument: a static buffer (four in rotation, 512
+ * bytes each, truncated), so up to four may appear in one ui_notify() */
+const char *vcs_shown(const char *s);
 /* local text (command line, Amiga GUI, config) -> UTF-8 NFC.
  * malloc'd, NULL only when out of memory */
 char *vcs_text_from_local(const char *s);

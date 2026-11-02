@@ -129,7 +129,7 @@ int vcs_repo_merge(VcsRepo *repo, const char *branch)
     snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, branch);
     theirs_ref = vcs_refs_find(&refs, fullname);
     if (!theirs_ref) {
-        ui_notify(UI_ERROR, "amivcs: no such branch '%s'", branch);
+        ui_notify(UI_ERROR, "amivcs: no such branch '%s'", vcs_shown(branch));
         vcs_refs_free(&refs);
         return 0;
     }
@@ -178,7 +178,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
         /* Current branch has no commits yet: trivially fast-forward to theirs. */
         base_commit = ours_commit;
     } else if (!find_merge_base(&repo->store, &ours_commit, &theirs_commit, &base_commit)) {
-        ui_notify(UI_ERROR, "amivcs: '%s' and the current branch share no common history", theirs_label);
+        ui_notify(UI_ERROR, "amivcs: '%s' and the current branch share no common history", vcs_shown(theirs_label));
         vcs_refs_free(&refs);
         return 0;
     }
@@ -234,7 +234,8 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
          * the same file as a different ours name here stops the merge
          * before anything is written */
         vcs_names_begin_flat(repo, &ours_flat, &theirs_flat);
-        if (!vcs_names_unique_flat(&ours_flat, &theirs_flat)) {
+        if (!vcs_names_unique_flat(&ours_flat, &theirs_flat)
+            || !vcs_names_in_the_way(repo, &ours_flat, &theirs_flat)) {
             vcs_flat_free(&base_flat); vcs_flat_free(&ours_flat); vcs_flat_free(&theirs_flat);
             return 0;
         }
@@ -291,6 +292,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
                     char abs_path[1024];
                     vcs_local_join(abs_path, sizeof(abs_path), repo->root, path);
                     localfs_remove(abs_path);
+                    vcs_index_remove(repo, path);   /* the merge result is built in the index */
                     break;
                 }
                 case TAKE_THEIRS: {
@@ -298,6 +300,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
                     ensure_parent_dir(repo->root, path);
                     vcs_local_join(abs_path, sizeof(abs_path), repo->root, path);
                     vcsobjstore_extract_blob_to_file(&repo->store, theirs_oid, abs_path);
+                    vcs_index_set_blob(repo, path, theirs_oid);
                     break;
                 }
                 case CONFLICT: {
@@ -341,7 +344,10 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
         void *data;
         long len;
 
-        if (!vcs_repo_snapshot_workdir(repo, &merged_tree)) return 0;
+        /* the index holds ours plus every change taken from theirs --
+         * not a snapshot of the directory, which would sweep in files
+         * nobody added */
+        if (!vcs_index_load(repo->amivcs_dir, &merged_tree)) return 0;
 
         vcs_commit_init(&commit);
         commit.tree = merged_tree;

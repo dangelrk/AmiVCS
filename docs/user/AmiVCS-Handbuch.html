@@ -358,13 +358,15 @@ Felder: <em>Server</em>, <em>Benutzer (= Autor)</em>, <em>Passwort</em>,
 <tr><th>Option (vor dem Befehl)</th><th>Bedeutung</th></tr>
 <tr><td><code>--author &lt;name&gt;</code></td><td>Commit-Autor für diesen Aufruf</td></tr>
 <tr><td><code>-c &lt;datei&gt;</code></td><td>andere Konfigurationsdatei verwenden</td></tr>
+<tr><td><code>--args-from &lt;datei&gt;</code></td><td>weitere Argumente aus einer Datei, eines pro Zeile (Pfade, Branch-Namen); <code>\</code>, Tab und Zeilenumbruch als <code>\\</code>, <code>\t</code>, <code>\n</code>. Spart Quoting auf der AmigaDOS-Kommandozeile</td></tr>
+<tr><td><code>--porcelain-out &lt;datei&gt;</code></td><td>Ergebnis zusätzlich maschinenlesbar in eine Datei, für Programme wie AmigaIDE (siehe unten)</td></tr>
 </table>
 
 <div class="callout"><strong>Immer im Wurzelverzeichnis aufrufen</strong><br>
 <code>amivcs</code> muss im Wurzelverzeichnis des Repositorys (dort, wo
 <code>.amivcs</code> liegt) aufgerufen werden. Anders als Git wird nicht
 in übergeordneten Verzeichnissen gesucht. Ausnahmen: <code>init</code>
-und <code>clone</code>. Pfade bei <code>add</code>/<code>remove</code>
+und <code>clone</code>. Pfade bei <code>add</code>/<code>unstage</code>
 sind relativ zum Repository, z. B. <code>src/main.c</code>.</div>
 
 <p>Ohne oder mit unbekanntem Befehl zeigt <code>amivcs</code> eine kurze
@@ -376,20 +378,39 @@ Hilfe. Rückgabewert 0 bei Erfolg, sonst ungleich 0.</p>
 <tr><th>Befehl</th><th>Wirkung</th></tr>
 <tr><td><code>init</code></td><td>Neues Repository im aktuellen Verzeichnis: <code>.amivcs</code>, Branch <code>main</code> (noch ohne Commit), <code>.amivcsignore</code> mit Standardmustern (falls noch keine da ist)</td></tr>
 <tr><td><code>status</code></td><td>„Changes to be committed“ (vorgemerkt) und „Changes not staged for commit“, jeweils mit new/modified/deleted</td></tr>
-<tr><td><code>add &lt;pfad&gt;…</code></td><td>Dateien oder Verzeichnisse (rekursiv) vormerken; ein ausdrücklich genannter Pfad wird auch vorgemerkt, wenn er einem Ignoriermuster entspricht</td></tr>
+<tr><td><code>add &lt;pfad&gt;…</code></td><td>Dateien oder Verzeichnisse (rekursiv) vormerken; ein ausdrücklich genannter Pfad wird auch vorgemerkt, wenn er einem Ignoriermuster entspricht. Eine gelöschte Datei (oder ein Verzeichnis mit gelöschten Dateien) merkt das Löschen vor</td></tr>
 <tr><td><code>add -A</code></td><td>alle Änderungen vormerken (neu, geändert, gelöscht)</td></tr>
-<tr><td><code>remove &lt;pfad&gt;…</code></td><td>Vormerkung zurücknehmen; die Datei bleibt unverändert</td></tr>
+<tr><td><code>unstage &lt;pfad&gt;…</code></td><td>Vormerkung zurücknehmen: der Eintrag kehrt zum Stand des letzten Commits zurück (bei neuen Dateien fällt er weg); die Datei bleibt unverändert. <code>remove</code> ist der alte Name dafür</td></tr>
 <tr><td><code>commit -m &lt;text&gt; [-a]</code></td><td>Vorgemerktes als Commit speichern; <code>-a</code>/<code>--all</code> merkt vorher alles vor. Ohne <code>add</code> und ohne <code>-a</code> gibt es nichts zu committen</td></tr>
-<tr><td><code>log</code></td><td>Historie des aktuellen Branches (ID, Autor, Datum in UTC, Nachricht); folgt bei Merges nur dem ersten Elternteil</td></tr>
+<tr><td><code>commit -F &lt;datei&gt; [-a]</code></td><td>wie oben, die Nachricht steht in der Datei (auch mehrzeilig)</td></tr>
+<tr><td><code>log [--all] [-n N]</code></td><td>Historie des aktuellen Branches (ID, Autor, Datum in UTC, Nachricht); folgt bei Merges nur dem ersten Elternteil. <code>--all</code> und <code>-n</code> wirken mit <code>--porcelain-out</code></td></tr>
 <tr><td><code>branch</code></td><td>alle Branches, der aktuelle mit <code>*</code></td></tr>
 <tr><td><code>branch &lt;name&gt;</code></td><td>neuen Branch auf dem aktuellen Commit anlegen (ohne zu wechseln); erst nach dem ersten Commit möglich</td></tr>
-<tr><td><code>switch &lt;branch&gt;</code></td><td>Branch wechseln und Arbeitsverzeichnis anpassen; verweigert bei ungesicherten Änderungen</td></tr>
-<tr><td><code>checkout</code></td><td>Arbeitsverzeichnis auf den aktuellen Commit einstellen; verweigert bei ungesicherten Änderungen</td></tr>
+<tr><td><code>switch &lt;branch&gt;</code></td><td>Branch wechseln und Arbeitsverzeichnis anpassen; verweigert bei vorgemerkten oder ungesicherten Änderungen an versionierten Dateien. Nicht versionierte Dateien bleiben unberührt; liegt eine davon dort, wo der Ziel-Branch eine Datei schreiben würde, wird verweigert, bevor etwas geschrieben wird</td></tr>
+<tr><td><code>checkout</code></td><td>versionierte Dateien auf den Stand des aktuellen Commits bringen (z. B. versehentlich gelöschte zurückholen); verweigert bei ungesicherten Änderungen</td></tr>
 <tr><td><code>merge &lt;branch&gt;</code></td><td>zusammenführen: „Already up to date“, „Fast-forward“ oder 3-Wege-Merge mit Merge-Commit; Konflikte siehe <a href="#konflikte">Kapitel 12</a></td></tr>
 <tr><td><code>gc</code></td><td>lose Objekte in eine Pack-Datei packen („packed N object(s)“)</td></tr>
 <tr><td><code>cat-file &lt;oid&gt;</code></td><td>Typ und Größe eines Objekts (Fehlersuche; 32-stellige Hex-ID)</td></tr>
 <tr><td><code>version</code></td><td>Version ausgeben</td></tr>
 </table>
+
+<p>Ändernde Befehle legen für ihre Dauer <code>.amivcs/lock</code> an.
+Läuft schon ein anderes Programm (z.&nbsp;B. AmigaIDE oder ein zweites
+<code>amivcs</code>), meldet <code>amivcs</code> das und ändert nichts.
+Bleibt die Datei nach einem Absturz liegen, kann man sie löschen.</p>
+
+<p><strong>Ausgabe für Programme</strong> (<code>--porcelain-out</code>):
+eine Zeile je Datensatz, Felder durch Tab getrennt, Text im lokalen
+Zeichensatz, <code>\</code>/Tab/Zeilenumbruch maskiert wie bei
+<code>--args-from</code>. Datensätze: <code>format 1</code>,
+<code>branch &lt;name&gt;</code> bzw. <code>detached &lt;id&gt;</code>,
+<code>change S|U N|M|D &lt;pfad&gt;</code>, <code>ref *|- &lt;name&gt;</code>,
+<code>commit &lt;id&gt; &lt;eltern&gt; &lt;zeit&gt; &lt;autor&gt;
+&lt;refs&gt; &lt;nachricht&gt;</code> (Zeit in UTC-Sekunden, Listen mit
+Komma), <code>committed &lt;id&gt;</code>, <code>msg info|warn|error
+&lt;text&gt;</code>, <code>progress &lt;fertig&gt; &lt;gesamt&gt;
+&lt;was&gt;</code>, zuletzt immer <code>end &lt;rückgabewert&gt;</code>.
+Ändernde Befehle hängen den neuen Status an.</p>
 
 <h2 id="remote">8. amivcs – Server-Befehle</h2>
 

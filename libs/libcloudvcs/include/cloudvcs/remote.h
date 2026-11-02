@@ -57,4 +57,10 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name);
  * repo_name: see vcs_remote_push(). */
 int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, const char *branch);
 
+/* Progress of clone/push/pull ("Receiving objects", done, total -- total
+ * 0 if unknown; final on the last call). NULL (the default) prints a
+ * console line with "\r"; the CLI's --porcelain-out sets it to write
+ * progress records instead. */
+extern void (*vcs_progress_hook)(const char *label, long done, long total, int final);
+
 #endif /* CLOUDVCS_REMOTE_H */
