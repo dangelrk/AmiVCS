@@ -1118,6 +1118,19 @@ Schwesterprojekte:
 Versionsgeschichte
 ------------------
 
+Programmversion 0.6 (02.11.2026)
+  - Datei- und Branchnamen und Commit-Texte mit Umlauten
+    (UTF-8 im Repository, codesets.library auf dem Amiga).
+  - unstage; add auf gelöschte Pfade.
+  - Branch wechseln und Merge wie bei git: nicht versionierte
+    Dateien bleiben, Überschreiben wird abgelehnt.
+  - Sperrdatei gegen zwei gleichzeitige schreibende Aufrufe;
+    Ctrl-C bricht Netzvorgänge ab.
+  - Schnittstelle für Programme (--porcelain-out, --args-from,
+    commit -F, log --all -n), genutzt von der AmigaIDE.
+  - clone eines Repositorys mit eigener .amivcsignore
+    scheiterte.
+
 Programmversion 0.5 (01.11.2026)
   - Wird eine Anmeldung abgelehnt, versucht AmiVCS es mit
     denselben Zugangsdaten 15 Minuten lang nicht erneut.
