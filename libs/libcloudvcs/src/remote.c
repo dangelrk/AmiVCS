@@ -482,12 +482,24 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
     long fetched = 0;
     int cancelled = 0;
     int i, main_idx = -1;
+    int initialized;
 
     if (!localfs_mkdir_p(local_dir)) {
         ui_notify(UI_ERROR, "amivcs: cannot create '%s'", local_dir);
         return 0;
     }
-    if (!vcs_repo_init(local_dir)) {
+    {
+        /* vcs_repo_init() writes a default .amivcsignore; in a clone the
+         * repository brings its own, and the checkout would refuse to
+         * overwrite the untracked default one. */
+        char ignore_path[1024];
+        int had_ignore;
+        localfs_join(ignore_path, sizeof(ignore_path), local_dir, VCS_IGNORE_FILE);
+        had_ignore = localfs_exists(ignore_path);
+        initialized = vcs_repo_init(local_dir);
+        if (initialized && !had_ignore) localfs_remove(ignore_path);
+    }
+    if (!initialized) {
         if (!vcs_repo_open(&repo, local_dir) || !clone_pending(repo.amivcs_dir, repo_name)) {
             ui_notify(UI_ERROR, "amivcs: '%s' is already an AMIVCS repository", local_dir);
             return 0;
