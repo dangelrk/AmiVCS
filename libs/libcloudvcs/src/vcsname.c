@@ -429,12 +429,12 @@ void vcs_names_prune(const char *amivcs_dir, int (*settled)(const char *repo_pat
 typedef struct { char *local; const char *repo; } Pair;
 
 /* AmigaOS, macOS and Windows file systems ignore case: "README" and
- * "Readme" are one file there (ASCII letters; enough for the usual
- * clash) */
+ * "Readme" are one file there, and so are "\xC3\x84pfel" and "\xC3\xA4pfel"
+ * (ASCII and Latin-1 letters, cs_fold_local() on the local form) */
 static void fold_case(char *s)
 {
 #if defined(PLATFORM_AMIGA) || defined(__APPLE__) || defined(_WIN32)
-    for (; *s; s++) if (*s >= 'A' && *s <= 'Z') *s = (char)(*s - 'A' + 'a');
+    cs_fold_local(s, s, strlen(s) + 1);
 #else
     (void)s;
 #endif

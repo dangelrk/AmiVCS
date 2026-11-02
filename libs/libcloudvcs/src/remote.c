@@ -474,6 +474,44 @@ static void set_clone_pending(const char *amivcs_dir, const char *repo_name)
     fclose(fp);
 }
 
+/* Removes a local directory tree (the .amivcs of a clone that cannot be
+ * checked out here). Names are read first, then deleted: deleting while
+ * ExNext() walks a directory is not safe on the Amiga. */
+static void remove_tree(const char *path)
+{
+    LocalDir *d = localfs_opendir(path);
+    if (d) {
+        LocalDirEntry e;
+        char **names = NULL;
+        int *dirs = NULL, n = 0, cap = 0, i;
+        while (localfs_readdir(d, &e)) {
+            if (n == cap) {
+                int nc = cap ? cap * 2 : 64;
+                char **t = (char **)realloc(names, sizeof(char *) * (size_t)nc);
+                int *u;
+                if (!t) break;
+                names = t;
+                u = (int *)realloc(dirs, sizeof(int) * (size_t)nc);
+                if (!u) break;
+                dirs = u; cap = nc;
+            }
+            if (!(names[n] = (char *)malloc(strlen(e.name) + 1))) break;
+            strcpy(names[n], e.name);
+            dirs[n++] = e.is_dir;
+        }
+        localfs_closedir(d);
+        for (i = 0; i < n; i++) {
+            char child[1024];
+            localfs_join(child, sizeof(child), path, names[i]);
+            if (dirs[i]) remove_tree(child); else localfs_remove(child);
+            free(names[i]);
+        }
+        free(names);
+        free(dirs);
+    }
+    localfs_remove(path);
+}
+
 int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *local_dir)
 {
     VcsRefList remote_refs;
@@ -483,6 +521,7 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
     int cancelled = 0;
     int i, main_idx = -1;
     int initialized;
+    int existed = localfs_exists(local_dir);
 
     if (!localfs_mkdir_p(local_dir)) {
         ui_notify(UI_ERROR, "amivcs: cannot create '%s'", local_dir);
@@ -550,6 +589,33 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
         VcsOid tree_oid;
 
         if (!vcs_commit_tree(&repo.store, &remote_refs.items[main_idx].oid, &tree_oid)) { vcs_refs_free(&remote_refs); return 0; }
+        {
+            /* Two names that would be one file here (case, umlauts, a
+             * character this codeset lacks): the checkout refuses before
+             * writing anything, and a resumed clone would refuse again.
+             * Undo the clone instead of leaving a repository without
+             * files behind. */
+            VcsFlatList flat;
+            int unique;
+            vcs_flat_init(&flat);
+            if (!vcs_flatten_committed_tree(&repo.store, &tree_oid, "", &flat)) {
+                vcs_flat_free(&flat);
+                vcs_refs_free(&remote_refs);
+                return 0;
+            }
+            vcs_names_begin_flat(&repo, &flat, NULL);
+            unique = vcs_names_unique_flat(&flat, NULL);
+            vcs_flat_free(&flat);
+            if (!unique) {
+                remove_tree(repo.amivcs_dir);
+                if (!existed) localfs_remove(local_dir);
+                ui_notify(UI_ERROR, "amivcs: clone of '%s' undone -- rename one of the two "
+                          "on a system that can tell them apart, push, and clone again",
+                          vcs_shown(repo_name));
+                vcs_refs_free(&remote_refs);
+                return 0;
+            }
+        }
         if (!vcs_repo_materialize_tree(&repo, &tree_oid)) { vcs_refs_free(&remote_refs); return 0; }
         vcs_head_set_branch(repo.amivcs_dir, checkout_branch);
         ui_notify(UI_INFO, "Cloned '%s' into %s, checked out '%s'.", repo_name, local_dir, vcs_shown(checkout_branch));

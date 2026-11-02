@@ -1008,6 +1008,16 @@ Zertifikatsfehler
     dreimal; bei sehr langsamen Leitungen timeout=300 setzen. Einen
     abgebrochenen clone mit demselben Aufruf fortsetzen.
 
+"... would be one file here" (bei clone, switch, merge)
+    Zwei Namen im Repository wären auf diesem Rechner dieselbe Datei:
+    sie unterscheiden sich nur in Groß-/Kleinschreibung ("README" und
+    "Readme", auch "Äpfel" und "äpfel"), oder beide enthalten ein
+    Zeichen, das der lokale Zeichensatz nicht kennt. Es wird nichts
+    geschrieben; ein clone wird ganz zurückgenommen (ein neu angelegtes
+    Verzeichnis verschwindet wieder). Einen der beiden Namen auf einem
+    System umbenennen, das sie unterscheidet (z. B. Linux), pushen und
+    erneut klonen.
+
 amivcs-gui startet nicht (Requester statt Fenster)
     MUI 3.8 oder neuer fehlt. Der Requester nennt den Grund.
 

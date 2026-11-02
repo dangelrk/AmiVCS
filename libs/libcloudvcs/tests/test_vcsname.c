@@ -76,6 +76,26 @@ int main(void)
         CHECK(vcs_names_check(p4, 3, a, b, sizeof(a)) == 1, "keine Kollision");
     }
 
+#if defined(__APPLE__) || defined(_WIN32)
+    /* case on a disk that ignores it: ASCII and umlauts (UTF-8 locally) */
+    {
+        const char *c1[] = { "README", "Readme" };
+        const char *c2[] = { "\xC3\x84pfel.txt", "\xC3\xA4pfel.txt" };
+        const char *c3[] = { "Dir/\xC3\x96l", "dir/x" };
+        const char *c4[] = { "\xC3\x84pfel.txt", "Apfel.txt", "\xC3\x9F", "ss" };
+        cs_test_mode(CS_TEST_DEFAULT);
+        vcs_names_reset();
+        CHECK(vcs_names_check(c1, 2, a, b, sizeof(a)) == 0, "README/Readme");
+        CHECK(vcs_names_check(c2, 2, a, b, sizeof(a)) == 0, "Umlaut gross/klein");
+        CHECK(vcs_names_check(c3, 2, a, b, sizeof(a)) == 0, "Ordner gross/klein");
+        CHECK(vcs_names_check(c4, 4, a, b, sizeof(a)) == 1, "verschiedene Namen bleiben verschieden");
+        /* the Amiga: ISO-8859-1 locally, folded there too */
+        cs_test_mode(CS_TEST_LATIN1);
+        vcs_names_reset();
+        CHECK(vcs_names_check(c2, 2, a, b, sizeof(a)) == 0, "Umlaut gross/klein (Latin-1)");
+    }
+#endif
+
     /* older repository from an Amiga build up to 0.5: bytes stay, any codeset */
     vcs_names_reset();
     CHECK(vcs_path_to_local(L_GROESSE, out, sizeof(out)) == 0, "Altname braucht ein Paar");

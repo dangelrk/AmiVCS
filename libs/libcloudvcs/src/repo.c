@@ -193,11 +193,14 @@ int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b)
     if (!ok) {
         /* both names have the same local form -- that is the point; name
          * the file once and why */
-        char local[1024];
+        char local[1024], xs[512];
         if (vcs_path_to_local(x, local, sizeof(local)) < 0) local[0] = '\0';
-        ui_notify(UI_ERROR, "amivcs: two names in this tree would both be \"%s\" here "
-                  "(a character this codeset can't show) -- nothing was changed; rename one "
-                  "of them on a system that can show both", local);
+        strncpy(xs, vcs_shown(x), sizeof(xs) - 1);
+        xs[sizeof(xs) - 1] = '\0';
+        ui_notify(UI_ERROR, "amivcs: \"%s\" and \"%s\" would be one file here (\"%s\": "
+                  "case, or a character this codeset can't show) -- nothing was changed; "
+                  "rename one of them on a system that can tell them apart",
+                  xs, vcs_shown(y), local);
     }
     return ok;
 }
