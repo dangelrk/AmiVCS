@@ -1128,6 +1128,12 @@ Schwesterprojekte:
 Versionsgeschichte
 ------------------
 
+Programmversion 0.7 (02.11.2026)
+  - clone, switch, merge: auch "Äpfel"/"äpfel" gelten auf
+    Amiga, macOS und Windows als dieselbe Datei.
+  - clone mit zwei solchen Namen wird ganz zurückgenommen,
+    statt ein Repository ohne Dateien zu hinterlassen.
+
 Programmversion 0.6 (02.11.2026)
   - Datei- und Branchnamen und Commit-Texte mit Umlauten
     (UTF-8 im Repository, codesets.library auf dem Amiga).

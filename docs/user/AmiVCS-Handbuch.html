@@ -125,7 +125,7 @@
 <div class="wrap">
 
 <h1>AmiVCS</h1>
-<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 02.11.2026 (Programmversion 0.6)</p>
+<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 02.11.2026 (Programmversion 0.7)</p>
 
 <p>AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
 für AmigaOS 3.x und den PC (macOS/Linux/Windows). Fast alles läuft rein
@@ -801,6 +801,7 @@ Schwesterprojekte:
 
 <table>
 <tr><th>Datum</th><th>Änderung</th></tr>
+<tr><td>02.11.2026</td><td>Programmversion 0.7: <code>clone</code>, <code>switch</code> und <code>merge</code> behandeln auch <code>Äpfel</code>/<code>äpfel</code> auf Amiga, macOS und Windows als dieselbe Datei; ein <code>clone</code> mit zwei solchen Namen wird ganz zurückgenommen, statt ein Repository ohne Dateien zu hinterlassen</td></tr>
 <tr><td>02.11.2026</td><td>Programmversion 0.6: Datei- und Branchnamen sowie Commit-Texte mit Umlauten (UTF-8 im Repository, codesets.library auf dem Amiga); <code>unstage</code>; <code>add</code> auf gelöschte Pfade; Branchwechsel und Merge wie bei git (nicht versionierte Dateien bleiben unangetastet, überschreiben wird abgelehnt); Sperrdatei gegen zwei gleichzeitige schreibende Aufrufe; Ctrl-C bricht Netzvorgänge ab; Schnittstelle für Programme (<code>--porcelain-out</code>, <code>--args-from</code>, <code>commit -F</code>, <code>log --all -n</code>), die die AmigaIDE nutzt; <code>clone</code> eines Repositorys mit eigener <code>.amivcsignore</code> scheiterte</td></tr>
 <tr><td>01.11.2026</td><td>Programmversion 0.5: wird eine Anmeldung abgelehnt, versucht AmiVCS es mit denselben Zugangsdaten 15 Minuten lang nicht erneut</td></tr>
 <tr><td>01.11.2026</td><td>Programmversion 0.4: der AmiVCS-Server liegt dem Amiga-Archiv bei (Schublade <code>Server</code>), gemeinsamer Kern aktualisiert</td></tr>
