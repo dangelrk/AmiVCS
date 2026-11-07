@@ -37,7 +37,6 @@
 #define ID_STAGE_ALL     5
 #define ID_UNSTAGE_SEL   6
 #define ID_COMMIT        7
-#define ID_TOGGLE_A      8
 #define ID_NEW_BRANCH    9
 #define ID_SWITCH_BRANCH 10
 #define ID_MERGE_BRANCH  11
@@ -45,6 +44,22 @@
 #define ID_PUSH          13
 #define ID_PULL          14
 #define ID_ABOUT         15
+#define ID_UNSTAGED_ACTIVE 16
+#define ID_STAGED_ACTIVE   17
+#define ID_UNSTAGED_DCLICK 18
+#define ID_STAGED_DCLICK   19
+
+/* TextEditor.mcc is optional (AmiVCS needs only MUI 3.8): with it the
+ * commit message is multi-line like git gui's, without it a String
+ * gadget stands in. The few ids are the class's own, from
+ * mui/TextEditor_mcc.h, so the MCC SDK isn't needed to build. */
+#ifndef MUIC_TextEditor
+#define MUIC_TextEditor               "TextEditor.mcc"
+#define MUIA_TextEditor_Contents      (0xad000000UL + 0x02)
+#define MUIA_TextEditor_FixedFont     (0xad000000UL + 0x0a)
+#define MUIM_TextEditor_ClearText     (0xad000000UL + 0x24)
+#define MUIM_TextEditor_ExportText    (0xad000000UL + 0x25)
+#endif
 
 #define ID_INPUT_OK      900
 #define ID_INPUT_CANCEL  901
@@ -54,8 +69,19 @@ static Object *g_app;
 static Object *g_status_text;
 static Object *g_main_status;
 static Object *g_unstaged_list, *g_staged_list, *g_history_list;
-static Object *g_commit_string;
-static Object *g_stage_all_toggle;
+static Object *g_commit_string;     /* TextEditor or String, see g_msg_is_editor */
+static int     g_msg_is_editor;
+static Object *g_stage_all_check;
+static Object *g_preview_title, *g_preview_text;
+static void set_preview(const char *title, char *text);
+
+/* vbcc's C library has no strdup() */
+static char *dupstr(const char *t)
+{
+    char *c = (char *)malloc(strlen(t) + 1);
+    if (c) strcpy(c, t);
+    return c;
+}
 
 static Object *g_input_window, *g_input_string, *g_input_ok, *g_input_cancel;
 static Object *g_progress_window, *g_progress_text, *g_cancel_button;
@@ -67,7 +93,6 @@ static Object *g_main_window;
 static VcsGuiSession g_session;
 static AcConfig      g_cfg;
 static char          g_cwd[AC_MAX_PATH];
-static int           g_stage_all_flag;
 
 static HistoryRow *g_history_rows;
 static int         g_history_n;
@@ -243,14 +268,118 @@ static void refresh_ui(void)
     char buf[300];
 
     refresh_lists();
+    set_preview("", NULL);
 
     if (g_session.is_open) {
         const char *branch = g_session.head.detached ? "(detached)" : g_session.head.branch;
-        snprintf(buf, sizeof(buf), "Repo: %s   Branch: %s", g_session.root, branch);
+        char shown[128];
+        vcs_text_to_local_buf(branch, shown, sizeof(shown));
+        snprintf(buf, sizeof(buf), "Current branch: \33b%s\33n      Repository: %s", shown, g_session.root);
     } else {
         strcpy(buf, "(not a repository -- Project/Init Repository Here)");
     }
     set(g_status_text, MUIA_Text_Contents, buf);
+}
+
+/* ------------------------------------------------------------------ */
+/* File preview (git gui's right-hand pane, without the diff for now):   */
+/* the selected file's current content from the working directory.       */
+/* ------------------------------------------------------------------ */
+#define PREVIEW_MAX 32768
+
+/* One list row per source line -- Floattext would re-wrap code like
+ * prose. Tabs become spaces (every 8 columns), very long lines are cut.
+ * Takes ownership of `text`. */
+static void set_preview(const char *title, char *text)
+{
+    char row[256];
+    char *p = text;
+
+    set(g_preview_title, MUIA_Text_Contents, title);
+    set(g_preview_text, MUIA_List_Quiet, TRUE);
+    DoMethod(g_preview_text, MUIM_List_Clear);
+    while (p && *p) {
+        int col = 0;
+        while (*p && *p != '\n') {
+            if (*p == '\t') {
+                do { if (col < (int)sizeof(row) - 1) row[col] = ' '; col++; } while (col % 8);
+            } else if (*p != '\r') {
+                if (col < (int)sizeof(row) - 1) row[col] = *p;
+                col++;
+            }
+            p++;
+        }
+        row[col < (int)sizeof(row) - 1 ? col : (int)sizeof(row) - 1] = '\0';
+        DoMethod(g_preview_text, MUIM_List_InsertSingle, row, MUIV_List_Insert_Bottom);
+        if (*p == '\n') p++;
+    }
+    set(g_preview_text, MUIA_List_Quiet, FALSE);
+    free(text);
+}
+
+static void show_preview(const VcsChange *c)
+{
+    char shown[256], path[1024], title[320];
+    const char *kind;
+    BPTR fh;
+    char *buf;
+    LONG n, i;
+
+    if (!c) { set_preview("", NULL); return; }
+    kind = c->kind == 'N' ? "new" : c->kind == 'M' ? "modified" : "deleted";
+    vcs_text_to_local_buf(c->path, shown, sizeof(shown));
+    snprintf(title, sizeof(title), "\33b%s\33n  (%s)", shown, kind);
+    if (c->kind == 'D') {
+        set_preview(title, dupstr("(file deleted in the working directory)"));
+        return;
+    }
+    strncpy(path, g_session.root, sizeof(path) - 1);
+    path[sizeof(path) - 1] = '\0';
+    AddPart((STRPTR)path, (STRPTR)shown, sizeof(path));
+
+    buf = (char *)malloc(PREVIEW_MAX + 64);
+    if (!buf) { set_preview(title, NULL); return; }
+    fh = Open((STRPTR)path, MODE_OLDFILE);
+    if (!fh) {
+        strcpy(buf, "(cannot read the file)");
+        set_preview(title, buf);
+        return;
+    }
+    n = Read(fh, buf, PREVIEW_MAX);
+    Close(fh);
+    if (n < 0) n = 0;
+    for (i = 0; i < n; i++) {
+        if (buf[i] == '\0') {   /* binary: say so instead of showing noise */
+            strcpy(buf, "(binary file)");
+            set_preview(title, buf);
+            return;
+        }
+        if (buf[i] == '\33') buf[i] = ' '; /* the list would read ESC as a style code */
+    }
+    buf[n] = '\0';
+    if (n == PREVIEW_MAX) strcat(buf, "\n\n... (only the first 32 KB shown)");
+    set_preview(title, buf);
+}
+
+static void preview_active(Object *list_obj, const VcsChangeList *changes)
+{
+    LONG active = -1;
+    get(list_obj, MUIA_List_Active, &active);
+    show_preview(active >= 0 && active < changes->n ? &changes->items[active] : NULL);
+}
+
+/* Double-click moves one file across, like clicking its icon in git gui. */
+static void move_active(Object *list_obj, const VcsChangeList *changes, int stage)
+{
+    LONG active = -1;
+    char path[1024];
+    get(list_obj, MUIA_List_Active, &active);
+    if (active < 0 || active >= changes->n) return;
+    strncpy(path, changes->items[active].path, sizeof(path) - 1);
+    path[sizeof(path) - 1] = '\0';
+    if (stage) vcsgui_add(&g_session, path);
+    else       vcsgui_remove(&g_session, path);
+    refresh_ui();
 }
 
 /* ------------------------------------------------------------------ */
@@ -339,32 +468,71 @@ static void do_stage_all(void)
     refresh_ui();
 }
 
-static void do_toggle_a(void)
+/* The commit message as one malloc'd local-charset string, trailing
+ * blank lines and spaces removed; NULL if it is empty. */
+static char *get_commit_message(void)
 {
-    g_stage_all_flag = !g_stage_all_flag;
-    set(g_stage_all_toggle, MUIA_Text_Contents, g_stage_all_flag ? "-a: ON" : "-a: OFF");
+    char *copy = NULL;
+    size_t len;
+
+    if (g_msg_is_editor) {
+        STRPTR text = (STRPTR)DoMethod(g_commit_string, MUIM_TextEditor_ExportText);
+        if (text) { copy = dupstr((char *)text); FreeVec(text); }
+    } else {
+        STRPTR text = NULL;
+        get(g_commit_string, MUIA_String_Contents, &text);
+        if (text) copy = dupstr((char *)text);
+    }
+    if (!copy) return NULL;
+    len = strlen(copy);
+    while (len > 0 && (copy[len - 1] == '\n' || copy[len - 1] == ' ' || copy[len - 1] == '\t'))
+        copy[--len] = '\0';
+    if (len == 0) { free(copy); return NULL; }
+    return copy;
+}
+
+static void clear_commit_message(void)
+{
+    if (g_msg_is_editor) DoMethod(g_commit_string, MUIM_TextEditor_ClearText);
+    else                 set(g_commit_string, MUIA_String_Contents, "");
 }
 
 static void do_commit(void)
 {
-    STRPTR text = NULL;
     VcsOid oid;
+    ULONG stage_all = FALSE;
+    char *text;
 
-    get(g_commit_string, MUIA_String_Contents, &text);
-    if (!text || !text[0]) {
-        MUI_Request(g_app, NULL, 0, "Commit", "_OK", "Enter a commit message first.");
+    get(g_stage_all_check, MUIA_Selected, &stage_all);
+    if (g_session.staged.n == 0 && !(stage_all && g_session.unstaged.n > 0)) {
+        MUI_Request(g_app, g_main_window, 0, "Commit", "_OK",
+                    "Nothing to commit.\n\n"
+                    "Stage files first (double-click them in \"Unstaged Changes\",\n"
+                    "or \"Stage selected\"/\"Stage all\"), or tick\n"
+                    "\"Stage all changed files before commit\".");
+        return;
+    }
+    text = get_commit_message();
+    if (!text) {
+        MUI_Request(g_app, g_main_window, 0, "Commit", "_OK",
+                    "Please type a commit message into the\n"
+                    "\"Commit message\" field first.");
+        set(g_main_window, MUIA_Window_ActiveObject, g_commit_string);
         return;
     }
     {
-        char *msg = vcs_text_from_local((char *)text);   /* repository text is UTF-8 */
-        int ok = msg && vcsgui_commit(&g_session, msg, g_stage_all_flag, &oid);
+        char *msg = vcs_text_from_local(text);   /* repository text is UTF-8 */
+        int ok = msg && vcsgui_commit(&g_session, msg, stage_all ? 1 : 0, &oid);
         free(msg);
+        free(text);
         if (!ok) {
-            MUI_Request(g_app, NULL, 0, "Commit", "_OK", (char *)vcsgui_last_message());
+            MUI_Request(g_app, g_main_window, 0, "Commit", "_OK", (char *)vcsgui_last_message());
             return;
         }
     }
-    set(g_commit_string, MUIA_String_Contents, "");
+    clear_commit_message();
+    set(g_stage_all_check, MUIA_Selected, FALSE);
+    set(g_main_status, MUIA_Text_Contents, "Committed.");
     refresh_ui();
 }
 
@@ -573,9 +741,11 @@ static struct NewMenu MenuData[] = {
 
 int gui_run(const AcConfig *cfg, const char *repo_path)
 {
+    static const char *pageTitles[] = { "Changes", "History", NULL };
     Object *window;
     Object *bt_stage, *bt_stage_all, *bt_unstage, *bt_commit;
     Object *bt_refresh, *bt_new_branch, *bt_switch, *bt_merge, *bt_clone, *bt_push, *bt_pull, *bt_quit;
+    Object *lv_unstaged, *lv_staged;
     ULONG   sigs = 0;
     BOOL    running = TRUE;
 
@@ -600,14 +770,33 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     g_unstaged_list = ListObject, InputListFrame, MUIA_List_DisplayHook, &change_display_hook, End;
     g_staged_list   = ListObject, InputListFrame, MUIA_List_DisplayHook, &change_display_hook, End;
+    lv_unstaged = ListviewObject, MUIA_Listview_List, g_unstaged_list,
+                      MUIA_Listview_MultiSelect, MUIV_Listview_MultiSelect_Shifted, End;
+    lv_staged   = ListviewObject, MUIA_Listview_List, g_staged_list,
+                      MUIA_Listview_MultiSelect, MUIV_Listview_MultiSelect_Shifted, End;
 
-    bt_stage      = SimpleButton("Stage ->");
-    bt_stage_all  = SimpleButton("Stage All");
-    bt_unstage    = SimpleButton("<- Unstage");
+    bt_stage      = SimpleButton("_Stage selected");
+    bt_stage_all  = SimpleButton("Stage _all");
+    bt_unstage    = SimpleButton("_Unstage selected");
 
-    g_commit_string    = StringObject, StringFrame, MUIA_String_MaxLen, 500, End;
-    g_stage_all_toggle = SimpleButton("-a: OFF");
-    bt_commit          = SimpleButton("Commit");
+    g_preview_title = TextObject, MUIA_Text_Contents, "", End;
+    g_preview_text  = ListObject, ReadListFrame,
+                          MUIA_Font, MUIV_Font_Fixed,
+                          MUIA_List_ConstructHook, MUIV_List_ConstructHook_String,
+                          MUIA_List_DestructHook,  MUIV_List_DestructHook_String,
+                      End;
+
+    /* multi-line like git gui if TextEditor.mcc is there */
+    g_commit_string = MUI_NewObject(MUIC_TextEditor,
+                          MUIA_Frame, MUIV_Frame_String,
+                          MUIA_TextEditor_FixedFont, TRUE,
+                          MUIA_CycleChain, 1,
+                          TAG_DONE);
+    g_msg_is_editor = g_commit_string != NULL;
+    if (!g_commit_string)
+        g_commit_string = StringObject, StringFrame, MUIA_String_MaxLen, 500, MUIA_CycleChain, 1, End;
+    g_stage_all_check = CheckMark(FALSE);
+    bt_commit         = SimpleButton("_Commit");
 
     g_history_list = ListObject,
                         InputListFrame,
@@ -616,14 +805,14 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
                         MUIA_List_DisplayHook, &history_display_hook,
                     End;
 
-    bt_refresh    = SimpleButton("Refresh");
-    bt_new_branch = SimpleButton("New Branch");
-    bt_switch     = SimpleButton("Switch");
-    bt_merge      = SimpleButton("Merge");
-    bt_clone      = SimpleButton("Clone");
-    bt_push       = SimpleButton("Push");
-    bt_pull       = SimpleButton("Pull");
-    bt_quit       = SimpleButton("Quit");
+    bt_refresh    = SimpleButton("_Rescan");
+    bt_new_branch = SimpleButton("New Branch...");
+    bt_switch     = SimpleButton("Switch...");
+    bt_merge      = SimpleButton("Merge...");
+    bt_clone      = SimpleButton("Clone...");
+    bt_push       = SimpleButton("_Push");
+    bt_pull       = SimpleButton("Pu_ll");
+    bt_quit       = NULL;
 
     g_progress_text   = TextObject, MUIA_Text_Contents, "", End;
     g_cancel_button   = SimpleButton("_Cancel");
@@ -649,43 +838,74 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         SubWindow, window = WindowObject,
             MUIA_Window_ID,    MAKE_ID('M','A','I','N'),
             MUIA_Window_Title, "amivcs-gui",
+            MUIA_Window_Width,  MUIV_Window_Width_Screen(70),
+            MUIA_Window_Height, MUIV_Window_Height_Screen(80),
             MUIA_Window_Menustrip, MUI_MakeObject(MUIO_MenustripNM, MenuData, 0),
             WindowContents, VGroup,
                 Child, g_status_text,
-                Child, HGroup,
+                Child, RegisterGroup(pageTitles),
+                    MUIA_Register_Frame, TRUE,
+
+                    /* ---- page 1: git gui's main window ---- */
                     Child, VGroup,
-                        Child, TextObject, MUIA_Text_Contents, "Not staged", End,
-                        Child, ListviewObject, MUIA_Listview_List, g_unstaged_list,
-                              MUIA_Listview_MultiSelect, MUIV_Listview_MultiSelect_Shifted, End,
+                        Child, HGroup,
+                            MUIA_VertWeight, 70,
+                            Child, VGroup,
+                                MUIA_HorizWeight, 35,
+                                Child, TextObject, MUIA_Text_Contents, "\33bUnstaged Changes", End,
+                                Child, lv_unstaged,
+                                Child, HGroup,
+                                    Child, bt_stage,
+                                    Child, bt_stage_all,
+                                End,
+                                Child, BalanceObject, End,
+                                Child, TextObject, MUIA_Text_Contents, "\33bStaged Changes (Will Commit)", End,
+                                Child, lv_staged,
+                                Child, bt_unstage,
+                            End,
+                            Child, BalanceObject, End,
+                            Child, VGroup,
+                                MUIA_HorizWeight, 65,
+                                Child, g_preview_title,
+                                Child, ListviewObject,
+                                    MUIA_Listview_Input, FALSE,
+                                    MUIA_Listview_List, g_preview_text,
+                                End,
+                            End,
+                        End,
+                        Child, BalanceObject, End,
+                        Child, HGroup,
+                            MUIA_VertWeight, 30,
+                            Child, VGroup,
+                                MUIA_HorizWeight, 0,
+                                Child, bt_refresh,
+                                Child, bt_commit,
+                                Child, bt_push,
+                                Child, bt_pull,
+                                Child, VSpace(0),
+                            End,
+                            Child, VGroup,
+                                Child, TextObject, MUIA_Text_Contents, "\33bCommit message:", End,
+                                Child, g_commit_string,
+                                Child, HGroup,
+                                    Child, g_stage_all_check,
+                                    Child, LLabel1("Stage all changed files before commit (-a)"),
+                                    Child, HSpace(0),
+                                End,
+                            End,
+                        End,
                     End,
+
+                    /* ---- page 2: history and branches ---- */
                     Child, VGroup,
-                        MUIA_Group_Horiz, FALSE,
-                        Child, bt_stage,
-                        Child, bt_stage_all,
-                        Child, bt_unstage,
+                        Child, ListviewObject, MUIA_Listview_List, g_history_list, End,
+                        Child, HGroup,
+                            Child, bt_new_branch,
+                            Child, bt_switch,
+                            Child, bt_merge,
+                            Child, bt_clone,
+                        End,
                     End,
-                    Child, VGroup,
-                        Child, TextObject, MUIA_Text_Contents, "To be committed", End,
-                        Child, ListviewObject, MUIA_Listview_List, g_staged_list,
-                              MUIA_Listview_MultiSelect, MUIV_Listview_MultiSelect_Shifted, End,
-                    End,
-                End,
-                Child, HGroup,
-                    Child, g_commit_string,
-                    Child, g_stage_all_toggle,
-                    Child, bt_commit,
-                End,
-                Child, TextObject, MUIA_Text_Contents, "History", End,
-                Child, ListviewObject, MUIA_Listview_List, g_history_list, End,
-                Child, HGroup,
-                    Child, bt_refresh,
-                    Child, bt_new_branch,
-                    Child, bt_switch,
-                    Child, bt_merge,
-                    Child, bt_clone,
-                    Child, bt_push,
-                    Child, bt_pull,
-                    Child, bt_quit,
                 End,
                 Child, g_main_status,
             End,
@@ -701,13 +921,16 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     DoMethod(window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
             g_app, 2, MUIM_Application_ReturnID, ID_QUIT);
 
-    DoMethod(bt_quit, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_QUIT);
+    (void)bt_quit;
     DoMethod(bt_refresh, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_REFRESH);
     DoMethod(bt_stage, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_STAGE_SEL);
     DoMethod(bt_stage_all, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_STAGE_ALL);
     DoMethod(bt_unstage, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_UNSTAGE_SEL);
     DoMethod(bt_commit, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_COMMIT);
-    DoMethod(g_stage_all_toggle, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_TOGGLE_A);
+    DoMethod(g_unstaged_list, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime, g_app, 2, MUIM_Application_ReturnID, ID_UNSTAGED_ACTIVE);
+    DoMethod(g_staged_list, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime, g_app, 2, MUIM_Application_ReturnID, ID_STAGED_ACTIVE);
+    DoMethod(lv_unstaged, MUIM_Notify, MUIA_Listview_DoubleClick, TRUE, g_app, 2, MUIM_Application_ReturnID, ID_UNSTAGED_DCLICK);
+    DoMethod(lv_staged, MUIM_Notify, MUIA_Listview_DoubleClick, TRUE, g_app, 2, MUIM_Application_ReturnID, ID_STAGED_DCLICK);
     DoMethod(bt_new_branch, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_NEW_BRANCH);
     DoMethod(bt_switch, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_SWITCH_BRANCH);
     DoMethod(bt_merge, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_MERGE_BRANCH);
@@ -729,7 +952,10 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         case ID_STAGE_ALL:      do_stage_all(); break;
         case ID_UNSTAGE_SEL:    do_unstage_selected(); break;
         case ID_COMMIT:         do_commit(); break;
-        case ID_TOGGLE_A:       do_toggle_a(); break;
+        case ID_UNSTAGED_ACTIVE: preview_active(g_unstaged_list, &g_session.unstaged); break;
+        case ID_STAGED_ACTIVE:   preview_active(g_staged_list, &g_session.staged); break;
+        case ID_UNSTAGED_DCLICK: move_active(g_unstaged_list, &g_session.unstaged, 1); break;
+        case ID_STAGED_DCLICK:   move_active(g_staged_list, &g_session.staged, 0); break;
         case ID_NEW_BRANCH:     do_new_branch(); break;
         case ID_SWITCH_BRANCH:  do_switch_branch(); break;
         case ID_MERGE_BRANCH:   do_merge_branch(); break;
@@ -747,6 +973,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     set(window, MUIA_Window_Open, FALSE);
     historylist_free(g_history_rows);
+
     vcsgui_close(&g_session);
     MUI_DisposeObject(g_app);
     return 0;

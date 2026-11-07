@@ -622,22 +622,30 @@ REPO=<pfad> und DEBUG dieselben Aufgaben.
 Ist das Verzeichnis noch kein Repository, fragt amivcs-gui, ob es
 eines anlegen soll (auch: Menü Repository > Init Repository Here).
 
-Das Fenster:
+Das Fenster ist wie "git gui" aufgebaut:
 
-  - oben: Repository-Pfad und aktueller Branch
-  - "Not staged" (links) und "To be committed" (rechts):
-      "Stage ->"    markierte Dateien vormerken
-      "Stage All"   alles vormerken
-      "<- Unstage"  Vormerkung zurücknehmen
-    Mehrfachauswahl mit gedrückter Umschalttaste.
-  - Commit-Zeile: Nachricht eingeben, "-a: OFF/ON" schaltet
-    "alles vormerken vor dem Commit" um, dann "Commit".
-  - "History": vollständige Historie aller Branches mit Spalten
-    Graph, OID, Author, Date, Message. Der Graph ist als Zeichen
-    ("| * ", "|/ ") dargestellt; Branch-Namen stehen in eckigen
-    Klammern vor der Nachricht.
-  - Knopfleiste: Refresh, New Branch, Switch, Merge, Clone, Push,
-    Pull, Quit
+  - oben: aktueller Branch und Repository-Pfad
+  - Reiter "Changes":
+      links oben  "Unstaged Changes": geänderte, noch nicht
+                  vorgemerkte Dateien; darunter "Stage selected" und
+                  "Stage all"
+      links unten "Staged Changes (Will Commit)": was der nächste
+                  Commit enthält; darunter "Unstage selected"
+      rechts      Inhalt der angeklickten Datei (Vorschau, erste
+                  32 KB; noch kein Diff)
+    Doppelklick auf eine Datei merkt sie vor bzw. nimmt die
+    Vormerkung zurück. Mehrfachauswahl mit gedrückter Umschalttaste.
+  - unten links die Knöpfe "Rescan", "Commit", "Push", "Pull"
+  - unten rechts das Feld "Commit message:" (mehrzeilig, wenn
+    TextEditor.mcc installiert ist, sonst einzeilig) und das
+    Häkchen "Stage all changed files before commit (-a)"
+    Ohne Nachricht oder ohne vorgemerkte Dateien sagt "Commit",
+    was fehlt, und setzt den Cursor ins Nachrichtenfeld.
+  - Reiter "History": vollständige Historie aller Branches mit
+    Spalten Graph, OID, Author, Date, Message. Der Graph ist als
+    Zeichen ("| * ", "|/ ") dargestellt; Branch-Namen stehen in
+    eckigen Klammern vor der Nachricht. Darunter die Knöpfe
+    "New Branch...", "Switch...", "Merge...", "Clone...".
 
 Menüs:
 

@@ -18,6 +18,7 @@ class QCheckBox;
 class QPushButton;
 class QTableView;
 class QLabel;
+class QListWidgetItem;
 class LogTableModel;
 class GraphDelegate;
 
@@ -54,6 +55,7 @@ private:
     void openOrOfferInit(const QString &dir);
     void refreshUI();
     void updateActionsEnabled();
+    void showPreview(QListWidgetItem *item);
     bool ensureRemoteConfigured();
     QString pickBranch(const QString &title, const QString &label);
     void startRemoteJob(RemoteJob::Kind kind, const QString &repoName, const QString &extra);
@@ -74,6 +76,11 @@ private:
     LogTableModel *m_logModel;
     GraphDelegate *m_graphDelegate;
     QLabel *m_branchLabel;
+    QLabel *m_previewTitle;
+    QPlainTextEdit *m_preview;
+    QPushButton *m_rescanBtn;
+    QPushButton *m_pushBtn;
+    QPushButton *m_pullBtn;
 
     QAction *m_actInit;
     QAction *m_actClone;

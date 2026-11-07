@@ -473,19 +473,27 @@ das Verzeichnis noch kein Repository, bietet <code>amivcs-gui</code> an,
 eines anzulegen (auch: Menü <em>Repository &gt; Init Repository
 Here</em>).</p>
 
+<p>Das Fenster ist wie „git gui“ aufgebaut:</p>
+
 <ul>
-<li>Oben Repository-Pfad und aktueller Branch.</li>
-<li>Listen <em>Not staged</em> und <em>To be committed</em> mit den
-Knöpfen <em>Stage -&gt;</em>, <em>Stage All</em>, <em>&lt;- Unstage</em>;
-Mehrfachauswahl mit der Umschalttaste.</li>
-<li>Commit-Zeile mit Umschalter <em>-a: OFF/ON</em> und Knopf
-<em>Commit</em>.</li>
-<li><em>History</em>: Historie aller Branches mit den Spalten Graph,
-OID, Author, Date, Message; der Graph besteht aus Zeichen
+<li>Oben aktueller Branch und Repository-Pfad.</li>
+<li>Reiter <em>Changes</em>: links <em>Unstaged Changes</em> (mit
+<em>Stage selected</em>, <em>Stage all</em>) und darunter <em>Staged
+Changes (Will Commit)</em> (mit <em>Unstage selected</em>); rechts der
+Inhalt der angeklickten Datei (Vorschau der ersten 32&nbsp;KB, noch kein
+Diff). Doppelklick auf eine Datei merkt sie vor bzw. nimmt die
+Vormerkung zurück; Mehrfachauswahl mit der Umschalttaste.</li>
+<li>Darunter links die Knöpfe <em>Rescan</em>, <em>Commit</em>,
+<em>Push</em>, <em>Pull</em>, rechts das Feld <em>Commit message:</em>
+(mehrzeilig, wenn TextEditor.mcc installiert ist, sonst einzeilig) und
+das Häkchen <em>Stage all changed files before commit (-a)</em>. Ohne
+Nachricht oder ohne vorgemerkte Dateien sagt <em>Commit</em>, was fehlt,
+und setzt den Cursor ins Nachrichtenfeld.</li>
+<li>Reiter <em>History</em>: Historie aller Branches mit den Spalten
+Graph, OID, Author, Date, Message; der Graph besteht aus Zeichen
 (<code>| * </code>, <code>|/ </code>), Branch-Namen stehen in eckigen
-Klammern vor der Nachricht.</li>
-<li>Knopfleiste: Refresh, New Branch, Switch, Merge, Clone, Push, Pull,
-Quit.</li>
+Klammern vor der Nachricht. Darunter <em>New Branch…</em>,
+<em>Switch…</em>, <em>Merge…</em>, <em>Clone…</em>.</li>
 <li>Menüs: <em>Project</em> (About…, Quit), <em>Repository</em> (Init
 Repository Here, Refresh, New Branch…, Switch Branch…, Merge Branch…),
 <em>Remote</em> (Clone…, Push, Pull).</li>
@@ -508,11 +516,12 @@ die Qt-Fassung.)</div>
 
 <pre>amivcs-gui [&lt;pfad&gt;]      # außerdem --help, --version</pre>
 
-<p>Dieselbe Oberfläche für macOS, Linux und Windows; Konfiguration
-<code>~/.amivcsrc</code>. Unterschiede zur MUI-Fassung:</p>
+<p>Dieselbe Oberfläche für macOS, Linux und Windows, ebenso wie
+„git gui“ aufgebaut (Reiter <em>Changes</em> mit Listen, Dateivorschau,
+Knöpfen und Nachrichtenfeld; Reiter <em>History</em>); Konfiguration
+<code>~/.amivcsrc</code>. Die Teiler lassen sich verschieben.
+Unterschiede zur MUI-Fassung:</p>
 <ul>
-<li>Vormerken und Zurücknehmen auch per Doppelklick.</li>
-<li>Häkchen „Stage all changes before commit (-a)“.</li>
 <li>Switch/Merge bieten die Branches in einer Auswahlliste an.</li>
 <li>Clone fragt den Namen auf dem Server und wählt das Zielverzeichnis
 per Dateidialog.</li>

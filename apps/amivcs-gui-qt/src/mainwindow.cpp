@@ -31,6 +31,10 @@ extern "C" {
 #include <QListWidgetItem>
 #include <QToolBar>
 #include <QStyle>
+#include <QTabWidget>
+#include <QFontDatabase>
+#include <QFile>
+#include <QDir>
 
 static QString kindLabel(char kind)
 {
@@ -68,58 +72,94 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     setWindowTitle(tr("AMIVCS GUI"));
     resize(900, 700);
 
+    // Laid out like git gui: changed and staged files on the left, the
+    // selected file on the right, buttons and the commit message below;
+    // the history is a tab of its own.
     auto *central = new QWidget(this);
     auto *mainLayout = new QVBoxLayout(central);
 
     m_branchLabel = new QLabel(this);
+    m_branchLabel->setTextFormat(Qt::RichText);
     mainLayout->addWidget(m_branchLabel);
 
-    auto *changesSplit = new QSplitter(Qt::Horizontal, this);
+    auto *tabs = new QTabWidget(this);
+    mainLayout->addWidget(tabs, 1);
 
-    auto *unstagedBox = new QWidget(this);
+    // ---- tab "Changes" ----
+    auto *changesPage = new QWidget(this);
+    auto *changesLayout = new QVBoxLayout(changesPage);
+    auto *vertSplit = new QSplitter(Qt::Vertical, changesPage);
+    auto *topSplit = new QSplitter(Qt::Horizontal, vertSplit);
+    auto *listsSplit = new QSplitter(Qt::Vertical, topSplit);
+
+    auto *unstagedBox = new QWidget(listsSplit);
     auto *unstagedLayout = new QVBoxLayout(unstagedBox);
-    unstagedLayout->addWidget(new QLabel(tr("Changes not staged for commit"), this));
+    unstagedLayout->setContentsMargins(0, 0, 0, 0);
+    unstagedLayout->addWidget(new QLabel(tr("<b>Unstaged Changes</b>"), this));
     m_unstagedList = new QListWidget(this);
     m_unstagedList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     unstagedLayout->addWidget(m_unstagedList);
     auto *unstagedBtns = new QHBoxLayout;
-    m_stageBtn = new QPushButton(tr("Stage →"), this);
-    m_stageAllBtn = new QPushButton(tr("Stage All"), this);
+    m_stageBtn = new QPushButton(tr("&Stage selected"), this);
+    m_stageAllBtn = new QPushButton(tr("Stage &all"), this);
     unstagedBtns->addWidget(m_stageBtn);
     unstagedBtns->addWidget(m_stageAllBtn);
     unstagedLayout->addLayout(unstagedBtns);
-    changesSplit->addWidget(unstagedBox);
 
-    auto *stagedBox = new QWidget(this);
+    auto *stagedBox = new QWidget(listsSplit);
     auto *stagedLayout = new QVBoxLayout(stagedBox);
-    stagedLayout->addWidget(new QLabel(tr("Changes to be committed"), this));
+    stagedLayout->setContentsMargins(0, 0, 0, 0);
+    stagedLayout->addWidget(new QLabel(tr("<b>Staged Changes (Will Commit)</b>"), this));
     m_stagedList = new QListWidget(this);
     m_stagedList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     stagedLayout->addWidget(m_stagedList);
-    auto *stagedBtns = new QHBoxLayout;
-    m_unstageBtn = new QPushButton(tr("← Unstage"), this);
-    stagedBtns->addWidget(m_unstageBtn);
-    stagedLayout->addLayout(stagedBtns);
-    changesSplit->addWidget(stagedBox);
+    m_unstageBtn = new QPushButton(tr("&Unstage selected"), this);
+    stagedLayout->addWidget(m_unstageBtn);
 
-    mainLayout->addWidget(changesSplit, 2);
+    auto *previewBox = new QWidget(topSplit);
+    auto *previewLayout = new QVBoxLayout(previewBox);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
+    m_previewTitle = new QLabel(this);
+    m_previewTitle->setTextFormat(Qt::RichText);
+    previewLayout->addWidget(m_previewTitle);
+    m_preview = new QPlainTextEdit(this);
+    m_preview->setReadOnly(true);
+    m_preview->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_preview->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    previewLayout->addWidget(m_preview);
+    topSplit->setStretchFactor(0, 35);
+    topSplit->setStretchFactor(1, 65);
 
-    auto *commitBox = new QWidget(this);
-    auto *commitLayout = new QVBoxLayout(commitBox);
-    commitLayout->addWidget(new QLabel(tr("Commit message"), this));
+    auto *bottom = new QWidget(vertSplit);
+    auto *bottomLayout = new QHBoxLayout(bottom);
+    bottomLayout->setContentsMargins(0, 0, 0, 0);
+    auto *btnColumn = new QVBoxLayout;
+    auto *rescanBtn = new QPushButton(tr("&Rescan"), this);
+    m_commitBtn = new QPushButton(tr("&Commit"), this);
+    auto *pushBtn = new QPushButton(tr("&Push"), this);
+    auto *pullBtn = new QPushButton(tr("Pu&ll"), this);
+    btnColumn->addWidget(rescanBtn);
+    btnColumn->addWidget(m_commitBtn);
+    btnColumn->addWidget(pushBtn);
+    btnColumn->addWidget(pullBtn);
+    btnColumn->addStretch();
+    bottomLayout->addLayout(btnColumn);
+    auto *msgLayout = new QVBoxLayout;
+    msgLayout->addWidget(new QLabel(tr("<b>Commit message:</b>"), this));
     m_commitMsg = new QPlainTextEdit(this);
-    m_commitMsg->setMaximumHeight(80);
-    commitLayout->addWidget(m_commitMsg);
-    auto *commitBtnRow = new QHBoxLayout;
-    m_stageAllCheck = new QCheckBox(tr("Stage all changes before commit (-a)"), this);
-    m_commitBtn = new QPushButton(tr("Commit"), this);
-    commitBtnRow->addWidget(m_stageAllCheck);
-    commitBtnRow->addStretch();
-    commitBtnRow->addWidget(m_commitBtn);
-    commitLayout->addLayout(commitBtnRow);
-    mainLayout->addWidget(commitBox);
+    msgLayout->addWidget(m_commitMsg);
+    m_stageAllCheck = new QCheckBox(tr("Stage all changed files before commit (-a)"), this);
+    msgLayout->addWidget(m_stageAllCheck);
+    bottomLayout->addLayout(msgLayout, 1);
+    vertSplit->setStretchFactor(0, 70);
+    vertSplit->setStretchFactor(1, 30);
 
-    mainLayout->addWidget(new QLabel(tr("History"), this));
+    changesLayout->addWidget(vertSplit);
+    tabs->addTab(changesPage, tr("Changes"));
+
+    // ---- tab "History" ----
+    auto *historyPage = new QWidget(this);
+    auto *historyLayout = new QVBoxLayout(historyPage);
     m_historyView = new QTableView(this);
     m_logModel = new LogTableModel(&m_session, this);
     m_historyView->setModel(m_logModel);
@@ -129,9 +169,35 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     m_historyView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_historyView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_historyView->horizontalHeader()->setStretchLastSection(true);
-    mainLayout->addWidget(m_historyView, 3);
+    historyLayout->addWidget(m_historyView);
+    auto *branchBtns = new QHBoxLayout;
+    auto *newBranchBtn = new QPushButton(tr("New Branch..."), this);
+    auto *switchBtn = new QPushButton(tr("Switch..."), this);
+    auto *mergeBtn = new QPushButton(tr("Merge..."), this);
+    auto *cloneBtn = new QPushButton(tr("Clone..."), this);
+    branchBtns->addWidget(newBranchBtn);
+    branchBtns->addWidget(switchBtn);
+    branchBtns->addWidget(mergeBtn);
+    branchBtns->addWidget(cloneBtn);
+    historyLayout->addLayout(branchBtns);
+    tabs->addTab(historyPage, tr("History"));
 
     setCentralWidget(central);
+
+    connect(rescanBtn, &QPushButton::clicked, this, &MainWindow::onRefresh);
+    connect(pushBtn, &QPushButton::clicked, this, &MainWindow::onPush);
+    connect(pullBtn, &QPushButton::clicked, this, &MainWindow::onPull);
+    connect(newBranchBtn, &QPushButton::clicked, this, &MainWindow::onNewBranch);
+    connect(switchBtn, &QPushButton::clicked, this, &MainWindow::onSwitchBranch);
+    connect(mergeBtn, &QPushButton::clicked, this, &MainWindow::onMerge);
+    connect(cloneBtn, &QPushButton::clicked, this, &MainWindow::onClone);
+    connect(m_unstagedList, &QListWidget::currentItemChanged, this,
+            [this](QListWidgetItem *item) { showPreview(item); });
+    connect(m_stagedList, &QListWidget::currentItemChanged, this,
+            [this](QListWidgetItem *item) { showPreview(item); });
+    m_pushBtn = pushBtn;
+    m_pullBtn = pullBtn;
+    m_rescanBtn = rescanBtn;
 
     auto *repoMenu = menuBar()->addMenu(tr("&Repository"));
     m_actInit = repoMenu->addAction(tr("&Init Repository Here"), this, &MainWindow::onInitRepoHere);
@@ -208,25 +274,29 @@ void MainWindow::refreshUI()
             const VcsChange &c = m_session.unstaged.items[i];
             auto *item = new QListWidgetItem(QStringLiteral("%1  %2").arg(kindLabel(c.kind), shownPath(c.path)));
             item->setData(Qt::UserRole, QByteArray(c.path));   // raw repository bytes
+            item->setData(Qt::UserRole + 1, QChar(c.kind));
             m_unstagedList->addItem(item);
         }
         for (int i = 0; i < m_session.staged.n; i++) {
             const VcsChange &c = m_session.staged.items[i];
             auto *item = new QListWidgetItem(QStringLiteral("%1  %2").arg(kindLabel(c.kind), shownPath(c.path)));
             item->setData(Qt::UserRole, QByteArray(c.path));   // raw repository bytes
+            item->setData(Qt::UserRole + 1, QChar(c.kind));
             m_stagedList->addItem(item);
         }
 
         QString branchText = m_session.head.detached
             ? tr("(detached HEAD)")
             : shortBranchName(m_session.head.branch);
-        m_branchLabel->setText(tr("Repository: %1  —  Branch: %2").arg(m_cwd, branchText));
+        m_branchLabel->setText(tr("Current branch: <b>%1</b>&nbsp;&nbsp;&nbsp;&nbsp;Repository: %2")
+                                   .arg(branchText.toHtmlEscaped(), m_cwd.toHtmlEscaped()));
         setWindowTitle(QStringLiteral("AMIVCS GUI - %1 [%2]").arg(m_cwd, branchText));
     } else {
         m_branchLabel->setText(tr("(not a repository -- use Repository > Init Repository Here)"));
         setWindowTitle(tr("AMIVCS GUI"));
     }
 
+    showPreview(nullptr);
     m_logModel->refresh();
     m_historyView->resizeColumnsToContents();
     updateActionsEnabled();
@@ -246,6 +316,44 @@ void MainWindow::updateActionsEnabled()
     m_unstageBtn->setEnabled(open);
     m_stageAllBtn->setEnabled(open);
     m_commitBtn->setEnabled(open);
+    m_rescanBtn->setEnabled(open);
+    m_pushBtn->setEnabled(open);
+    m_pullBtn->setEnabled(open);
+}
+
+// The right-hand pane: the selected file's current content (the first
+// 32 KB, binary files only named) -- a diff is to come.
+void MainWindow::showPreview(QListWidgetItem *item)
+{
+    if (!item) {
+        m_previewTitle->clear();
+        m_preview->clear();
+        return;
+    }
+    const QByteArray raw = item->data(Qt::UserRole).toByteArray();
+    const QChar kind = item->data(Qt::UserRole + 1).toChar();
+    const QString shown = shownPath(raw.constData());
+    m_previewTitle->setText(QStringLiteral("<b>%1</b>&nbsp;&nbsp;(%2)")
+                                .arg(shown.toHtmlEscaped(), kindLabel(kind.toLatin1())));
+    if (kind == QLatin1Char('D')) {
+        m_preview->setPlainText(tr("(file deleted in the working directory)"));
+        return;
+    }
+    QFile f(QDir(m_cwd).filePath(QString::fromUtf8(raw)));
+    if (!f.open(QIODevice::ReadOnly)) {
+        m_preview->setPlainText(tr("(cannot read the file)"));
+        return;
+    }
+    const qint64 limit = 32 * 1024;
+    QByteArray data = f.read(limit);
+    if (data.contains('\0')) {
+        m_preview->setPlainText(tr("(binary file)"));
+        return;
+    }
+    QString text = QString::fromUtf8(data);
+    if (f.size() > limit)
+        text += tr("\n\n... (only the first 32 KB shown)");
+    m_preview->setPlainText(text);
 }
 
 void MainWindow::onRefresh()
@@ -283,9 +391,17 @@ void MainWindow::onStageAll()
 
 void MainWindow::onCommit()
 {
+    if (m_session.staged.n == 0 && !(m_stageAllCheck->isChecked() && m_session.unstaged.n > 0)) {
+        QMessageBox::information(this, tr("Commit"),
+            tr("Nothing to commit.\n\nStage files first (double-click them in \"Unstaged Changes\", "
+               "or \"Stage selected\"/\"Stage all\"), or tick \"Stage all changed files before commit\"."));
+        return;
+    }
     QString msg = m_commitMsg->toPlainText().trimmed();
     if (msg.isEmpty()) {
-        QMessageBox::warning(this, tr("Commit"), tr("Enter a commit message first."));
+        QMessageBox::information(this, tr("Commit"),
+            tr("Please type a commit message into the \"Commit message\" field first."));
+        m_commitMsg->setFocus();
         return;
     }
     QByteArray msgUtf8 = msg.normalized(QString::NormalizationForm_C).toUtf8();   // repository text: UTF-8 NFC
@@ -295,6 +411,7 @@ void MainWindow::onCommit()
         return;
     }
     m_commitMsg->clear();
+    m_stageAllCheck->setChecked(false);
     refreshUI();
     statusBar()->showMessage(tr("Committed."), 3000);
 }
