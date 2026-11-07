@@ -36,6 +36,12 @@ Requirements
 - optional: codesets.library 6 or newer for umlauts in other charsets
   than ISO-8859-1 (util/libs/codesets-6.22.lha)
 
+Status
+------
+Experimental software, developed with the help of Claude (an AI
+assistant by Anthropic) and written primarily for the author's own use.
+Try it with copies of your data first; use at your own risk.
+
 Documentation and user interface are in German.
 Die Dokumentation (Docs/AmiVCS.guide) und die Programme sind deutsch.
 

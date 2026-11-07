@@ -7,6 +7,10 @@ PHP server that only stores objects and branch refs. It is deliberately
 not a Git clone, but borrows Git's proven ideas (commit/tree/blob,
 branches, staging, 3-way merge).*
 
+> **Status:** experimental. Developed with the help of Claude (an AI assistant
+> by Anthropic), primarily for the author's own use. Try it with copies of
+> your data first; use at your own risk.
+
 AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung,
 die auf einem Amiga mit 68020-CPU genauso läuft wie auf einem aktuellen
 PC. Fast alle Befehle (`init`, `status`, `add`, `commit`, `log`,

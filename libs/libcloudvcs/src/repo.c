@@ -1005,6 +1005,14 @@ int vcs_repo_branch(VcsRepo *repo, const char *name)
         char fullname[128];
         VcsOid head_commit;
 
+        /* Same rule as the server (vcsname.h): a name it would refuse can
+         * be committed to locally but never pushed. */
+        if (!vcs_branch_name_ok(name)) {
+            ui_notify(UI_ERROR, "amivcs: invalid branch name '%s' -- no spaces, no ~ ^ : ? * [ \\, "
+                      "no '..', at most %d bytes", vcs_shown(name), VCS_BRANCH_MAX);
+            vcs_refs_free(&refs);
+            return 0;
+        }
         snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, name);
         if (vcs_refs_find(&refs, fullname)) {
             ui_notify(UI_ERROR, "amivcs: branch '%s' already exists", vcs_shown(name));

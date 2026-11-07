@@ -184,10 +184,34 @@ static int json_is_ok(JSON_Object *obj)
     return s && strcmp(s, "ok") == 0;
 }
 
+/* Percent-encodes s for a query value (RFC 3986 unreserved stay, '/'
+ * too); out is cut at a whole escape. */
+static void query_escape(const char *s, char *out, size_t outsz)
+{
+    static const char hexd[] = "0123456789ABCDEF";
+    size_t o = 0;
+
+    for (; *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+            || c == '-' || c == '_' || c == '.' || c == '~' || c == '/') {
+            if (o + 1 >= outsz) break;
+            out[o++] = (char)c;
+        } else {
+            if (o + 3 >= outsz) break;
+            out[o++] = '%';
+            out[o++] = hexd[c >> 4];
+            out[o++] = hexd[c & 15];
+        }
+    }
+    if (outsz) out[o] = '\0';
+}
+
 static void report_json_error(JSON_Object *obj, const char *fallback)
 {
     const char *msg = json_object_get_string(obj, "message");
-    ui_notify(UI_ERROR, "amivcs: %s", msg ? msg : fallback);
+    /* the server's text is UTF-8 and may quote a branch name */
+    ui_notify(UI_ERROR, "amivcs: %s", msg ? vcs_shown(msg) : fallback);
 }
 
 /* GET query, parse the JSON body. *out_val must be freed with
@@ -887,21 +911,25 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
     vcs_refs_free(&remote_refs);
 
     {
-        char hex[VCS_OID_HEX], query[400];
+        char hex[VCS_OID_HEX], query[800];
         JSON_Value *val;
         JSON_Object *obj;
         int ok;
+        char name_q[400];  /* VCS_BRANCH_MAX bytes, each escaped */
 
         vcs_oid_to_hex(&local_commit, hex);
+        /* The branch name is UTF-8 and may hold '&', '+', '#' ... */
+        query_escape(fullname, name_q, sizeof(name_q));
         snprintf(query, sizeof(query), "action=update-ref&repo=%s&name=%s&old=%s&new=%s",
-                resolved_name, fullname, remote_old_hex, hex);
+                resolved_name, name_q, remote_old_hex, hex);
 
         /* No retry: a compare-and-swap, see api_request(). */
         if (!api_get_json(cfg, query, &val, &obj, 0)) return 0;
         ok = json_is_ok(obj);
         if (!ok) {
-            report_json_error(obj, "update-ref failed");
-            ui_notify(UI_ERROR, "amivcs: push rejected -- pull and merge first");
+            /* The server says why: 409 "... pull and merge first", or
+             * 400 for a name it does not accept. */
+            report_json_error(obj, "push rejected -- pull and merge first");
         } else {
             ui_notify(UI_INFO, "Pushed '%s' to '%s'.", vcs_shown(head.branch), resolved_name);
         }

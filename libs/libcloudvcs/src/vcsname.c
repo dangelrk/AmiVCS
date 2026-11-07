@@ -134,6 +134,22 @@ int vcs_utf8_valid(const char *s)
     return 1;
 }
 
+int vcs_branch_name_ok(const char *name)
+{
+    size_t n = strlen(name), i;
+
+    if (n == 0 || n > VCS_BRANCH_MAX || !vcs_utf8_valid(name)) return 0;
+    if (name[0] == '/' || name[0] == '-' || name[0] == '.') return 0;
+    if (name[n - 1] == '/' || name[n - 1] == '.') return 0;
+    if (n >= 5 && strcmp(name + n - 5, ".lock") == 0) return 0;
+    if (strstr(name, "..") || strstr(name, "//") || strstr(name, "@{")) return 0;
+    for (i = 0; i < n; i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (c <= 0x20 || c == 0x7f || strchr("~^:?*[\\", c)) return 0;
+    }
+    return 1;
+}
+
 void vcs_utf8_copy(char *dst, size_t dstsz, const char *src)
 {
     size_t n;

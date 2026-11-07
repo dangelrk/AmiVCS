@@ -7,6 +7,13 @@ lokal; ein eigener AmiVCS-Server wird nur für clone, push und pull
 gebraucht. Dieselben Programme gibt es auch für macOS, Linux und
 Windows.
 
+Hinweis
+-------
+Experimentelle Software, entwickelt mit Hilfe von Claude (KI-Assistent
+von Anthropic) und in erster Linie für den Eigengebrauch des Autors
+geschrieben. Bitte zuerst mit Kopien der Daten ausprobieren; Benutzung
+auf eigene Gefahr.
+
 Inhalt der Schublade
 --------------------
 

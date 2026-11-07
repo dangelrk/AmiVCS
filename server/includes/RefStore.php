@@ -5,6 +5,25 @@ if (!defined('AMIVCS_SERVER')) { http_response_code(403); exit; }
 
 class RefStore
 {
+    /* Gueltiger Branch-Ref ("refs/heads/<name>"), dieselbe Regel wie
+     * vcs_branch_name_ok() im Client (libs/libcloudvcs/.../vcsname.h):
+     * 1..100 Byte gueltiges UTF-8 (Umlaute erlaubt), keine Steuerzeichen,
+     * kein Leerzeichen, keines von ~ ^ : ? * [ \ , kein "..", "//" oder
+     * "@{", nicht mit / - . beginnend, nicht mit / . oder ".lock" endend. */
+    public static function validRefName(string $ref): bool
+    {
+        if (strncmp($ref, 'refs/heads/', 11) !== 0) {
+            return false;
+        }
+        $n = substr($ref, 11);
+        return $n !== '' && strlen($n) <= 100
+            && preg_match('//u', $n) === 1
+            && !preg_match('#[\x00-\x20\x7f~^:?*\[\\\\]#', $n)
+            && !preg_match('#^[/.\-]|[/.]$|\.lock$#', $n)
+            && strpos($n, '..') === false && strpos($n, '//') === false
+            && strpos($n, '@{') === false;
+    }
+
     public static function list(string $repoName): void
     {
         $repoId = Repos::resolve($repoName);
@@ -19,7 +38,7 @@ class RefStore
      * merge locally and retry; the server never merges (ADR 09). */
     public static function updateRef(string $repoName, string $name, string $old, string $new): void
     {
-        if (!preg_match('#^refs/heads/[A-Za-z0-9_.\-/]{1,100}$#', $name)) {
+        if (!self::validRefName($name)) {
             Response::error(400, 'Invalid ref name');
         }
         if ($new !== '' && !preg_match('/^[0-9a-f]{32}$/', $new)) {

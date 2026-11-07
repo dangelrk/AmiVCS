@@ -160,7 +160,13 @@ class Repos
         if (mb_strlen($desc, 'UTF-8') > 255 || preg_match('/[\x00-\x1f\x7f]/', $desc)) {
             return 'Die Beschreibung darf höchstens 255 Zeichen lang sein.';
         }
-        if (!preg_match('#^refs/heads/[A-Za-z0-9_.\-/]{1,100}$#', $defaultBranch)) {
+        /* Ein schon gesetzter Standard-Branch bleibt erlaubt, auch wenn er
+         * nach der seit 0.9 strengeren Regel ungueltig waere (z. B. "x.lock"
+         * aus einer alten Version) -- sonst liesse sich nicht einmal mehr
+         * die Beschreibung speichern. */
+        $cur = DB::get()->prepare('SELECT default_branch FROM repos WHERE id = ?');
+        $cur->execute([$repoId]);
+        if ($defaultBranch !== (string)$cur->fetchColumn() && !RefStore::validRefName($defaultBranch)) {
             return 'Ungültiger Standard-Branch.';
         }
         DB::get()->prepare('UPDATE repos SET description = ?, is_public = ?, default_branch = ? WHERE id = ?')

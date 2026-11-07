@@ -125,7 +125,9 @@
 <div class="wrap">
 
 <h1>AmiVCS</h1>
-<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 07.11.2026 (Programmversion 0.8)</p>
+<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 07.11.2026 (Programmversion 0.9)</p>
+
+<div class="callout"><strong>Hinweis:</strong> Experimentelle Software, entwickelt mit Hilfe von Claude (KI-Assistent von Anthropic) und in erster Linie für den Eigengebrauch des Autors geschrieben. Bitte zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.</div>
 
 <p>AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
 für AmigaOS 3.x und den PC (macOS/Linux/Windows). Fast alles läuft rein
@@ -387,7 +389,7 @@ Hilfe. Rückgabewert 0 bei Erfolg, sonst ungleich 0.</p>
 <tr><td><code>commit -F &lt;datei&gt; [-a]</code></td><td>wie oben, die Nachricht steht in der Datei (auch mehrzeilig)</td></tr>
 <tr><td><code>log [--all] [-n N]</code></td><td>Historie des aktuellen Branches (ID, Autor, Datum in UTC, Nachricht); folgt bei Merges nur dem ersten Elternteil. <code>--all</code> und <code>-n</code> wirken mit <code>--porcelain-out</code></td></tr>
 <tr><td><code>branch</code></td><td>alle Branches, der aktuelle mit <code>*</code></td></tr>
-<tr><td><code>branch &lt;name&gt;</code></td><td>neuen Branch auf dem aktuellen Commit anlegen (ohne zu wechseln); erst nach dem ersten Commit möglich</td></tr>
+<tr><td><code>branch &lt;name&gt;</code></td><td>neuen Branch auf dem aktuellen Commit anlegen (ohne zu wechseln); erst nach dem ersten Commit möglich. Umlaute und Zeichen wie <code>&amp; + #</code> sind erlaubt, nicht aber Leerzeichen, <code>~ ^ : ? * [ \</code> und <code>..</code>; der Name darf nicht mit <code>/ - .</code> beginnen, nicht mit <code>/ .</code> oder <code>.lock</code> enden und höchstens 100 Byte lang sein (wie beim Server)</td></tr>
 <tr><td><code>switch &lt;branch&gt;</code></td><td>Branch wechseln und Arbeitsverzeichnis anpassen; verweigert bei vorgemerkten oder ungesicherten Änderungen an versionierten Dateien. Nicht versionierte Dateien bleiben unberührt; liegt eine davon dort, wo der Ziel-Branch eine Datei schreiben würde, wird verweigert, bevor etwas geschrieben wird</td></tr>
 <tr><td><code>checkout</code></td><td>versionierte Dateien auf den Stand des aktuellen Commits bringen (z. B. versehentlich gelöschte zurückholen); verweigert bei ungesicherten Änderungen</td></tr>
 <tr><td><code>merge &lt;branch&gt;</code></td><td>zusammenführen: „Already up to date“, „Fast-forward“ oder 3-Wege-Merge mit Merge-Commit; Konflikte siehe <a href="#konflikte">Kapitel 12</a></td></tr>
@@ -802,6 +804,7 @@ Schwesterprojekte: AmiCloudCore, AmiCloud, AmiOwnCloud.</p>
 
 <table>
 <tr><th>Datum</th><th>Änderung</th></tr>
+<tr><td>07.11.2026</td><td>Programmversion 0.9: <code>push</code> lädt Branches mit Umlauten oder Zeichen wie <code>&amp; + #</code> hoch (braucht den Server ab 0.9; vorher lehnte er sie ab, mit der irreführenden Meldung „pull and merge first“); <code>branch</code> lehnt Namen ab, die der Server nicht annimmt; Server: gleichzeitiges Hochladen desselben Objekts scheitert nicht mehr mit Fehler 500; Hinweis auf den experimentellen Status</td></tr>
 <tr><td>07.11.2026</td><td>Programmversion 0.8: Handbuch überarbeitet; der Installer meldet es jetzt, wenn er nicht aus seiner Schublade gestartet wird, statt mit „object in use“ abzubrechen</td></tr>
 <tr><td>02.11.2026</td><td>Programmversion 0.7: <code>clone</code>, <code>switch</code> und <code>merge</code> behandeln auch <code>Äpfel</code>/<code>äpfel</code> auf Amiga, macOS und Windows als dieselbe Datei; ein <code>clone</code> mit zwei solchen Namen wird ganz zurückgenommen, statt ein Repository ohne Dateien zu hinterlassen</td></tr>
 <tr><td>02.11.2026</td><td>Programmversion 0.6: Datei- und Branchnamen sowie Commit-Texte mit Umlauten (UTF-8 im Repository, codesets.library auf dem Amiga); <code>unstage</code>; <code>add</code> auf gelöschte Pfade; Branchwechsel und Merge wie bei git (nicht versionierte Dateien bleiben unangetastet, überschreiben wird abgelehnt); Sperrdatei gegen zwei gleichzeitige schreibende Aufrufe; Ctrl-C bricht Netzvorgänge ab; Schnittstelle für Programme (<code>--porcelain-out</code>, <code>--args-from</code>, <code>commit -F</code>, <code>log --all -n</code>), die die AmigaIDE nutzt; <code>clone</code> eines Repositorys mit eigener <code>.amivcsignore</code> scheiterte</td></tr>

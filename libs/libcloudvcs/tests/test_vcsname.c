@@ -210,6 +210,30 @@ int main(void)
         CHECK(!vcs_local_join(abs, 8, "Work:repo", U_ORDNER) && abs[0] == '\0', "zu lang: leer");
     }
 
+    /* branch names: same rule as server/includes/RefStore.php */
+    CHECK(vcs_branch_name_ok("main"), "Branch main");
+    CHECK(vcs_branch_name_ok("\xc3\x84pfel"), "Branch mit Umlaut");
+    CHECK(vcs_branch_name_ok("feature/x-1"), "Branch mit Ordner");
+    CHECK(vcs_branch_name_ok("a&b+c#d"), "Branch mit & + #");
+    CHECK(!vcs_branch_name_ok(""), "leerer Branch");
+    CHECK(!vcs_branch_name_ok("a b"), "Branch mit Leerzeichen");
+    CHECK(!vcs_branch_name_ok("a..b"), "Branch mit ..");
+    CHECK(!vcs_branch_name_ok("/a") && !vcs_branch_name_ok("a/") && !vcs_branch_name_ok("-a")
+          && !vcs_branch_name_ok(".a") && !vcs_branch_name_ok("a."), "Branch Anfang/Ende");
+    CHECK(!vcs_branch_name_ok("a//b") && !vcs_branch_name_ok("a@{b"), "Branch // und @{");
+    CHECK(!vcs_branch_name_ok("x.lock"), "Branch .lock");
+    CHECK(!vcs_branch_name_ok("a~1") && !vcs_branch_name_ok("a:b") && !vcs_branch_name_ok("a\\b")
+          && !vcs_branch_name_ok("a*") && !vcs_branch_name_ok("a[b"), "Branch Sonderzeichen");
+    CHECK(!vcs_branch_name_ok("\xc4pfel"), "Branch Latin-1 (kein UTF-8)");
+    {
+        char longname[VCS_BRANCH_MAX + 2];
+        memset(longname, 'x', sizeof(longname) - 1);
+        longname[sizeof(longname) - 1] = '\0';
+        CHECK(!vcs_branch_name_ok(longname), "Branch zu lang");
+        longname[VCS_BRANCH_MAX] = '\0';
+        CHECK(vcs_branch_name_ok(longname), "Branch genau maximal lang");
+    }
+
     printf("vcsname: %d ok, %d Fehler\n", g_ok, g_fail);
     return g_fail ? 1 : 0;
 }

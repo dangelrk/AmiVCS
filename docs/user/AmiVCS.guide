@@ -1,5 +1,5 @@
 @database "AmiVCS.guide"
-@$VER: AmiVCS.guide 0.8 (07.11.2026)
+@$VER: AmiVCS.guide 0.9 (07.11.2026)
 @author "Ronny Krueger"
 @(c) "2026 Ronny Krueger, GPL-3.0-or-later"
 @wordwrap
@@ -15,6 +15,10 @@
 AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
 für AmigaOS 3.x und den PC. Fast alles läuft rein lokal; ein Server
 wird nur für clone, push und pull gebraucht.
+
+Experimentelle Software: entwickelt mit Hilfe von Claude (KI-Assistent
+von Anthropic), in erster Linie für den Eigengebrauch des Autors. Bitte
+zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.
 
   Allgemeines
     @{" Einführung und Überblick   " link Einfuehrung}
@@ -483,7 +487,11 @@ branch
 
 branch <name>
     Legt einen neuen Branch auf dem aktuellen Commit an (wechselt
-    aber nicht dorthin). Geht erst nach dem ersten Commit.
+    aber nicht dorthin). Geht erst nach dem ersten Commit. Umlaute
+    und Zeichen wie & + # sind erlaubt, nicht aber Leerzeichen,
+    ~ ^ : ? * [ \\ und "..". Der Name darf nicht mit / - oder .
+    beginnen, nicht mit / . oder ".lock" enden und höchstens 100
+    Byte lang sein (wie beim Server).
 
 switch <branch>
     Wechselt den Branch und bringt das Arbeitsverzeichnis auf dessen
@@ -1133,6 +1141,16 @@ Schwesterprojekte:
 
 Versionsgeschichte
 ------------------
+
+Programmversion 0.9 (07.11.2026)
+  - push: Branches mit Umlauten oder Zeichen wie & + # lassen sich
+    jetzt hochladen (braucht den Server ab 0.9). Vorher lehnte der
+    Server sie ab, und die Meldung lautete irreführend "pull and
+    merge first".
+  - branch lehnt Namen ab, die der Server nicht annimmt.
+  - Server: gleichzeitiges Hochladen desselben Objekts scheitert
+    nicht mehr mit Fehler 500.
+  - Hinweis auf den experimentellen Status ergänzt.
 
 Programmversion 0.8 (07.11.2026)
   - Handbuch überarbeitet.

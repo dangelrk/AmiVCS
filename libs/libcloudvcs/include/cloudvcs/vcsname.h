@@ -97,4 +97,13 @@ void  vcs_utf8_copy(char *dst, size_t dstsz, const char *src);
 /* 1 if s is valid UTF-8 (pure ASCII included) */
 int   vcs_utf8_valid(const char *s);
 
+/* Branch names (UTF-8, without "refs/heads/"): 1 if the server accepts
+ * it, the same rule as server/includes/RefStore.php validRefName():
+ * 1..100 bytes of valid UTF-8, no control characters, no space and none
+ * of ~ ^ : ? * [ \ (git's rule), no "..", "//" or "@{", not starting
+ * with '/', '-' or '.', not ending with '/', '.' or ".lock". Umlauts and
+ * other letters are fine. */
+#define VCS_BRANCH_MAX 100
+int   vcs_branch_name_ok(const char *name);
+
 #endif /* CLOUDVCS_VCSNAME_H */

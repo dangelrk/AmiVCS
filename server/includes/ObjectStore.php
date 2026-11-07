@@ -67,15 +67,18 @@ class ObjectStore
 
         $path = self::objectPath($repoName, $oid);
         $dir  = dirname($path);
-        if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
             Response::error(500, 'Cannot create object directory');
         }
         if (file_put_contents($path, $data, LOCK_EX) === false) {
             Response::error(500, 'Write failed');
         }
 
+        /* IGNORE: zwei gleichzeitige Uploads desselben Objekts (gleicher
+         * Inhalt, gleiche Datei) sind beide erfolgreich, statt dass der
+         * zweite am Duplicate Key mit 500 scheitert. */
         DB::get()->prepare(
-            'INSERT INTO objects (repo_id, oid, type, size_bytes) VALUES (?, ?, ?, ?)'
+            'INSERT IGNORE INTO objects (repo_id, oid, type, size_bytes) VALUES (?, ?, ?, ?)'
         )->execute([$repoId, $oid, $type, strlen($data)]);
 
         Response::ok(['oid' => $oid]);
