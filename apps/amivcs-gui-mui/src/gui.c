@@ -133,6 +133,7 @@ static void build_input_dialog(void)
     g_input_cancel = SimpleButton("_Cancel");
 
     g_input_window = WindowObject,
+        MUIA_Window_ID,    MAKE_ID('I','N','P','T'),
         MUIA_Window_Title, "Input",
         MUIA_Window_Menu,  MUIV_Window_Menu_NoMenu,
         WindowContents, VGroup,
@@ -817,6 +818,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     g_progress_text   = TextObject, MUIA_Text_Contents, "", End;
     g_cancel_button   = SimpleButton("_Cancel");
     g_progress_window = WindowObject,
+        MUIA_Window_ID,    MAKE_ID('P','R','O','G'),
         MUIA_Window_Title, "Working...",
         MUIA_Window_CloseGadget, FALSE,
         MUIA_Window_Menu, MUIV_Window_Menu_NoMenu,
@@ -917,6 +919,11 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     DoMethod(g_app, OM_ADDMEMBER, g_progress_window);
     build_input_dialog();
+
+    /* every window reopens where it was left, also after a reboot */
+    mui_remember_window(window);
+    mui_remember_window(g_input_window);
+    mui_remember_window(g_progress_window);
 
     DoMethod(window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
             g_app, 2, MUIM_Application_ReturnID, ID_QUIT);
