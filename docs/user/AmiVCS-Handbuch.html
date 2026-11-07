@@ -125,7 +125,7 @@
 <div class="wrap">
 
 <h1>AmiVCS</h1>
-<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 02.11.2026 (Programmversion 0.7)</p>
+<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 07.11.2026 (Programmversion 0.8)</p>
 
 <p>AmiVCS ist eine kleine, bewusst einfach gehaltene Versionsverwaltung
 für AmigaOS 3.x und den PC (macOS/Linux/Windows). Fast alles läuft rein
@@ -212,7 +212,7 @@ vorheriges <code>Stack</code> ist nicht nötig.</p>
 
 <h2 id="installation">2. Installation auf dem Amiga</h2>
 
-<p>Das Archiv <code>AmiVCS-0.2.lha</code> enthält die Schublade
+<p>Das Archiv <code>AmiVCS.lha</code> (Aminet, <code>dev/misc</code>) enthält die Schublade
 <code>AmiVCS</code>:</p>
 
 <pre>AmiVCS/
@@ -226,7 +226,7 @@ vorheriges <code>Stack</code> ist nicht nötig.</p>
   Docs/              AmiVCS.guide
   Examples/          amivcs.cfg.example</pre>
 
-<p>Archiv auspacken, z.&nbsp;B. <code>lha x AmiVCS-0.2.lha RAM:</code>.</p>
+<p>Archiv auspacken, z.&nbsp;B. <code>lha x AmiVCS.lha RAM:</code>.</p>
 <p>Alle Teile haben Workbench-Icons. Zum Installieren in der Schublade das
 Icon <strong>Install-AmiVCS</strong> doppelt anklicken. Es startet den
 Commodore-Installer (bei AmigaOS&nbsp;3.2 in <code>SYS:System</code>, bei
@@ -234,6 +234,8 @@ Commodore-Installer (bei AmigaOS&nbsp;3.2 in <code>SYS:System</code>, bei
 Ohne Installer gibt es dasselbe als Shell-Skript:</p>
 <pre>CD RAM:AmiVCS
 Execute Install-AmiVCS.shell</pre>
+
+<p>Wer den Installer aus der Shell startet, wechselt vorher mit <code>CD</code> in die Schublade: Das Skript sucht seine Dateien relativ zum aktuellen Verzeichnis. Von einem anderen Verzeichnis aus bricht es mit einem Hinweis ab.</p>
 
 <p><strong>Aktualisieren:</strong> Eine neuere Version installiert man genauso –
 Archiv auspacken, Installer erneut starten. Er vergleicht bei jedem Programm
@@ -655,12 +657,12 @@ ansehen.</li>
 
 <h2 id="server">15. Server einrichten</h2>
 
-<p>Der Server (<code>server/</code>) läuft auf einem gewöhnlichen
+<p>Der Server liegt dem Archiv als Schublade <code>Server</code> bei und läuft auf einem gewöhnlichen
 Webserver: PHP ≥ 7.4 mit <code>pdo_mysql</code> und <code>mbstring</code>, MariaDB oder MySQL,
 HTTPS-Zertifikat. Er gehört in die Wurzel eines eigenen vHosts
 (<code>web.php</code> leitet auf <code>/web.php</code> um). Die
 ausführliche Schritt-für-Schritt-Anleitung steht in
-<code>docs/INSTALL.md</code> im Quellarchiv; Kurzfassung für
+<code>INSTALL.md</code> im Server-Paket; Kurzfassung für
 AlmaLinux/RHEL mit Apache:</p>
 
 <pre># vHost amivcs.example.com mit DocumentRoot /var/www/amivcs,
@@ -768,6 +770,8 @@ jeder Anfrage (Kontopasswort oder App-Passwort; nach 5 Fehlversuchen
 
 <h2 id="bauen">19. Bauen aus den Quellen</h2>
 
+<p>Die Quellen werden später auf GitHub veröffentlicht. Bis dahin gibt es die Amiga-Programme als Archiv auf Aminet.</p>
+
 <pre>git clone --recurse-submodules https://github.com/dangelrk/AmiVCS.git
 cd AmiVCS
 make pc                       # amivcs für den PC
@@ -793,14 +797,12 @@ Quelltext. Es gibt keine Gewährleistung. Maßgeblich ist der Lizenztext in
 Parson steht unter der MIT-Lizenz; ihr Wortlaut liegt als
 <code>THIRD-PARTY-NOTICES</code> in der Installationsschublade.</p>
 
-<p>Projektseite: <a href="https://github.com/dangelrk/AmiVCS">github.com/dangelrk/AmiVCS</a> ·
-Schwesterprojekte:
-<a href="https://github.com/dangelrk/AmiCloudCore">AmiCloudCore</a>,
-<a href="https://github.com/dangelrk/AmiCloud">AmiCloud</a>,
-<a href="https://github.com/dangelrk/AmiOwnCloud">AmiOwnCloud</a>.</p>
+<p>Fehlermeldungen und Wünsche: <a href="mailto:amitools@planet-rk.de">amitools@planet-rk.de</a> ·
+Schwesterprojekte: AmiCloudCore, AmiCloud, AmiOwnCloud.</p>
 
 <table>
 <tr><th>Datum</th><th>Änderung</th></tr>
+<tr><td>07.11.2026</td><td>Programmversion 0.8: Handbuch überarbeitet; der Installer meldet es jetzt, wenn er nicht aus seiner Schublade gestartet wird, statt mit „object in use“ abzubrechen</td></tr>
 <tr><td>02.11.2026</td><td>Programmversion 0.7: <code>clone</code>, <code>switch</code> und <code>merge</code> behandeln auch <code>Äpfel</code>/<code>äpfel</code> auf Amiga, macOS und Windows als dieselbe Datei; ein <code>clone</code> mit zwei solchen Namen wird ganz zurückgenommen, statt ein Repository ohne Dateien zu hinterlassen</td></tr>
 <tr><td>02.11.2026</td><td>Programmversion 0.6: Datei- und Branchnamen sowie Commit-Texte mit Umlauten (UTF-8 im Repository, codesets.library auf dem Amiga); <code>unstage</code>; <code>add</code> auf gelöschte Pfade; Branchwechsel und Merge wie bei git (nicht versionierte Dateien bleiben unangetastet, überschreiben wird abgelehnt); Sperrdatei gegen zwei gleichzeitige schreibende Aufrufe; Ctrl-C bricht Netzvorgänge ab; Schnittstelle für Programme (<code>--porcelain-out</code>, <code>--args-from</code>, <code>commit -F</code>, <code>log --all -n</code>), die die AmigaIDE nutzt; <code>clone</code> eines Repositorys mit eigener <code>.amivcsignore</code> scheiterte</td></tr>
 <tr><td>01.11.2026</td><td>Programmversion 0.5: wird eine Anmeldung abgelehnt, versucht AmiVCS es mit denselben Zugangsdaten 15 Minuten lang nicht erneut</td></tr>
@@ -816,7 +818,7 @@ Schwesterprojekte:
 </table>
 
 <footer>
-AmiVCS-Handbuch · Stand 23.10.2026 · Amiga-Fassung:
+AmiVCS-Handbuch · Stand 07.11.2026 · Amiga-Fassung:
 <code>AmiVCS.guide</code> (AmigaGuide) ·
 <a href="#">nach oben</a>
 </footer>

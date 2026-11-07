@@ -15,7 +15,7 @@
 # diese Datei nicht gebraucht -- nur clone/push/pull brauchen server,
 # user und pass. "#" am Zeilenanfang = Kommentar.
 
-# Basis-URL des AmiVCS-Servers (siehe server/ und docs/INSTALL.md),
+# Basis-URL des AmiVCS-Servers (siehe Schublade Server, INSTALL.md im Server-Paket),
 # ohne /api.php und ohne abschliessenden "/". Auf dem Amiga nur https://.
 server=https://amivcs.example.com
 

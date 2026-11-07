@@ -44,12 +44,12 @@ Vorhandene Icons, Einstellungen und DOSDriver bleiben erhalten.
 Voraussetzungen
 ---------------
 
-  - AmigaOS 3.x, 68000 oder besser (keine FPU nötig)
+  - AmigaOS 3.x, 68020 oder besser (keine FPU nötig)
   - nur für clone/push/pull (auch in amivcs-gui): TCP/IP-Stack mit
     bsdsocket.library (z.B. Roadshow, AmiTCP, Miami) und AmiSSL 5
   - für amivcs-gui: MUI 3.8 oder neuer
   - ein AmiVCS-Server nur für clone/push/pull (Einrichtung: siehe
-    docs/INSTALL.md im Quellarchiv)
+    Schublade Server)
 
 Lizenz
 ------
@@ -59,5 +59,5 @@ GNU General Public License, Version 3 oder später (siehe LICENSE).
 Enthält den JSON-Parser Parson (MIT-Lizenz, siehe THIRD-PARTY-NOTICES).
 Es gibt keine Gewährleistung.
 
-Quelltext, Fehlermeldungen, Wünsche:
-  https://github.com/dangelrk/AmiVCS
+Fehlermeldungen, Wünsche: amitools@planet-rk.de
+Die Quellen werden später auf GitHub veröffentlicht.

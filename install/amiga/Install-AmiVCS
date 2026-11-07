@@ -99,7 +99,9 @@
              "Version neuer ist als die im Archiv:\n\n" #behalten
              (all))))
 
-(if (= 0 (exists "C/amivcs" (noreq)))
+; Das Skript selbst muss hier liegen: Aus SYS: heraus gaebe es "C/amivcs"
+; sonst auch, und Quelle und Ziel waeren dieselbe Datei ("object in use").
+(if (OR (= 0 (exists "C/amivcs" (noreq))) (= 0 (exists "Install-AmiVCS" (noreq))))
   (abort "Die AmiVCS-Programme wurden nicht gefunden.\n\n"
          "Bitte den Installer aus der ausgepackten\n"
          "AmiVCS-Schublade starten."))

@@ -1,5 +1,5 @@
 @database "AmiVCS.guide"
-@$VER: AmiVCS.guide 0.5 (23.10.2026)
+@$VER: AmiVCS.guide 0.8 (07.11.2026)
 @author "Ronny Krueger"
 @(c) "2026 Ronny Krueger, GPL-3.0-or-later"
 @wordwrap
@@ -64,7 +64,7 @@ Einführung und Überblick
 AmiVCS ist KEIN Git-Nachbau. Es übernimmt bewährte Grundideen von Git
 (Commit, Tree und Blob, Branches, dateiweises Vormerken, 3-Wege-Merge),
 verzichtet aber bewusst auf Rebase, Cherry-Pick, Stash, Reflog und
-Ähnliches. Ziel ist ein System, das auf einem 68000 ohne FPU flüssig
+Ähnliches. Ziel ist ein System, das auf einem 68020 ohne FPU flüssig
 läuft und das man komplett verstehen kann.
 
 Bestandteile:
@@ -160,6 +160,11 @@ beantworten):
 
   CD RAM:AmiVCS
   Execute Install-AmiVCS.shell
+
+Wer den Installer aus der Shell startet, wechselt vorher mit CD in die
+Schublade: Das Skript sucht seine Dateien relativ zum aktuellen
+Verzeichnis. Von einem anderen Verzeichnis aus bricht es mit einem
+Hinweis ab.
 
 Aktualisieren: eine neuere Version installiert man genauso - Archiv
 auspacken, Installer erneut starten. Er vergleicht bei jedem Programm
@@ -276,7 +281,7 @@ Konfiguration auf dem PC:
   amivcs-gui  ~/.amivcsrc
 
 Das Format ist dasselbe wie auf dem Amiga. Ausführlich: docs/INSTALL.md
-im Quellarchiv.
+in den Quellen.
 
 @{" Zurück " link Deinstallation}  @{" Index " link Main}
 @{" Weiter " link Konfiguration}
@@ -820,7 +825,7 @@ Objektmodell und Grenzen
 
 AmiVCS speichert Inhalte als Objekte in einer kompakten binären
 Kodierung, ohne Gleitkommazahlen (Zeitstempel sind ganze Sekunden in
-UTC) und ohne Kompression - ein 68000 ohne FPU braucht dafür nichts
+UTC) und ohne Kompression - ein 68020 ohne FPU braucht dafür nichts
 extra.
 
   Blob     Rohe Dateibytes. Die ID (OID) ist die MD5-Summe des
@@ -866,11 +871,11 @@ Bewusste Grenzen der Version 1:
 Server einrichten
 -----------------
 
-Der AmiVCS-Server liegt im Quellarchiv unter server/. Er läuft auf
+Der AmiVCS-Server liegt dem Archiv als Schublade Server bei. Er läuft auf
 einem gewöhnlichen Webserver (PHP 7.4 oder neuer mit pdo_mysql und mbstring,
 MariaDB oder MySQL, HTTPS-Zertifikat) - nicht auf dem Amiga.
 
-Kurzfassung (Einzelheiten: docs/INSTALL.md im Quellarchiv):
+Kurzfassung (Einzelheiten: INSTALL.md im Server-Paket):
 
   1. Eigene (Sub-)Domain, z.B. amivcs.example.com, mit eigenem
      vHost und HTTPS. Die Dateien gehören in die Wurzel des vHosts.
@@ -1040,7 +1045,8 @@ Server testen
 Bauen aus den Quellen
 ---------------------
 
-Die Quellen: https://github.com/dangelrk/AmiVCS
+Die Quellen werden später auf GitHub veröffentlicht. Bis dahin gibt
+es die Amiga-Programme als Archiv auf Aminet.
 Beim Klonen das Submodul core/ (AmiCloudCore) mitnehmen:
 
   git clone --recurse-submodules https://github.com/dangelrk/AmiVCS.git
@@ -1063,7 +1069,7 @@ bzw. werden über die Assigns AmiSSL:, NetInclude: und MUI: gefunden.
 Build-Amiga wurde auf dem Host gegengeprüft, auf echter Hardware aber
 noch nicht getestet.
 
-Vollständige Anleitung: docs/BUILD.md im Quellarchiv.
+Vollständige Anleitung: docs/BUILD.md in den Quellen.
 
 @{" Zurück " link Fehlersuche}  @{" Index " link Main}
 @{" Weiter " link Lizenz}
@@ -1108,16 +1114,16 @@ Autor und Kontakt
 
 Ronny Krueger
 
-Projektseite, Quelltext, Fehlermeldungen und Wünsche:
+Fehlermeldungen und Wünsche:
 
-  https://github.com/dangelrk/AmiVCS
+  amitools@planet-rk.de
 
 Schwesterprojekte:
 
-  https://github.com/dangelrk/AmiCloudCore  gemeinsame Bibliotheken
-  https://github.com/dangelrk/AmiCloud      Cloud-Server, AMICLOUD:
-  https://github.com/dangelrk/AmiOwnCloud   OwnCloud/Nextcloud,
-                                            OWNCLOUD:, AmiOwnCloudSync
+  AmiCloudCore  gemeinsame Bibliotheken
+  AmiCloud      Cloud-Server, AMICLOUD:
+  AmiOwnCloud   OwnCloud/Nextcloud,
+                OWNCLOUD:, AmiOwnCloudSync
 
 @{" Zurück " link Lizenz}  @{" Index " link Main}
 @{" Weiter " link Historie}
@@ -1127,6 +1133,11 @@ Schwesterprojekte:
 
 Versionsgeschichte
 ------------------
+
+Programmversion 0.8 (07.11.2026)
+  - Handbuch überarbeitet.
+  - Der Installer meldet es jetzt, wenn er nicht aus seiner Schublade
+    gestartet wird, statt mit "object in use" abzubrechen.
 
 Programmversion 0.7 (02.11.2026)
   - clone, switch, merge: auch "Äpfel"/"äpfel" gelten auf
