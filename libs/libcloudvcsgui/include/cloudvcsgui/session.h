@@ -94,9 +94,8 @@ int vcsgui_refresh(VcsGuiSession *s);
  * disk. */
 void vcsgui_close(VcsGuiSession *s);
 
-/* author is copied into s->author (vcsgui_commit()'s identity); NULL/""
- * leaves it empty, which vcs_repo_commit() itself already defaults to
- * "unknown". */
+/* author is copied into s->author and then wins over the configured
+ * identity (vcsgui_identity()); NULL/"" uses the configuration. */
 void vcsgui_set_author(VcsGuiSession *s, const char *author);
 
 int vcsgui_add(VcsGuiSession *s, const char *relpath);
@@ -109,15 +108,40 @@ int vcsgui_switch(VcsGuiSession *s, const char *branch);
 int vcsgui_checkout(VcsGuiSession *s);
 int vcsgui_merge(VcsGuiSession *s, const char *branch);
 
-/* Clone/push/pull -- thin wrappers around remote.h that additionally
- * arm this session as the active one for vcsgui_install_progress_hook()'s
- * bridge (see below) for the call's duration, and refresh/open the
- * session afterward on success. cfg is remote.h's usual AcConfig
- * (server/username/password) -- unrelated to the session itself, a
- * caller may reuse one AcConfig across many sessions. */
-int vcsgui_clone(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name, const char *local_dir);
-int vcsgui_push(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name);
-int vcsgui_pull(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name, const char *branch);
+/* Clone/push/pull -- wrappers around remote.h that resolve the remote
+ * and login from the repository's .amivcs/config (vcsconfig.h), arm this
+ * session for vcsgui_install_progress_hook()'s bridge (see below) for the
+ * call's duration, and refresh/open the session afterward on success.
+ *
+ * opts: program options only (verify_ssl, timeout -- the global config,
+ * vcs_global_load_options()). url: NULL/"" = the repository's remote=;
+ * given, it is used and, on success, remembered (a push also creates the
+ * repository on the server). login: user/password typed in -- empty
+ * fields fall back to what the repository remembers; remember=1 keeps
+ * the password in .amivcs/config. If an operation fails and
+ * vcsgui_auth_failed() is 1, ask for user/password and call again. */
+typedef struct {
+    char user[64];
+    char pass[128];
+    int  remember;
+} VcsGuiLogin;
+
+int vcsgui_clone(VcsGuiSession *s, const AcConfig *opts, const char *url,
+                 const VcsGuiLogin *login, const char *local_dir);
+int vcsgui_push(VcsGuiSession *s, const AcConfig *opts, const char *url, const VcsGuiLogin *login);
+int vcsgui_pull(VcsGuiSession *s, const AcConfig *opts, const char *url, const VcsGuiLogin *login,
+                const char *branch);
+int vcsgui_auth_failed(void);
+
+/* What the repository remembers about its remote: URL, user, whether a
+ * password is stored. Returns 1 if a remote URL is set. */
+int vcsgui_remote_info(VcsGuiSession *s, char *url, size_t usz, char *user, size_t nsz, int *has_pass);
+
+/* The commit author (UTF-8): vcsgui_set_author()'s if set, else the
+ * repository's name/email, else the global defaults (vcsconfig.h).
+ * Returns 0 if no name is set anywhere -- ask the user and store it with
+ * vcs_global_set("name"/"email") before committing. */
+int vcsgui_identity(VcsGuiSession *s, char *out, size_t sz);
 
 /* Requests that the currently-running clone/push/pull (if any) stop at
  * its next object boundary. Safe to call from another thread (Qt's

@@ -122,9 +122,12 @@ function jsUrl(): string
     return '/web.js?v=' . filemtime(dirname(__DIR__, 2) . '/web.js');
 }
 
+/* Basis-URL dieses Servers (dort liegt api.php), auch in einem
+ * Unterverzeichnis; eine Remote-URL ist serverUrl() . '/' . <repo>. */
 function serverUrl(): string
 {
-    return 'https://' . ($_SERVER['HTTP_HOST'] ?? 'amivcs.example.com');
+    $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+    return 'https://' . ($_SERVER['HTTP_HOST'] ?? 'amivcs.example.com') . $dir;
 }
 
 /* Link auf eine Repo-Seite: v = code|blob|raw|history|commit|branches|settings|zip */

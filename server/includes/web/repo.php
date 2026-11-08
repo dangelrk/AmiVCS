@@ -175,12 +175,11 @@ function renderCode(array $repo, RepoReader $rd, string $ref, string $commitOid,
 <dialog id="dlgClone" class="dlg dlg-wide">
   <form method="dialog">
     <h2>Repository klonen</h2>
-    <p>In <code>amivcs.cfg</code> (bzw. AMIVCSPrefs) muss dieser Server eingetragen sein:</p>
-    <pre data-copy-src>server=<?= h(serverUrl()) . "\n" ?>user=<?= h(Auth::$username) . "\n" ?>pass=…</pre>
+    <p>Im Verzeichnis, in dem der Klon entstehen soll (Benutzer
+       <code><?= h(Auth::$username) ?></code> und Passwort werden gefragt):</p>
+    <pre data-copy-src>amivcs clone <?= h(serverUrl() . '/' . $repo['name']) ?></pre>
     <button type="button" class="btn" data-copy><?= icon('copy') ?>Kopieren</button>
-    <p>Dann im Zielverzeichnis:</p>
-    <pre data-copy-src>amivcs clone <?= h($repo['name']) ?></pre>
-    <button type="button" class="btn" data-copy><?= icon('copy') ?>Kopieren</button>
+    <p>In amivcs-gui und der AmigaIDE dieselbe Adresse bei <em>Clone</em> eingeben.</p>
     <div class="dlg-actions"><button value="ok" class="btn btn-primary">Schließen</button></div>
   </form>
 </dialog>

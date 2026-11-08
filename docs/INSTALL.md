@@ -27,7 +27,7 @@ und Zugangsdaten sind nur für `clone`, `push` und `pull` nötig.
 | TCP/IP-Stack mit `bsdsocket.library` (z. B. Roadshow, AmiTCP, Miami) | Clone/Push/Pull in `amivcs` und `amivcs-gui` – lokal wird er nicht gebraucht |
 | AmiSSL 5 (`amisslmaster.library`) | wie oben; alle Serververbindungen laufen über HTTPS |
 | MUI 3.8 oder neuer (`muimaster.library` ≥ 19) | nur `amivcs-gui` |
-| – | `AMIVCSPrefs` braucht nur Intuition/GadTools |
+| – | `AmiVCSConfig` braucht nur Intuition/GadTools |
 
 Hinweise:
 
@@ -54,9 +54,9 @@ AmiVCS/
   ReadMe             Kurzbeschreibung
   LICENSE            GPLv3
   THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
-  C/                 amivcs, amivcs-gui, AMIVCSPrefs
+  C/                 amivcs, amivcs-gui, AmiVCSConfig
   Docs/              AmiVCS.guide
-  Examples/          amivcs.cfg.example
+  Examples/          config.example
 ```
 
 Archiv auspacken (z. B. `lha x AmiVCS-0.7.lha RAM:`). Zum Installieren in der Schublade das Icon **Install-AmiVCS** doppelt anklicken.
@@ -73,13 +73,16 @@ Execute Install-AmiVCS.shell
 Das Skript fragt, welche Teile installiert werden sollen, und
 
 - kopiert `amivcs` und `amivcs-gui` nach `C:`,
-- kopiert `AMIVCSPrefs` samt Icon nach `SYS:Prefs/`,
+- kopiert `AmiVCSConfig` samt Icon nach `SYS:Prefs/` und entfernt das
+  alte `SYS:Prefs/AMIVCSPrefs` (bis 0.9),
 - kopiert `AmiVCS.guide` nach `HELP:` – nur, wenn der Assign `HELP:`
   existiert,
 - prüft, ob `muimaster.library` und `amisslmaster.library` in `LIBS:`
   liegen, und warnt sonst,
-- bietet an, `AMIVCSPrefs` zu starten, falls noch keine
-  `ENVARC:amivcs.cfg` existiert.
+- bietet an, `AmiVCSConfig` zu starten, falls noch keine
+  `ENVARC:AmiVCS/config` existiert (Name und E-Mail für die Commits),
+- weist darauf hin, dass eine alte `ENVARC:amivcs.cfg` nicht mehr
+  gelesen wird.
 
 Eine vorhandene Konfiguration wird **nie** überschrieben.
 
@@ -107,19 +110,19 @@ als das im Archiv (Hilfsskript `Install-Datei`, Vergleich mit
 |---|---|---|
 | `C/amivcs` | `C:` | Kommandozeile |
 | `C/amivcs-gui` | `C:` (oder beliebige Schublade) | MUI-Oberfläche |
-| `C/AMIVCSPrefs` | `SYS:Prefs/` | Einstellungs-Editor |
+| `C/AmiVCSConfig` | `SYS:Prefs/` | Einstellungen |
 | `Docs/AmiVCS.guide` | `HELP:` oder beliebig | Handbuch |
-| `Examples/amivcs.cfg.example` | als Vorlage für `ENVARC:amivcs.cfg` | nur für clone/push/pull |
+| `Examples/config.example` | als Vorlage für `ENVARC:AmiVCS/config` | Name/E-Mail, Optionen |
 
 ```
 Copy C/amivcs C:
 Copy C/amivcs-gui C:
-Copy C/AMIVCSPrefs SYS:Prefs/
+Copy C/AmiVCSConfig SYS:Prefs/
 Copy Docs/AmiVCS.guide HELP:
 ```
 
-Es werden keine Icons mitgeliefert. `AMIVCSPrefs` lässt sich im Shell
-mit `SYS:Prefs/AMIVCSPrefs` starten; auf der Workbench ist es nur
+Es werden keine Icons mitgeliefert. `AmiVCSConfig` lässt sich im Shell
+mit `SYS:Prefs/AmiVCSConfig [<repository>]` starten; auf der Workbench ist es nur
 sichtbar, wenn im Fenster „Alle Dateien anzeigen“ eingeschaltet ist. Für `amivcs-gui` kann ein
 eigenes Projekt-Icon angelegt werden; es versteht die Merkmale
 (Tooltypes) `REPO=<pfad>` (zu öffnendes Repository) und `DEBUG`.
@@ -129,26 +132,36 @@ Kein DOS-Treiber, kein Mounten: AmiVCS enthält keinen Handler.
 <a id="konfiguration-amiga"></a>
 ### Konfiguration
 
-Die Konfigurationsdatei heißt `amivcs.cfg` und ist von AmiCloud völlig
-unabhängig. Sie wird gesucht:
+Es gibt zwei Ebenen, wie bei git:
 
-| Programm | Suchreihenfolge |
+| Datei | Inhalt |
 |---|---|
-| `amivcs` | `-c <datei>`, sonst `ENV:amivcs.cfg`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
-| `amivcs-gui` | `ENV:amivcs.cfg`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
-| `AMIVCSPrefs` | liest `ENV:amivcs.cfg`, sonst `ENVARC:amivcs.cfg` |
+| `ENV:AmiVCS/config` (aktiv), `ENVARC:AmiVCS/config` (dauerhaft) | globale Vorgaben: `name`, `email` des Autors, `verify_ssl`, `timeout` |
+| `.amivcs/config` im Repository | `remote` (Remote-URL, z. B. `https://amivcs.example.com/meinprojekt`), `user`, `pass` (nur mit „Passwort merken“), eigener `name`/`email` |
 
-`AMIVCSPrefs` schreibt mit **Benutzen** nur `ENV:amivcs.cfg` (gilt bis
-zum Neustart), mit **Speichern** `ENVARC:amivcs.cfg` **und**
-`ENV:amivcs.cfg`, mit **Abbrechen** nichts. Wer die Datei von Hand
-anlegt, kopiert sie nach `ENVARC:` (dauerhaft) und `ENV:` (sofort
-wirksam):
+Rein lokal braucht AmiVCS nur einen Namen für die Commits. Server,
+Benutzer und Passwort gehören zu jedem Repository: `amivcs clone <url>`
+merkt sich die Adresse, `amivcs push <url>` ebenso (und legt das
+Repository auf dem Server an); Benutzer und Passwort werden beim ersten
+Netzbefehl gefragt.
+
+**AmiVCSConfig** (`SYS:Prefs/AmiVCSConfig`) bearbeitet beides: die
+globalen Vorgaben und das Repository im aktuellen Verzeichnis, im
+Argument `<pfad>` oder im Merkmal `REPO=` seines Icons (amivcs-gui und
+die AmigaIDE starten es mit dem Repository). **Speichern** schreibt
+`ENV:` und `ENVARC:` bzw. `.amivcs/config`, **Abbrechen** nichts.
+
+Dasselbe in der Shell:
 
 ```
-Copy Examples/amivcs.cfg.example ENVARC:amivcs.cfg
-Ed ENVARC:amivcs.cfg
-Copy ENVARC:amivcs.cfg ENV:
+amivcs config --global name "Vorname Nachname"
+amivcs config --global email name@example.org
+amivcs remote https://amivcs.example.com/meinprojekt
+amivcs config --unset pass
 ```
+
+Die frühere `amivcs.cfg` und `AMIVCSPrefs` (bis 0.9) werden nicht mehr
+benutzt.
 
 Inhalt und alle Schlüssel: [config-examples/README.md](../config-examples/README.md).
 
@@ -160,13 +173,14 @@ Aus der Schublade:
 Execute Uninstall-AmiVCS
 ```
 
-Das Skript löscht `C:amivcs`, `C:amivcs-gui`, `SYS:Prefs/AMIVCSPrefs`
-und `HELP:AmiVCS.guide` und fragt, ob auch `ENV:amivcs.cfg` und
-`ENVARC:amivcs.cfg` entfernt werden sollen. Von Hand:
+Das Skript löscht `C:amivcs`, `C:amivcs-gui`, `SYS:Prefs/AmiVCSConfig`
+(und ein altes `AMIVCSPrefs`) und `HELP:AmiVCS.guide` und fragt, ob auch
+die Einstellungen `ENV:AmiVCS` und `ENVARC:AmiVCS` (und eine alte
+`amivcs.cfg`) entfernt werden sollen. Von Hand:
 
 ```
-Delete C:amivcs C:amivcs-gui SYS:Prefs/AMIVCSPrefs HELP:AmiVCS.guide
-Delete ENV:amivcs.cfg ENVARC:amivcs.cfg
+Delete C:amivcs C:amivcs-gui SYS:Prefs/AmiVCSConfig HELP:AmiVCS.guide
+Delete ENV:AmiVCS ENVARC:AmiVCS ALL
 ```
 
 Repositories (Verzeichnisse mit einem Unterverzeichnis `.amivcs`)
@@ -188,15 +202,21 @@ make install DESTDIR=/tmp/paket      # für Paketbau
 
 Konfiguration:
 
-| Programm | Datei |
-|---|---|
-| `amivcs` (macOS/Linux) | `-c <datei>`, sonst `~/.amivcsrc` |
-| `amivcs` (Windows-Build) | `-c <datei>`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
-| `amivcs-gui` (Qt) | `~/.amivcsrc` (unter Windows `%USERPROFILE%\.amivcsrc`) |
+globale Vorgaben (Name, E-Mail, Optionen) in `~/.amivcsconfig`, unter
+Windows `%USERPROFILE%\.amivcsconfig` – für `amivcs` und `amivcs-gui`
+gleichermaßen (Vorlage
+[config-examples/config.example](../config-examples/config.example)),
+am einfachsten gesetzt mit
 
-Das Format ist dasselbe wie auf dem Amiga (siehe
-[config-examples/amivcs.cfg.example](../config-examples/amivcs.cfg.example)).
-Die Datei enthält ein Passwort, also am besten `chmod 600 ~/.amivcsrc`.
+```sh
+amivcs config --global name "Vorname Nachname"
+amivcs config --global email name@example.org
+```
+
+Remote-URL, Benutzer und (nur mit „Passwort merken“) Passwort stehen wie
+auf dem Amiga in `.amivcs/config` des jeweiligen Repositorys; in
+`amivcs-gui` (Qt) unter *Repository > Settings...*. Ein gemerktes
+Passwort steht dort im Klartext.
 
 ## 3. AmiVCS-Server einrichten
 
@@ -303,9 +323,10 @@ curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"
 
 Danach:
 
-- API für die Clients: `https://amivcs.example.com/api.php` – in der
-  Client-Konfiguration aber nur die Basis-URL eintragen:
-  `server=https://amivcs.example.com`
+- API für die Clients: `https://amivcs.example.com/api.php` – die
+  Clients bekommen aber die Remote-URL eines Repositorys,
+  `https://amivcs.example.com/<repository>`, und hängen `api.php` selbst
+  an die Basis davor (`amivcs clone https://amivcs.example.com/projekt`)
 - Startseite: `https://amivcs.example.com/` (öffentliche Repositories)
 - Weboberfläche: `https://amivcs.example.com/web.php` – Dateibaum,
   Dateiansicht, Historie mit Graph, Commits mit Diff, Branches, ZIP-Download;
@@ -313,7 +334,7 @@ Danach:
   Standard-Branch, Löschen), persönliche Einstellungen mit App-Passwörtern,
   Benutzerverwaltung für Administratoren.
 
-Repositories entstehen beim ersten `amivcs push <name>` automatisch oder
+Repositories entstehen beim ersten `amivcs push https://<server>/<name>` automatisch oder
 in der Weboberfläche (Namen: Buchstaben, Ziffern, `_`, `.`, `-`, nicht mit
 `.` beginnend, höchstens 128 Zeichen). Neue Repositories sind **privat**;
 in den Repository-Einstellungen lassen sie sich öffentlich schalten – dann

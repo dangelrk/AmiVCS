@@ -31,8 +31,8 @@ zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.
     @{" Installation auf dem PC    " link InstPC}
 
   Konfiguration
-    @{" Konfigurationsdatei        " link Konfiguration}
-    @{" AMIVCSPrefs                " link Prefs}
+    @{" Konfiguration              " link Konfiguration}
+    @{" AmiVCSConfig               " link Prefs}
 
   Programme
     @{" amivcs - Aufruf, Optionen  " link CLI}
@@ -77,7 +77,8 @@ Bestandteile:
                 lokal und für den Server.
   amivcs-gui    Grafische Oberfläche im Stil von "git gui": auf dem
                 Amiga mit MUI, auf dem PC mit Qt 6.
-  AMIVCSPrefs   Einstellungs-Editor für amivcs.cfg (nur Amiga).
+  AmiVCSConfig  Einstellungen: Name/E-Mail, Remote-URL und Benutzer
+                pro Repository (nur Amiga).
   Server        Schlanker PHP-Server: speichert nur Objekte und
                 Branch-Zeiger. Dazu eine nur lesende Web-Oberfläche.
 
@@ -114,7 +115,7 @@ amivcs-gui):
 Zusätzlich für amivcs-gui:
   - MUI 3.8 oder neuer (muimaster.library Version 19)
 
-AMIVCSPrefs braucht nur Intuition und GadTools aus dem Betriebssystem.
+AmiVCSConfig braucht nur Intuition und GadTools aus dem Betriebssystem.
 
 Optional: codesets.library ab Version 6 (Aminet util/libs/codesets)
 für Umlaute in Dateinamen, Autor und Commit-Text bei anderen
@@ -150,9 +151,9 @@ Das Archiv AmiVCS.lha enthält die Schublade "AmiVCS":
   ReadMe             Kurzbeschreibung
   LICENSE            Lizenztext (GPLv3)
   THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
-  C/                 amivcs, amivcs-gui, AMIVCSPrefs
+  C/                 amivcs, amivcs-gui, AmiVCSConfig
   Docs/              AmiVCS.guide (dieses Handbuch)
-  Examples/          amivcs.cfg.example
+  Examples/          config.example
 
 Auspacken (z.B. im Shell-Fenster mit  lha x AmiVCS.lha RAM:) und in
 der Schublade das Icon Install-AmiVCS doppelt anklicken. Es startet
@@ -184,19 +185,20 @@ Der Installer fragt zuerst, welche Teile installiert werden sollen:
 
   - amivcs nach C:
   - amivcs-gui nach C:
-  - AMIVCSPrefs (mit Icon) nach SYS:Prefs/
+  - AmiVCSConfig (mit Icon) nach SYS:Prefs/ (ein altes AMIVCSPrefs
+    wird dabei entfernt)
   - AmiVCS.guide nach HELP: (nur wenn der Assign HELP: existiert)
 
 Er warnt, wenn muimaster.library oder amisslmaster.library in LIBS:
-fehlen, und bietet am Ende an, AMIVCSPrefs zu starten, falls es noch
-keine ENVARC:amivcs.cfg gibt. Vorhandene Konfigurationen werden nie
-überschrieben.
+fehlen, und bietet am Ende an, AmiVCSConfig zu starten, falls es noch
+keine ENVARC:AmiVCS/config gibt (Name und E-Mail für die Commits).
+Vorhandene Einstellungen werden nie überschrieben.
 
 Es wird kein DOS-Treiber installiert und nichts gemountet; AmiVCS
 enthält keinen Handler.
 
-Danach den Server-Zugang eintragen, sofern Sie clone, push oder pull
-nutzen wollen (@{" Konfiguration " link Konfiguration}), und loslegen
+Danach Name und E-Mail eintragen, falls noch nicht geschehen
+(@{" Konfiguration " link Konfiguration}), und loslegen
 (@{" Arbeitsablauf " link Workflow}).
 
 @{" Zurück " link Voraussetzungen}  @{" Index " link Main}
@@ -212,16 +214,16 @@ Wohin welche Datei gehört:
 
   C/amivcs            -> C:
   C/amivcs-gui        -> C: (oder eine beliebige Schublade)
-  C/AMIVCSPrefs       -> SYS:Prefs/
+  C/AmiVCSConfig      -> SYS:Prefs/
   Docs/AmiVCS.guide   -> HELP: (oder beliebig)
-  Examples/amivcs.cfg.example
-                      -> Vorlage für ENVARC:amivcs.cfg
+  Examples/config.example
+                      -> Vorlage für ENVARC:AmiVCS/config
 
 Im Shell-Fenster, aus der Schublade heraus:
 
   Copy C/amivcs C:
   Copy C/amivcs-gui C:
-  Copy C/AMIVCSPrefs(%|.info) SYS:Prefs/
+  Copy C/AmiVCSConfig(%|.info) SYS:Prefs/
   Copy Docs/AmiVCS.guide(%|.info) HELP:
 
 Wer amivcs-gui von der Workbench aus starten möchte, legt sich ein
@@ -244,15 +246,16 @@ anklicken oder im Shell-Fenster:
 
   Execute Uninstall-AmiVCS
 
-Das Skript löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AMIVCSPrefs und
-HELP:AmiVCS.guide und fragt, ob auch ENV:amivcs.cfg und
-ENVARC:amivcs.cfg entfernt werden sollen.
+Das Skript löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AmiVCSConfig
+(und ein altes AMIVCSPrefs) und HELP:AmiVCS.guide und fragt, ob auch
+die Einstellungen ENV:AmiVCS und ENVARC:AmiVCS entfernt werden
+sollen.
 
 Von Hand:
 
-  Delete C:amivcs C:amivcs-gui SYS:Prefs/AMIVCSPrefs
+  Delete C:amivcs C:amivcs-gui SYS:Prefs/AmiVCSConfig
   Delete HELP:AmiVCS.guide
-  Delete ENV:amivcs.cfg ENVARC:amivcs.cfg
+  Delete ENV:AmiVCS ENVARC:AmiVCS ALL
 
 Ihre Repositories (Verzeichnisse mit einem Unterverzeichnis ".amivcs")
 bleiben unberührt. Wer ein Repository wieder in ein ganz normales
@@ -278,110 +281,117 @@ gebaut (siehe @{" Bauen " link Bauen}) und dann installiert:
 "make install" kopiert amivcs und amivcs-gui nach /usr/local/bin
 (anderes Ziel mit PREFIX=..., Paketbau mit DESTDIR=...).
 
-Konfiguration auf dem PC:
-
-  amivcs      -c <datei>, sonst ~/.amivcsrc
-              (Windows-Build: amivcs.cfg im aktuellen Verzeichnis)
-  amivcs-gui  ~/.amivcsrc
-
-Das Format ist dasselbe wie auf dem Amiga. Ausführlich: docs/INSTALL.md
-in den Quellen.
+Globale Vorgaben auf dem PC: ~/.amivcsconfig (Windows:
+%USERPROFILE%\.amivcsconfig), für amivcs und amivcs-gui. Pro
+Repository gilt wie auf dem Amiga .amivcs/config. Ausführlich:
+docs/INSTALL.md in den Quellen.
 
 @{" Zurück " link Deinstallation}  @{" Index " link Main}
 @{" Weiter " link Konfiguration}
 @endnode
 
-@node Konfiguration "Konfigurationsdatei"
+@node Konfiguration "Konfiguration"
 
-Konfigurationsdatei amivcs.cfg
-------------------------------
+Konfiguration
+-------------
 
-Nur für clone, push und pull nötig - mit einer Ausnahme: "user" ist
-auch der Autorname Ihrer Commits. Eigene Datei, NICHT amicloud.cfg.
+Wie bei git gibt es zwei Ebenen: globale Vorgaben für alle
+Repositories und die Einstellungen eines Repositorys. Beides sind
+Textdateien, eine Einstellung pro Zeile als "schlüssel=wert"; Zeilen
+mit "#" am Anfang sind Kommentare. Am bequemsten bearbeitet man sie
+mit @{" AmiVCSConfig " link Prefs} oder "amivcs config".
 
-Wo die Programme suchen:
+Globale Vorgaben: ENV:AmiVCS/config (aktiv) und ENVARC:AmiVCS/config
+(dauerhaft).
 
-  amivcs        -c <datei>, sonst ENV:amivcs.cfg,
-                sonst amivcs.cfg im aktuellen Verzeichnis
-  amivcs-gui    ENV:amivcs.cfg, sonst amivcs.cfg im aktuellen
-                Verzeichnis
-  AMIVCSPrefs   ENV:amivcs.cfg, sonst ENVARC:amivcs.cfg
-
-Dauerhaft gehört die Datei nach ENVARC:; beim Systemstart kopiert
-AmigaOS sie nach ENV:. Am bequemsten per @{" AMIVCSPrefs " link Prefs}.
-
-Format: eine Einstellung pro Zeile, "schlüssel=wert". Zeilen mit "#"
-am Anfang sind Kommentare.
-
-  server=https://amivcs.example.com
-  user=bob
-  pass=geheim
+  name=Vorname Nachname
+  email=name@example.org
   #verify_ssl=1
   #timeout=120
 
-Die Schlüssel:
-
-  server       Basis-URL des AmiVCS-Servers, ohne "/api.php". Ein
-               abschließender "/" wird entfernt. Auf dem Amiga sind
-               nur https://-Adressen möglich.
-  user         Benutzername am Server UND Commit-Autor (erscheint in
-               "amivcs log"; ohne user heißt der Autor "unknown").
-               Andere Schreibweise: username
-  pass         Passwort am Server, am besten ein App-Passwort aus
-               der Web-Oberfläche. Andere Schreibweise: password
+  name         Autor Ihrer Commits (wie user.name bei git). Ohne
+               Namen lehnt "amivcs commit" ab; amivcs-gui fragt
+               einmal danach.
+  email        E-Mail des Autors; der Autor erscheint als
+               "Name <email>".
   verify_ssl   1 = Zertifikat des Servers prüfen (Standard),
                0 = nicht prüfen, nur zum Testen!
   timeout      Netz-Timeout in Sekunden, Standard 120: so lange
                darf eine Verbindung ganz ohne Datenfluss bleiben.
                Die Dauer von clone, push oder pull ist nie begrenzt.
 
-Der gemeinsame Parser kennt außerdem basepath, debug, gmt_offset und
-dst; AmiVCS wertet diese nicht aus.
+Pro Repository: .amivcs/config (wird nicht versioniert).
+
+  remote=https://amivcs.example.com/meinprojekt
+  user=bob
+  pass=geheim
+
+  remote       Remote-URL wie bei git: alles vor dem letzten "/"
+               ist der Server (dort liegt api.php), dahinter der Name
+               des Repositorys auf dem Server. Jedes Repository kann
+               auf einen anderen Server zeigen. Auf dem Amiga nur
+               https://-Adressen.
+  user         Benutzername an diesem Server
+  pass         Passwort - NUR wenn beim Login "Passwort merken"
+               gewählt wurde, im Klartext. Am besten ein
+               App-Passwort aus der Web-Oberfläche.
+  name, email  Autor nur für dieses Repository (fehlt er, gilt die
+               globale Vorgabe)
+
+Rein lokal braucht AmiVCS nur einen Namen. clone und push <url>
+merken sich die Remote-URL; fehlen Benutzer oder Passwort oder lehnt
+der Server sie ab, fragt amivcs im Shell-Fenster danach (das Passwort
+ohne Echo) und bietet an, das Passwort zu merken.
+
+In der Shell:
+
+  amivcs config --global name "Vorname Nachname"
+  amivcs config --global email name@example.org
+  amivcs remote https://amivcs.example.com/meinprojekt
+  amivcs config --unset pass
 
 Den Autor für einen einzelnen Aufruf ändern:
 
   amivcs --author "Ronny" commit -a -m "Text"
 
-Von Hand anlegen:
-
-  Copy Examples/amivcs.cfg.example ENVARC:amivcs.cfg
-  Ed ENVARC:amivcs.cfg
-  Copy ENVARC:amivcs.cfg ENV:
-
-Die Datei enthält Ihr Passwort im Klartext.
+Bis Version 0.9 gab es stattdessen eine einzige amivcs.cfg mit
+server=, user= und pass=; sie wird nicht mehr gelesen. Für ein schon
+vorhandenes Repository genügt einmal "amivcs remote https://server/name".
 
 @{" Zurück " link InstPC}  @{" Index " link Main}  @{" Weiter " link Prefs}
 @endnode
 
-@node Prefs "AMIVCSPrefs"
+@node Prefs "AmiVCSConfig"
 
-AMIVCSPrefs
------------
+AmiVCSConfig
+------------
 
-Einstellungs-Editor für amivcs.cfg, im Stil der Workbench-Voreinsteller.
-Aufruf: SYS:Prefs/AMIVCSPrefs (Shell oder Workbench). Das Fenster
-öffnet sich auf dem Workbench-Bildschirm.
+Einstellungen im Stil der Workbench-Voreinsteller:
+
+  SYS:Prefs/AmiVCSConfig [<repository>]
+
+Das Repository ist das Argument, das Merkmal REPO= des Icons oder das
+aktuelle Verzeichnis. amivcs-gui (Repository > Settings...) und die
+AmigaIDE starten AmiVCSConfig mit dem geöffneten Repository.
 
 Felder:
 
-  Server               Basis-URL des Servers (Schlüssel "server")
-  Benutzer (= Autor)   Benutzername und Commit-Autor ("user")
-  Passwort             Passwort ("pass")
-  Zertifikat prüfen    Häkchen = verify_ssl=1
+  Vorgaben für alle Repositories:
+    Name, E-Mail
+  Repository:
+    Remote-URL              z.B. https://amivcs.example.com/projekt
+    Benutzer (Server)
+    Name, E-Mail            nur für dieses Repository (leer = Vorgabe)
+    Passwort vergessen      nur sichtbar, wenn eins gemerkt ist
 
-Knöpfe (klassische Prefs-Semantik):
+Knöpfe:
 
-  Speichern   schreibt ENVARC:amivcs.cfg UND ENV:amivcs.cfg -
-              gilt sofort und dauerhaft
-  Benutzen    schreibt nur ENV:amivcs.cfg - gilt bis zum Neustart
+  Speichern   schreibt ENV: und ENVARC:AmiVCS/config sowie
+              .amivcs/config des Repositorys
   Abbrechen   schreibt nichts
 
-Beim Öffnen wird ENV:amivcs.cfg gelesen, ersatzweise ENVARC:. Weichen
-beide Dateien voneinander ab, meldet die Statuszeile
-"ENV:/ENVARC: unterscheiden sich (angezeigt: ENV:)".
-
-Eine eigene amivcs.cfg im aktuellen Verzeichnis (die amivcs und
-amivcs-gui ersatzweise lesen) bearbeitet AMIVCSPrefs nicht.
+Ein "Benutzen" gibt es nicht mehr. Die Fensterposition wird gemerkt.
+Ohne Repository zeigt das Fenster nur die Vorgaben.
 
 @{" Zurück " link Konfiguration}  @{" Index " link Main}
 @{" Weiter " link CLI}
@@ -392,13 +402,12 @@ amivcs-gui ersatzweise lesen) bearbeitet AMIVCSPrefs nicht.
 amivcs - Aufruf und Optionen
 ----------------------------
 
-  amivcs [--author <name>] [-c <datei>] <befehl> [argumente]
+  amivcs [--author <name>] <befehl> [argumente]
 
 Optionen (vor dem Befehl angeben):
 
-  --author <name>   Commit-Autor für diesen Aufruf (statt "user" aus
-                    der Konfigurationsdatei)
-  -c <datei>        andere Konfigurationsdatei verwenden
+  --author <name>   Commit-Autor für diesen Aufruf (statt name/email
+                    aus der Konfiguration)
   --args-from <datei>
                     weitere Argumente (Pfade, Branch-Namen) aus einer
                     Datei, eines pro Zeile; spart Quoting in der Shell
@@ -416,7 +425,7 @@ Befehle im Überblick:
   init, status, add, unstage, commit, log, branch, switch, checkout,
   merge, gc, cat-file, version
       -> @{" lokale Befehle " link Lokal}
-  clone, push, pull
+  clone, push, pull, remote, config
       -> @{" Server-Befehle " link Remote}
 
 "amivcs" ohne Befehl oder mit unbekanntem Befehl zeigt eine kurze
@@ -539,37 +548,50 @@ Beispiel:
 amivcs - Server-Befehle
 -----------------------
 
-Brauchen server, user und pass in der Konfigurationsdatei sowie einen
-laufenden TCP/IP-Stack und AmiSSL. Der Fortschritt wird laufend
-angezeigt.
+Brauchen eine Remote-URL wie https://amivcs.example.com/projekt
+sowie einen laufenden TCP/IP-Stack und AmiSSL. Benutzer und Passwort
+fragt amivcs im Shell-Fenster, wenn sie fehlen oder der Server sie
+ablehnt (das Passwort ohne Echo, danach "merken? (j/n)"). Der
+Fortschritt wird laufend angezeigt.
 
-clone <repo> [verzeichnis]
-    Holt das Server-Repository <repo> in ein neues Verzeichnis (ohne
-    Angabe: gleicher Name wie <repo>) und legt dort alle Branches des
-    Servers an. Ausgecheckt wird "main", falls vorhanden, sonst der
-    erste Branch. Der Name <repo> wird in .amivcs/config gemerkt.
-    Dieser Befehl darf überall aufgerufen werden. Bricht ein clone ab
-    (Leitung weg, Ctrl-C), setzt derselbe Aufruf ihn fort: bereits
-    geholte Objekte bleiben, nur der Rest wird geladen.
+clone <url> [verzeichnis]
+    Holt das Server-Repository in ein neues Verzeichnis (ohne Angabe:
+    der Name aus der URL, wie bei git) und legt dort alle Branches
+    des Servers an. Ausgecheckt wird "main", falls vorhanden, sonst
+    der erste Branch. URL und Benutzer werden in .amivcs/config
+    gemerkt. Dieser Befehl darf überall aufgerufen werden. Bricht ein
+    clone ab (Leitung weg, Ctrl-C), setzt derselbe Aufruf ihn fort:
+    bereits geholte Objekte bleiben, nur der Rest wird geladen.
 
-push [<repo>]
+push [<url>]
     Lädt den aktuellen Branch hoch: alle Objekte, die der Server noch
-    nicht hat, dann den Branch-Zeiger. Mit <repo> wird dieses
-    Server-Repository benutzt und gemerkt; existiert es noch nicht,
-    wird es angelegt. Ohne <repo> gilt das gemerkte (aus clone oder
-    einem früheren push).
+    nicht hat, dann den Branch-Zeiger. Mit <url> wird diese Adresse
+    benutzt und als Remote gemerkt, ohne <url> gilt die gemerkte.
+    Existiert das Repository auf dem Server noch nicht, wird es
+    angelegt - auch wenn die URL vorher mit "amivcs remote" oder
+    AmiVCSConfig gesetzt wurde.
 
-pull [<branch>]
+pull [<url>] [<branch>]
     Holt <branch> (ohne Angabe: gleichnamig zum aktuellen Branch) vom
     Server und führt ihn genauso zusammen wie "merge": Fast-forward,
     3-Wege-Merge oder Abbruch bei Konflikt.
+
+remote [<url>]
+    Zeigt bzw. setzt die Remote-URL dieses Repositorys.
+
+config [--global] [--unset] [<schlüssel> [<wert>]]
+    Ohne Schlüssel: alle Werte (global und dieses Repository; ein
+    gemerktes Passwort verdeckt). Schlüssel: name, email (mit
+    --global die Vorgabe, sonst nur dieses Repository), remote, user,
+    pass (nur Repository); global auch verify_ssl, timeout.
+    "config --unset pass" vergisst das gemerkte Passwort.
 
 Über eine langsame oder wacklige Leitung (Modem): Scheitert eine
 einzelne Anfrage an der Verbindung, versucht amivcs sie bis zu zweimal
 neu. Ctrl-C bricht clone, push und pull ab; pull und push lassen sich
 danach einfach wiederholen, clone setzt fort.
 
-Repository-Namen auf dem Server: Buchstaben, Ziffern, "_", "." und
+Repository-Namen (letzter Teil der URL): Buchstaben, Ziffern, "_", "." und
 "-", höchstens 128 Zeichen. Jeder Benutzer sieht nur seine eigenen
 Repositories.
 
@@ -586,9 +608,10 @@ Beispiel mit zwei Rechnern:
 
   Amiga:   amivcs init
            amivcs commit -a -m "Start"
-           amivcs push projekt-x      ; legt projekt-x an
+           amivcs push https://amivcs.example.com/projekt-x
+                                      ; legt projekt-x an
 
-  PC:      amivcs clone projekt-x
+  PC:      amivcs clone https://amivcs.example.com/projekt-x
            cd projekt-x
            ... ändern ...
            amivcs commit -a -m "Vom PC"
@@ -624,7 +647,7 @@ eines anlegen soll (auch: Menü Repository > Init Repository Here).
 
 Das Fenster ist wie "git gui" aufgebaut:
 
-  - oben: aktueller Branch und Repository-Pfad
+  - oben: aktueller Branch, Repository-Pfad und Remote-URL
   - Reiter "Changes":
       links oben  "Unstaged Changes": geänderte, noch nicht
                   vorgemerkte Dateien; darunter "Stage selected" und
@@ -650,22 +673,30 @@ Das Fenster ist wie "git gui" aufgebaut:
 Menüs:
 
   Project      About... (Amiga-?), Quit (Amiga-Q)
-  Repository   Init Repository Here, Refresh (R), New Branch... (B),
-               Switch Branch... (S), Merge Branch... (M)
+  Repository   Init Repository Here, Refresh (R), Settings... (,),
+               New Branch... (B), Switch Branch... (S),
+               Merge Branch... (M)
   Remote       Clone..., Push (P), Pull (L)
 
 Switch und Merge zeigen zuerst die vorhandenen Branches an; danach
 wird der Name eingetippt.
 
-Clone, Push, Pull: Fehlen Server, Benutzer oder Passwort in
-amivcs.cfg, fragt amivcs-gui danach. Diese Eingaben gelten nur bis
-zum Programmende. Während der Übertragung erscheint ein Fenster
-"Working..." mit Abbrechen-Knopf.
+Clone fragt die Remote-URL (https://server/name) und das lokale
+Verzeichnis. Push ohne gemerkte Remote-URL fragt sie und legt das
+Repository bei Bedarf auf dem Server an - so wird auch ein frisch mit
+init angelegtes Repository verknüpft. Fehlt das Passwort oder lehnt
+der Server die Anmeldung ab, erscheint das Fenster "Login" (Benutzer,
+Passwort, "Remember password"); gemerkt wird in .amivcs/config.
+Während der Übertragung erscheint ein Fenster "Working..." mit
+Abbrechen-Knopf.
 
-WICHTIG: Push und Pull in amivcs-gui benutzen immer das gemerkte
-Server-Repository. Ein frisch mit init angelegtes Repository muss
-deshalb einmal mit "amivcs push <name>" in der Shell verknüpft werden
-(bei geklonten Repositories ist das schon geschehen).
+Gibt es beim ersten Commit noch keinen Namen, fragt amivcs-gui nach
+Name und E-Mail und speichert sie als globale Vorgabe.
+
+Repository > Settings... startet @{" AmiVCSConfig " link Prefs} für
+das geöffnete Repository; danach "Refresh".
+
+Alle Fenster merken sich ihre Position.
 
 @{" Zurück " link Remote}  @{" Index " link Main}  @{" Weiter " link GUIQt}
 @endnode
@@ -680,7 +711,7 @@ Dieselbe Oberfläche für macOS, Linux und Windows (Qt 6).
   amivcs-gui [<pfad>]
 
 Ohne <pfad> wird das aktuelle Verzeichnis geöffnet. --help und
---version werden unterstützt. Konfiguration: ~/.amivcsrc.
+--version werden unterstützt. Globale Vorgaben: ~/.amivcsconfig.
 
 Unterschiede zur MUI-Fassung:
 
@@ -688,16 +719,16 @@ Unterschiede zur MUI-Fassung:
     zurücknehmen.
   - "-a" ist ein Häkchen "Stage all changes before commit (-a)".
   - Switch/Merge bieten die Branches in einer Auswahlliste an.
-  - Clone fragt den Namen auf dem Server und wählt das Zielverzeichnis
-    per Dateidialog.
+  - Clone fragt die Remote-URL und wählt das übergeordnete
+    Verzeichnis per Dateidialog (der Klon heißt wie in der URL).
   - Der Commit-Graph wird grafisch gezeichnet.
   - Menüs: Repository, Remote, Help; Refresh zusätzlich in der
     Werkzeugleiste.
-  - Fehlende Zugangsdaten fragt ein Dialog "AMIVCS - Remote Server"
-    ab (Server URL, Username, Password, Verify TLS certificate); auch
-    hier nur bis zum Programmende.
+  - Repository > Settings... öffnet einen eigenen Dialog "AMIVCS
+    Settings": Remote-URL, Benutzer, Passwort vergessen, Name und
+    E-Mail für dieses Repository und die globalen Vorgaben.
 
-Push/Pull benutzen wie bei MUI das gemerkte Server-Repository.
+Clone, Push, Login und erster Commit laufen wie bei MUI.
 
 @{" Zurück " link GUI}  @{" Index " link Main}  @{" Weiter " link Workflow}
 @endnode
@@ -724,14 +755,15 @@ Allein und nur lokal:
 
 Mit Server (einmalig verknüpfen, dann nur noch push/pull):
 
-  amivcs push meinprojekt      ; beim ersten Mal mit Namen
+  amivcs push https://amivcs.example.com/meinprojekt
+                               ; beim ersten Mal mit URL
   ... arbeiten, committen ...
   amivcs pull                  ; Änderungen anderer holen
   amivcs push
 
 Auf einem zweiten Rechner:
 
-  amivcs clone meinprojekt
+  amivcs clone https://amivcs.example.com/meinprojekt
   CD meinprojekt
 
 Aufräumen ab und zu:
@@ -858,7 +890,7 @@ Aufbau von .amivcs:
   HEAD                     aktueller Branch
   packed-refs              alle Branches
   index                    Vormerkungen (die OID eines Trees)
-  config                   gemerktes Server-Repository
+  config                   Remote-URL, Benutzer, ggf. Passwort
   objects/<2>/<30>         lose Objekte (nach OID verteilt)
   objects/pack/            Pack-Dateien aus "amivcs gc"
 
@@ -913,11 +945,11 @@ Kurzfassung (Einzelheiten: INSTALL.md im Server-Paket):
          "https://amivcs.example.com/api.php?action=status"
      liefert {"status":"ok","version":"0.1"}.
 
-Auf den Clients dann:
+Die Clients brauchen dann nur noch die Remote-URL eines Repositorys:
 
-  server=https://amivcs.example.com
+  https://amivcs.example.com/<name>
 
-Repositories entstehen beim ersten "amivcs push <name>" von selbst
+Repositories entstehen beim ersten "amivcs push <url>" von selbst
 oder in der Web-Oberfläche.
 
 @{" Zurück " link Modell}  @{" Index " link Main}  @{" Weiter " link WebUI}
@@ -930,7 +962,9 @@ Web-Oberfläche
 
 Unter https://amivcs.example.com/ (Adresse Ihres Servers) lassen
 sich die Repositories im Browser ansehen, ähnlich wie bei Gitea.
-Anmeldung mit denselben Zugangsdaten wie in amivcs.cfg.
+Anmeldung mit denselben Zugangsdaten wie beim Login der Clients. Der
+Dialog "Klonen" eines Repositorys zeigt die fertige Zeile
+"amivcs clone https://.../<name>".
 
   - Code: Dateibaum je Branch oder Commit, README, Dateiansicht
     mit Zeilennummern, Bilder, ZIP-Download. Textdateien in
@@ -948,8 +982,8 @@ für andere unsichtbar. clone, push und pull bleiben immer dem
 Eigentümer vorbehalten. Im Browser entstehen keine Commits.
 
 App-Passwörter: Je Gerät eines anlegen (Persönliche Einstellungen,
-Geräte und App-Passwörter) und statt des Kontopassworts in
-amivcs.cfg eintragen. Es wird nur einmal angezeigt und lässt sich
+Geräte und App-Passwörter) und statt des Kontopassworts beim Login
+eingeben. Es wird nur einmal angezeigt und lässt sich
 einzeln widerrufen. Nach 5 falschen Anmeldungen sperrt der Server
 15 Minuten.
 
@@ -998,14 +1032,21 @@ Fehlersuche
 "cannot branch -- no commits yet"
     Branches gibt es erst nach dem ersten Commit.
 
-"... requires server=/user=/pass= in the config file"
-    amivcs.cfg fehlt oder ist unvollständig
-    (@{" Konfiguration " link Konfiguration}).
-    Mit -c <datei> lässt sich eine andere Datei angeben.
+"who are you? Set your name first"
+    Noch kein Name für die Commits: amivcs config --global name "..."
+    oder AmiVCSConfig (@{" Konfiguration " link Konfiguration}).
 
-"no remote repository configured -- give one explicitly"
-    Das Repository ist noch mit keinem Server-Repository verknüpft:
-    einmal "amivcs push <name>" aufrufen.
+"no remote URL set"
+    Das Repository ist noch mit keinem Server verknüpft: einmal
+    "amivcs push <url>" oder "amivcs remote <url>" aufrufen.
+
+"... is not a repository URL (https://server/<name>)"
+    Die Adresse braucht Schema, Server und den Namen des Repositorys,
+    z.B. https://amivcs.example.com/projekt.
+
+"login refused ... -- wrong user or password"
+    Benutzer oder Passwort falsch; amivcs fragt neu. Ein falsch
+    gemerktes Passwort vergisst "amivcs config --unset pass".
 
 "rejected -- the server has commits you don't have; pull and merge
 first"

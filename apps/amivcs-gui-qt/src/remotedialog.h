@@ -7,31 +7,42 @@
 #include <QDialog>
 
 extern "C" {
-#include "amicloud.h"
+#include "session.h"
 }
 
 class QLineEdit;
 class QCheckBox;
 
-/* Shown only when clone/push/pull is first used and ~/.amivcsrc is
- * missing/incomplete -- same "editing an already-complete config happens
- * by hand-editing the rc file for now" v1 scope as amicloud-commander-
- * qt's ConnectDialog (this dialog does not persist anything to disk
- * either). Deliberately a separate class, not a shared one, even though
- * the fields are identical to ConnectDialog's -- AMIVCS's own AcConfig
- * (~/.amivcsrc) is fully separate from AmiCloud's (~/.amicloudrc). */
+/* Login for one clone/push/pull: user, password, "remember the password"
+ * (kept in the repository's .amivcs/config, see vcsconfig.h). */
 class RemoteDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit RemoteDialog(const AcConfig &initial, QWidget *parent = nullptr);
-    AcConfig result() const;
+    RemoteDialog(const QString &url, const QString &user, bool refused, QWidget *parent = nullptr);
+    VcsGuiLogin result() const;
 
 private:
-    QLineEdit *m_server;
     QLineEdit *m_user;
     QLineEdit *m_pass;
-    QCheckBox *m_verifySsl;
+    QCheckBox *m_remember;
+};
+
+/* Repository > Settings...: the repository's remote URL, user and
+ * identity, and the global name/email defaults. */
+class SettingsDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    SettingsDialog(const QString &amivcsDir, QWidget *parent = nullptr);
+
+private slots:
+    void save();
+
+private:
+    QString m_amivcsDir;
+    QLineEdit *m_remote, *m_user, *m_name, *m_email, *m_globalName, *m_globalEmail;
+    QCheckBox *m_forget;
 };
 
 #endif // REMOTEDIALOG_H

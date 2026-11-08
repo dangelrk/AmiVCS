@@ -21,6 +21,8 @@
 #include "merge.h"
 #include "pack.h"
 #include "remote.h"
+#include "vcsconfig.h"
+#include "localfs.h"
 #include "http.h"
 #include "ui_hooks.h"
 #include "charset.h"
@@ -32,13 +34,23 @@
 #include <signal.h>
 
 #ifdef PLATFORM_AMIGA
+#include <dos/dos.h>
+#include <proto/dos.h>
+#else
+#include <unistd.h>
+#include <termios.h>
+#endif
+
+#ifdef PLATFORM_AMIGA
 long __stack = 65536;
 const char amiga_ver[] = "$VER: amivcs " AC_VERSION " (" AC_DATE ")";
 #endif
 
-/* Own config file, fully separate from amicloud's: "user=" doubles as the
- * commit author. Basename "amivcs" -> ENV:amivcs.cfg / ~/.amivcsrc, see
- * config_default_path(). */
+/* Configuration (docs/design/remotes-plan.md, vcsconfig.h): the remote
+ * URL, its user and -- if remembered -- password per repository in
+ * .amivcs/config; the commit identity there or as a global default in
+ * ENV:AmiVCS/config / ~/.amivcsconfig, which also holds charset=,
+ * timeout=, verify_ssl=, debug=. */
 
 /* ------------------------------------------------------------------ */
 /* Machine-readable output for programs (the IDE): --porcelain-out FILE */
@@ -188,6 +200,9 @@ static char *read_text(const char *path)
 static void pc_head(VcsRepo *repo)
 {
     VcsHead head;
+    VcsRepoConfig rc;
+    if (vcs_repo_config_load(repo->amivcs_dir, &rc) && rc.remote[0])
+        pc_rec("remote", 1, rc.remote);
     if (!vcs_head_load(repo->amivcs_dir, &head)) return;
     if (head.detached) {
         char hex[VCS_OID_HEX];
@@ -274,6 +289,198 @@ static int pc_log(VcsRepo *repo, int all, long limit)
     return 1;
 }
 
+/* ------------------------------------------------------------------ */
+/* Credentials for clone/push/pull                                       */
+/* ------------------------------------------------------------------ */
+/* Given by a program (the IDE, via --args-from) or typed in; never put
+ * on a real command line. */
+static const char *g_opt_user, *g_opt_password;
+static int g_opt_remember = -1;   /* -1: ask, 0/1: given */
+
+static int interactive(void)
+{
+    if (g_pc) return 0;           /* a program is driving amivcs */
+#ifdef PLATFORM_AMIGA
+    return IsInteractive(Input()) != 0;
+#else
+    return isatty(0);
+#endif
+}
+
+/* One line from the console; echo off for passwords. */
+static int read_line(const char *prompt, char *out, size_t sz, int secret)
+{
+    size_t n = 0;
+    fputs(prompt, stdout);
+    fflush(stdout);
+#ifdef PLATFORM_AMIGA
+    if (secret) {
+        BPTR in = Input();
+        char c;
+        SetMode(in, 1);           /* raw: no echo, character by character */
+        while (Read(in, &c, 1) == 1) {
+            if (c == '\r' || c == '\n') break;
+            if (c == 3) { n = 0; break; }                 /* Ctrl-C */
+            if (c == 8 || c == 127) { if (n) n--; continue; }
+            if (n + 1 < sz && (unsigned char)c >= 32) out[n++] = c;
+        }
+        SetMode(in, 0);
+        out[n] = '\0';
+        fputs("\n", stdout);
+        return 1;
+    }
+#else
+    if (secret) {
+        struct termios old, quiet;
+        int ok = tcgetattr(0, &old) == 0;
+        if (ok) { quiet = old; quiet.c_lflag &= ~(tcflag_t)ECHO; tcsetattr(0, TCSANOW, &quiet); }
+        if (!fgets(out, (int)sz, stdin)) out[0] = '\0';
+        if (ok) tcsetattr(0, TCSANOW, &old);
+        fputs("\n", stdout);
+        n = strlen(out);
+        while (n && (out[n - 1] == '\n' || out[n - 1] == '\r')) out[--n] = '\0';
+        return 1;
+    }
+#endif
+    if (!fgets(out, (int)sz, stdin)) { out[0] = '\0'; return 0; }
+    n = strlen(out);
+    while (n && (out[n - 1] == '\n' || out[n - 1] == '\r')) out[--n] = '\0';
+    return 1;
+}
+
+/* Makes sure cfg has a user and a password for `url`: options first, then
+ * what .amivcs/config has (already in cfg), then -- at a console -- the
+ * user. force: ask again (the server said 401). *remember: 1 if the
+ * password should go into .amivcs/config. Without a console a program
+ * gets an "auth-required" record and handles the dialog itself. */
+static int get_credentials(AcConfig *cfg, const char *url, int force, int *remember)
+{
+    char ans[16];
+
+    if (g_opt_user && !force) strncpy(cfg->username, g_opt_user, sizeof(cfg->username) - 1);
+    if (g_opt_password && !force) strncpy(cfg->password, g_opt_password, sizeof(cfg->password) - 1);
+    *remember = g_opt_remember > 0;
+    if (cfg->username[0] && cfg->password[0] && !force) return 1;
+
+    if (!interactive()) {
+        pc_rec("auth-required", 2, url, cfg->username);
+        ui_notify(UI_ERROR, force ? "amivcs: login refused for %s -- wrong user or password"
+                                  : "amivcs: %s needs a user and password", url);
+        return 0;
+    }
+    if (force) ui_notify(UI_WARN, "amivcs: login refused -- wrong user or password?");
+    printf("Login for %s\n", url);
+    if (!cfg->username[0] || force) {
+        char prompt[96], user[64];
+        if (cfg->username[0]) snprintf(prompt, sizeof(prompt), "User [%s]: ", cfg->username);
+        else strcpy(prompt, "User: ");
+        read_line(prompt, user, sizeof(user), 0);
+        if (user[0]) strncpy(cfg->username, user, sizeof(cfg->username) - 1);
+    }
+    read_line("Password: ", cfg->password, sizeof(cfg->password), 1);
+    if (!cfg->username[0] || !cfg->password[0]) return 0;
+    if (g_opt_remember < 0) {
+        read_line("Remember the password in .amivcs/config (plain text)? [y/N] ", ans, sizeof(ans), 0);
+        *remember = ans[0] == 'y' || ans[0] == 'Y' || ans[0] == 'j' || ans[0] == 'J';
+    }
+    return 1;
+}
+
+/* After a successful clone/push/pull: user (and, if wanted, password)
+ * into the repository's config. */
+static void store_credentials(const char *amivcs_dir, const AcConfig *cfg, int remember)
+{
+    if (cfg->username[0]) vcs_repo_config_set(amivcs_dir, "user", cfg->username);
+    if (remember) vcs_repo_config_set(amivcs_dir, "pass", cfg->password);
+}
+
+/* Takes --user/--password/--remember-password/--no-remember-password out
+ * of argv (they may follow the command, e.g. from --args-from). */
+static int strip_credential_options(int argc, char **argv)
+{
+    int r, w = 0;
+    for (r = 0; r < argc; r++) {
+        if (strcmp(argv[r], "--user") == 0 && r + 1 < argc) { g_opt_user = argv[++r]; continue; }
+        if (strcmp(argv[r], "--password") == 0 && r + 1 < argc) { g_opt_password = argv[++r]; continue; }
+        if (strcmp(argv[r], "--remember-password") == 0) { g_opt_remember = 1; continue; }
+        if (strcmp(argv[r], "--no-remember-password") == 0) { g_opt_remember = 0; continue; }
+        argv[w++] = argv[r];
+    }
+    argv[w] = NULL;
+    return w;
+}
+
+static int is_url(const char *s) { return s && strstr(s, "://") != NULL; }
+
+/* ------------------------------------------------------------------ */
+/* config / remote                                                       */
+/* ------------------------------------------------------------------ */
+static const char *const repo_keys[] = { "remote", "user", "pass", "name", "email", NULL };
+static const char *const global_keys[] = { "name", "email", "charset", "timeout", "verify_ssl", "debug", NULL };
+
+static int key_allowed(const char *key, int global)
+{
+    const char *const *k;
+    for (k = global ? global_keys : repo_keys; *k; k++) if (strcmp(*k, key) == 0) return 1;
+    return 0;
+}
+
+static void print_config_file(const char *path, int global)
+{
+    const char *const *k;
+    for (k = global ? global_keys : repo_keys; *k; k++) {
+        char v[AC_MAX_URL];
+        if (vcs_config_file_get(path, *k, v, sizeof(v)))
+            printf("%s=%s\n", *k, strcmp(*k, "pass") == 0 ? "********" : v);
+    }
+}
+
+/* amivcs config [--global] [--unset] [<key> [<value>]] */
+static int cmd_config(int argc, char **argv, int i, const char *amivcs_dir)
+{
+    int global = 0, unset = 0;
+    const char *key = NULL, *val = NULL;
+    char path[AC_MAX_PATH];
+
+    for (; i < argc; i++) {
+        if (strcmp(argv[i], "--global") == 0) global = 1;
+        else if (strcmp(argv[i], "--unset") == 0) unset = 1;
+        else if (!key) key = argv[i];
+        else if (!val) val = argv[i];
+    }
+    if (!global && !amivcs_dir) {
+        ui_notify(UI_ERROR, "amivcs: not in a repository -- use --global for the defaults");
+        return 1;
+    }
+    if (global) vcs_global_config_path(path, sizeof(path));
+    else vcs_repo_config_path(amivcs_dir, path, sizeof(path));
+
+    if (!key) { print_config_file(path, global); return 0; }
+    if (!key_allowed(key, global)) {
+        ui_notify(UI_ERROR, "amivcs: unknown %s key '%s'", global ? "global" : "repository", key);
+        return 1;
+    }
+    if (!val && !unset) {
+        char v[AC_MAX_URL];
+        if (!vcs_config_file_get(path, key, v, sizeof(v))) return 1;
+        printf("%s\n", strcmp(key, "pass") == 0 ? "********" : v);
+        return 0;
+    }
+    if (val && strcmp(key, "remote") == 0) {
+        char server[AC_MAX_URL], name[256];
+        if (!vcs_url_split(val, server, sizeof(server), name, sizeof(name))) {
+            ui_notify(UI_ERROR, "amivcs: '%s' is not a repository URL (https://server/<name>)", val);
+            return 1;
+        }
+    }
+    if (global ? !vcs_global_set(key, unset ? NULL : val)
+               : !vcs_config_file_set(path, key, unset ? NULL : val)) {
+        ui_notify(UI_ERROR, "amivcs: cannot write %s", path);
+        return 1;
+    }
+    return 0;
+}
+
 static void usage(const char *prog)
 {
     fprintf(stderr,
@@ -281,8 +488,7 @@ static void usage(const char *prog)
         "Usage: %s [options] <command> [args]\n"
         "\n"
         "Options:\n"
-        "  --author <name>      Commit author (default: user= from the config file)\n"
-        "  -c <config-file>     Config file (default: ENV:amivcs.cfg / ~/.amivcsrc)\n"
+        "  --author <name>      Commit author (default: name/email from the config)\n"
         "  --porcelain-out <f>  Write machine-readable records to <f> (for programs)\n"
         "  --args-from <f>      Further arguments from <f>, one per line\n"
         "\n"
@@ -301,13 +507,19 @@ static void usage(const char *prog)
         "  merge <branch>       Merge <branch> into the current branch\n"
         "  gc                   Bundle loose objects into a pack\n"
         "  cat-file <oid>       Print a stored object's type and size (debug)\n"
-        "  clone <repo> [dir]   Clone <repo> from the configured server into [dir]\n"
-        "  push [<repo>]        Push the current branch to the server\n"
-        "  pull [<branch>]      Fetch and merge <branch> (default: current) from the server\n"
+        "  clone <url> [dir]    Clone https://server/<name> into [dir] (default <name>)\n"
+        "  push [<url>]         Push the current branch; a URL becomes the remote\n"
+        "  pull [<url>] [<branch>]  Fetch and merge <branch> (default: current)\n"
+        "  remote [<url>]       Show or set this repository's remote URL\n"
+        "  config [--global] [--unset] [<key> [<value>]]\n"
+        "                       Show or set name, email (global or here),\n"
+        "                       remote, user, pass (here); --unset pass forgets it\n"
         "  version              Print the version\n"
         "\n"
         "Must be run from the repository root (no parent-directory search).\n"
-        "clone/push/pull need server=/user=/pass= in the config file.\n",
+        "clone/push/pull ask for user and password when needed; programs pass\n"
+        "--user/--password/--remember-password through --args-from.\n"
+        "Defaults: ENV:AmiVCS/config (Amiga), ~/.amivcsconfig (elsewhere).\n",
         prog);
     exit(1);
 }
@@ -323,11 +535,12 @@ static int is_writing(const char *cmd)
 }
 
 static int run(int argc, char **argv, AcConfig *cfg);
+static const char *g_opt_author;
 
 int main(int argc, char **argv)
 {
     AcConfig cfg;
-    const char *opt_author = NULL, *opt_cfgfile = NULL, *opt_pc = NULL, *opt_args = NULL;
+    const char *opt_pc = NULL, *opt_args = NULL;
     int i, rc, k, nargc;
     char **nargv;
 
@@ -349,8 +562,7 @@ int main(int argc, char **argv)
     cfg.verify_ssl  = 1;
 
     for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--author") == 0 && i + 1 < argc) { opt_author = argv[++i]; continue; }
-        if (strcmp(argv[i], "-c") == 0 && i + 1 < argc) { opt_cfgfile = argv[++i]; continue; }
+        if (strcmp(argv[i], "--author") == 0 && i + 1 < argc) { g_opt_author = argv[++i]; continue; }
         if (strcmp(argv[i], "--porcelain-out") == 0 && i + 1 < argc) { opt_pc = argv[++i]; continue; }
         if (strcmp(argv[i], "--args-from") == 0 && i + 1 < argc) { opt_args = argv[++i]; continue; }
         if (argv[i][0] == '-' && strcmp(argv[i], "--help") != 0) continue; /* unknown option: ignore */
@@ -368,18 +580,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (opt_cfgfile) {
-        config_load(opt_cfgfile, &cfg);
-    } else {
-        char primary[AC_MAX_PATH], fallback[AC_MAX_PATH];
-        config_default_path("amivcs", primary, sizeof(primary), fallback, sizeof(fallback));
-        if (!config_load(primary, &cfg) && fallback[0]) config_load(fallback, &cfg);
-    }
-    if (opt_author) strncpy(cfg.username, opt_author, sizeof(cfg.username) - 1);
-    {
-        size_t len = strlen(cfg.server);
-        if (len > 0 && cfg.server[len - 1] == '/') cfg.server[len - 1] = '\0';
-    }
+    vcs_global_load_options(&cfg);
 
     /* names and texts in the repository are UTF-8; the local side is the
      * file system's codeset (codesets.library, else ISO-8859-1; vcsname.h) */
@@ -392,6 +593,7 @@ int main(int argc, char **argv)
     for (k = 0; k < argc - i; k++) nargv[k] = argv[i + k];
     for (k = 0; k < g_xargc; k++) nargv[argc - i + k] = g_xargv[k];
     nargv[nargc] = NULL;
+    nargc = strip_credential_options(nargc, nargv);
 
     if (nargc < 1) { fprintf(stderr, "amivcs: no command given\n"); usage(argv[0]); }
     rc = run(nargc, nargv, &cfg);
@@ -428,18 +630,40 @@ static int run(int argc, char **argv, AcConfig *cfg)
     }
 
     if (strcmp(cmd, "clone") == 0) {
-        const char *repo_name, *local_dir;
-        if (i >= argc) { ui_notify(UI_ERROR, "amivcs: clone requires <repo> [dir]"); return 1; }
-        repo_name = argv[i++];
-        local_dir = (i < argc) ? argv[i] : repo_name;
-        if (!cfg->server[0] || !cfg->username[0] || !cfg->password[0]) {
-            ui_notify(UI_ERROR, "amivcs: clone requires server=/user=/pass= in the config file");
+        char repo_name[256], local_dir[AC_MAX_PATH];
+        const char *url;
+        int tries, remember = 0;
+        if (i >= argc || !is_url(argv[i])) {
+            ui_notify(UI_ERROR, "amivcs: clone requires <url> [dir], e.g. https://server/<name>");
             return 1;
         }
+        url = argv[i++];
+        if (!vcs_url_split(url, cfg->server, sizeof(cfg->server), repo_name, sizeof(repo_name))) {
+            ui_notify(UI_ERROR, "amivcs: '%s' is not a repository URL (https://server/<name>)", url);
+            return 1;
+        }
+        /* like git: the directory is named after the repository */
+        if (i < argc) { strncpy(local_dir, argv[i], sizeof(local_dir) - 1); local_dir[sizeof(local_dir) - 1] = '\0'; }
+        else vcs_text_to_local_buf(repo_name, local_dir, sizeof(local_dir));
         if (!http_init()) { ui_notify(UI_ERROR, "amivcs: network initialisation failed"); return 1; }
-        rc = !vcs_remote_clone(cfg, repo_name, local_dir);
+        rc = 1;
+        for (tries = 0; tries < 3; tries++) {
+            if (!get_credentials(cfg, url, tries > 0, &remember)) break;
+            if (vcs_remote_clone(cfg, repo_name, local_dir)) {
+                char amivcs_dir[AC_MAX_PATH];
+                localfs_join(amivcs_dir, sizeof(amivcs_dir), local_dir, ".amivcs");
+                store_credentials(amivcs_dir, cfg, remember);
+                rc = 0;
+                break;
+            }
+            if (!vcs_remote_auth_failed()) break;
+        }
         http_cleanup();
         return rc;
+    }
+
+    if (strcmp(cmd, "config") == 0 && i < argc && strcmp(argv[i], "--global") == 0) {
+        return cmd_config(argc, argv, i, NULL);
     }
 
     if (!vcs_repo_open(&repo, ".")) {
@@ -473,7 +697,14 @@ static int run(int argc, char **argv, AcConfig *cfg)
         if (!rc && (!message || !message[0])) { ui_notify(UI_ERROR, "amivcs: commit requires -m <message> or -F <file>"); rc = 1; }
         if (!rc) {
             VcsOid oid;
-            char *author = vcs_text_from_local(cfg->username);
+            char ident[300];
+            char *author = NULL;
+            if (g_opt_author) author = vcs_text_from_local(g_opt_author);
+            else if (vcs_identity(repo.amivcs_dir, ident, sizeof(ident))) author = vcs_text_from_local(ident);
+            else ui_notify(UI_ERROR, "amivcs: who are you? Set your name first:\n"
+                                     "  amivcs config --global name \"Your Name\"\n"
+                                     "  amivcs config --global email you@example.org\n"
+                                     "(without --global for this repository only)");
             char *msg = vcs_text_from_local(message);
             if (!author || !msg || !vcs_repo_commit(&repo, author, msg, stage_all, &oid)) rc = 1;
             else {
@@ -563,22 +794,46 @@ static int run(int argc, char **argv, AcConfig *cfg)
         }
 
     } else if (strcmp(cmd, "push") == 0 || strcmp(cmd, "pull") == 0) {
-        const char *arg = (i < argc) ? argv[i] : NULL;
-        if (!cfg->server[0] || !cfg->username[0] || !cfg->password[0]) {
-            ui_notify(UI_ERROR, "amivcs: %s requires server=/user=/pass= in the config file", cmd);
-            rc = 1;
-        } else if (!http_init()) {
-            ui_notify(UI_ERROR, "amivcs: network initialisation failed");
-            rc = 1;
-        } else {
-            if (strcmp(cmd, "push") == 0) rc = !vcs_remote_push(&repo, cfg, arg);
-            else {
-                char *b = arg ? vcs_repo_branch_name(&repo, arg) : NULL;
-                rc = !vcs_remote_pull(&repo, cfg, NULL, b);
-                free(b);
+        const char *url = (i < argc && is_url(argv[i])) ? argv[i++] : NULL;
+        const char *branch = (i < argc) ? argv[i] : NULL;
+        char repo_name[256], shown_url[AC_MAX_URL + 256];
+        int tries, remember = 0, ok = 0;
+        if (!vcs_remote_resolve(repo.amivcs_dir, url, cfg, repo_name, sizeof(repo_name))) rc = 1;
+        else if (!http_init()) { ui_notify(UI_ERROR, "amivcs: network initialisation failed"); rc = 1; }
+        else {
+            snprintf(shown_url, sizeof(shown_url), "%s/%s", cfg->server, repo_name);
+            for (tries = 0; tries < 3 && !ok; tries++) {
+                if (!get_credentials(cfg, shown_url, tries > 0, &remember)) break;
+                if (strcmp(cmd, "push") == 0) ok = vcs_remote_push(&repo, cfg, repo_name, url != NULL);
+                else {
+                    char *b = branch ? vcs_repo_branch_name(&repo, branch) : NULL;
+                    ok = vcs_remote_pull(&repo, cfg, repo_name, b);
+                    free(b);
+                }
+                if (!ok && !vcs_remote_auth_failed()) break;
             }
+            if (ok) {
+                if (url) vcs_repo_config_set(repo.amivcs_dir, "remote", shown_url);
+                store_credentials(repo.amivcs_dir, cfg, remember);
+            }
+            rc = !ok;
             http_cleanup();
         }
+
+    } else if (strcmp(cmd, "remote") == 0) {
+        if (i < argc) {
+            char *set_argv[3];
+            set_argv[0] = "config"; set_argv[1] = "remote"; set_argv[2] = argv[i];
+            rc = cmd_config(3, set_argv, 1, repo.amivcs_dir);
+        } else {
+            VcsRepoConfig rcfg;
+            vcs_repo_config_load(repo.amivcs_dir, &rcfg);
+            if (rcfg.remote[0]) printf("%s\n", rcfg.remote);
+            else { ui_notify(UI_INFO, "no remote set (amivcs remote <url>)"); rc = 1; }
+        }
+
+    } else if (strcmp(cmd, "config") == 0) {
+        rc = cmd_config(argc, argv, i, repo.amivcs_dir);
 
     } else if (strcmp(cmd, "gc") == 0) {
         int count = 0;

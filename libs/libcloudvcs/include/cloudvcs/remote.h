@@ -17,9 +17,10 @@
  * conflict) happens here, client-side, reusing repo.h/merge.h exactly
  * like a purely local operation would.
  *
- * AcConfig (core/libcloudcore/include/cloudcore/amicloud.h) is reused
- * unchanged for the remote connection (server/username/password/
- * verify_ssl) -- see plan section 5, no core extension needed.
+ * AcConfig (core/libcloudcore/include/cloudcore/amicloud.h) carries the
+ * connection: server (the URL without the repository name), username,
+ * password, verify_ssl, timeout -- filled per repository by
+ * vcs_remote_resolve() (vcsconfig.h).
  */
 
 #include "repo.h"
@@ -31,30 +32,33 @@
  * v1's callers just report failure and stop). */
 int vcs_remote_create_repo(const AcConfig *cfg, const char *repo_name);
 
-/* Clones repo_name from the server into local_dir (created if missing):
- * initializes a new local repository there, fetches every object
- * reachable from every branch the server reports, mirrors all of them as
- * local refs/heads/ branches, and checks out "main" if the server has
- * it (else the first branch in whatever order the server returned).
- * Remembers repo_name in <local_dir>/.amivcs/config so push/pull need no
- * repeated argument. Returns 1 on success. */
+/* Clones repo_name from the server cfg->server into local_dir (created
+ * if missing): initializes a new local repository there, fetches every
+ * object reachable from every branch the server reports, mirrors all of
+ * them as local refs/heads/ branches, and checks out "main" if the
+ * server has it (else the first branch in whatever order the server
+ * returned). Writes remote=<server>/<repo_name> and user= into
+ * <local_dir>/.amivcs/config (vcsconfig.h); the password only if the
+ * caller does so. Returns 1 on success. */
 int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *local_dir);
 
-/* Pushes the current branch: uploads every object reachable from its tip
- * that the server doesn't already have (action=has negotiation), then
- * updates the branch's ref there via compare-and-swap against the
- * server's current value. Refuses (0) with a clear message if the server
- * rejects it as a non-fast-forward (409) -- pull and merge first, the
- * server never merges (ADR 09). repo_name may be NULL to reuse
- * .amivcs/config's remembered remote; if given, it overrides and
- * re-remembers it, creating the repo on the server first if needed. */
-int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name);
+/* Pushes the current branch to repo_name on cfg->server: uploads every
+ * object reachable from its tip that the server doesn't already have
+ * (action=has negotiation), then updates the branch's ref there via
+ * compare-and-swap against the server's current value. Refuses (0) with
+ * a clear message if the server rejects it as a non-fast-forward (409)
+ * -- pull and merge first, the server never merges (ADR 09). create: make
+ * the repository on the server first if it doesn't exist (a first push
+ * to a new URL); without it a repository the server reports missing is
+ * created as well (a remote URL set beforehand). Resolve server/name/credentials with
+ * vcs_remote_resolve() (vcsconfig.h). */
+int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, int create);
 
 /* Fetches the named remote branch (or the current local branch's name if
  * branch is NULL) and merges it into the current branch via the exact
  * same logic as `amivcs merge` (merge.h's vcs_repo_merge_commit) --
  * fast-forward, clean 3-way, or a refused conflict, identically.
- * repo_name: see vcs_remote_push(). */
+ * repo_name/cfg: see vcs_remote_push(). */
 int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, const char *branch);
 
 /* Progress of clone/push/pull ("Receiving objects", done, total -- total
@@ -62,5 +66,9 @@ int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, c
  * console line with "\r"; the CLI's --porcelain-out sets it to write
  * progress records instead. */
 extern void (*vcs_progress_hook)(const char *label, long done, long total, int final);
+
+/* 1 if the last failed clone/push/pull ended with the server answering
+ * 401 -- the password (or user) is wrong or missing; ask and retry. */
+int vcs_remote_auth_failed(void);
 
 #endif /* CLOUDVCS_REMOTE_H */

@@ -50,15 +50,15 @@ private slots:
     void onPush();
     void onPull();
     void onAbout();
+    void onSettings();
 
 private:
     void openOrOfferInit(const QString &dir);
     void refreshUI();
     void updateActionsEnabled();
     void showPreview(QListWidgetItem *item);
-    bool ensureRemoteConfigured();
     QString pickBranch(const QString &title, const QString &label);
-    void startRemoteJob(RemoteJob::Kind kind, const QString &repoName, const QString &extra);
+    void startRemoteJob(RemoteJob::Kind kind, const QString &url, const QString &extra, int attempt);
 
     VcsGuiSession m_session;
     AcConfig m_cfg;
@@ -90,6 +90,8 @@ private:
     QAction *m_actSwitch;
     QAction *m_actMerge;
     QAction *m_actRefresh;
+    QAction *m_actSettings;
+    QString m_lastUser;   // the user typed in last, offered again
 
     RemoteJob *m_job;
 };

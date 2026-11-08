@@ -9,6 +9,7 @@
 extern "C" {
 #include "config.h"
 #include "vcsname.h"
+#include "vcsconfig.h"
 }
 
 #include <QListWidget>
@@ -202,6 +203,7 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     auto *repoMenu = menuBar()->addMenu(tr("&Repository"));
     m_actInit = repoMenu->addAction(tr("&Init Repository Here"), this, &MainWindow::onInitRepoHere);
     m_actRefresh = repoMenu->addAction(tr("&Refresh"), this, &MainWindow::onRefresh);
+    m_actSettings = repoMenu->addAction(tr("S&ettings..."), this, &MainWindow::onSettings);
     repoMenu->addSeparator();
     m_actNewBranch = repoMenu->addAction(tr("&New Branch..."), this, &MainWindow::onNewBranch);
     m_actSwitch = repoMenu->addAction(tr("&Switch Branch..."), this, &MainWindow::onSwitchBranch);
@@ -288,8 +290,12 @@ void MainWindow::refreshUI()
         QString branchText = m_session.head.detached
             ? tr("(detached HEAD)")
             : shortBranchName(m_session.head.branch);
-        m_branchLabel->setText(tr("Current branch: <b>%1</b>&nbsp;&nbsp;&nbsp;&nbsp;Repository: %2")
-                                   .arg(branchText.toHtmlEscaped(), m_cwd.toHtmlEscaped()));
+        char remote[1024], user[64];
+        vcsgui_remote_info(&m_session, remote, sizeof(remote), user, sizeof(user), nullptr);
+        m_branchLabel->setText(tr("Current branch: <b>%1</b>&nbsp;&nbsp;&nbsp;&nbsp;Repository: %2"
+                                  "&nbsp;&nbsp;&nbsp;&nbsp;Remote: %3")
+                                   .arg(branchText.toHtmlEscaped(), m_cwd.toHtmlEscaped(),
+                                        remote[0] ? QString::fromUtf8(remote).toHtmlEscaped() : tr("(none)")));
         setWindowTitle(QStringLiteral("AMIVCS GUI - %1 [%2]").arg(m_cwd, branchText));
     } else {
         m_branchLabel->setText(tr("(not a repository -- use Repository > Init Repository Here)"));
@@ -319,6 +325,7 @@ void MainWindow::updateActionsEnabled()
     m_rescanBtn->setEnabled(open);
     m_pushBtn->setEnabled(open);
     m_pullBtn->setEnabled(open);
+    m_actSettings->setEnabled(open);
 }
 
 // The right-hand pane: the selected file's current content (the first
@@ -356,8 +363,11 @@ void MainWindow::showPreview(QListWidgetItem *item)
     m_preview->setPlainText(text);
 }
 
+// Refresh: read the working tree again (files changed outside), then
+// redraw -- refreshUI() alone only shows what the session holds
 void MainWindow::onRefresh()
 {
+    if (m_session.is_open) vcsgui_refresh(&m_session);
     refreshUI();
 }
 
@@ -391,11 +401,29 @@ void MainWindow::onStageAll()
 
 void MainWindow::onCommit()
 {
+    if (m_stageAllCheck->isChecked()) onRefresh();   // -a takes what is changed now
     if (m_session.staged.n == 0 && !(m_stageAllCheck->isChecked() && m_session.unstaged.n > 0)) {
         QMessageBox::information(this, tr("Commit"),
             tr("Nothing to commit.\n\nStage files first (double-click them in \"Unstaged Changes\", "
                "or \"Stage selected\"/\"Stage all\"), or tick \"Stage all changed files before commit\"."));
         return;
+    }
+    {
+        // like git: no commit without a name; asked once, kept globally
+        char ident[300];
+        if (!vcsgui_identity(&m_session, ident, sizeof(ident))) {
+            bool ok = false;
+            const QString name = QInputDialog::getText(this, tr("Who are you?"),
+                tr("Commits carry your name and e-mail. They are kept as defaults for every\n"
+                   "repository (Repository > Settings... changes them).\n\nYour name:"),
+                QLineEdit::Normal, QString(), &ok).trimmed();
+            if (!ok || name.isEmpty()) return;
+            const QString email = QInputDialog::getText(this, tr("Who are you?"), tr("Your e-mail (may be empty):"),
+                                                        QLineEdit::Normal, QString(), &ok).trimmed();
+            if (!ok) return;
+            vcs_global_set("name", name.toUtf8().constData());
+            vcs_global_set("email", email.toUtf8().constData());
+        }
     }
     QString msg = m_commitMsg->toPlainText().trimmed();
     if (msg.isEmpty()) {
@@ -462,25 +490,49 @@ void MainWindow::onMerge()
     refreshUI();
 }
 
-bool MainWindow::ensureRemoteConfigured()
+void MainWindow::onSettings()
 {
-    if (m_cfg.server[0] && m_cfg.username[0] && m_cfg.password[0]) return true;
-    RemoteDialog dlg(m_cfg, this);
-    if (dlg.exec() != QDialog::Accepted) return false;
-    m_cfg = dlg.result();
-    return m_cfg.server[0] && m_cfg.username[0] && m_cfg.password[0];
+    if (!m_session.is_open) return;
+    SettingsDialog dlg(QString::fromUtf8(m_session.repo.amivcs_dir), this);
+    if (dlg.exec() == QDialog::Accepted) refreshUI();
 }
 
-void MainWindow::startRemoteJob(RemoteJob::Kind kind, const QString &repoName, const QString &extra)
+// Starts a clone/push/pull. The login is asked for when the repository
+// remembers no password, or again (up to three times) after the server
+// refused it -- see the jobFinished handler.
+void MainWindow::startRemoteJob(RemoteJob::Kind kind, const QString &url, const QString &extra, int attempt)
 {
     if (m_job) return;
+
+    char remote[1024], user[64];
+    int hasPass = 0;
+    QString shownUrl = url;
+    if (kind != RemoteJob::Clone) {
+        vcsgui_remote_info(&m_session, remote, sizeof(remote), user, sizeof(user), &hasPass);
+        if (shownUrl.isEmpty()) shownUrl = QString::fromUtf8(remote);
+        else hasPass = 0;
+    } else {
+        user[0] = '\0';
+    }
+
+    VcsGuiLogin login;
+    std::memset(&login, 0, sizeof(login));
+    std::strncpy(login.user, m_lastUser.isEmpty() ? user : m_lastUser.toUtf8().constData(), sizeof(login.user) - 1);
+    if (attempt > 0 || !hasPass) {
+        RemoteDialog dlg(shownUrl, QString::fromUtf8(login.user), attempt > 0, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+        login = dlg.result();
+        if (!login.user[0] || !login.pass[0]) return;
+        m_lastUser = QString::fromUtf8(login.user);
+    }
 
     auto *dlg = new QProgressDialog(tr("Working..."), tr("Cancel"), 0, 0, this);
     dlg->setWindowModality(Qt::WindowModal);
     dlg->setMinimumDuration(0);
     dlg->setAutoClose(false);
 
-    m_job = new RemoteJob(kind, &m_session, m_cfg, repoName, extra, this);
+    m_job = new RemoteJob(kind, &m_session, m_cfg, url, login, extra, this);
+    std::memset(login.pass, 0, sizeof(login.pass));
 
     connect(m_job, &RemoteJob::progress, this, [dlg](qint64 done, qint64 total, QString label) {
         if (total > 0) {
@@ -492,14 +544,19 @@ void MainWindow::startRemoteJob(RemoteJob::Kind kind, const QString &repoName, c
         if (!label.isEmpty()) dlg->setLabelText(label);
     });
     connect(dlg, &QProgressDialog::canceled, m_job, &RemoteJob::requestCancel);
-    connect(m_job, &RemoteJob::jobFinished, this, [this, dlg](bool ok) {
+    connect(m_job, &RemoteJob::jobFinished, this, [this, dlg, kind, url, extra, attempt](bool ok) {
         dlg->close();
         dlg->deleteLater();
         RemoteJob *job = m_job;
         m_job = nullptr;
         job->deleteLater();
+        if (!ok && vcsgui_auth_failed() && attempt < 2) {
+            startRemoteJob(kind, url, extra, attempt + 1);   // login refused: ask again
+            return;
+        }
         refreshUI();
-        statusBar()->showMessage(ok ? tr("Done.") : QString::fromUtf8(vcsgui_last_message()), 5000);
+        if (ok) statusBar()->showMessage(QString::fromUtf8(vcsgui_last_message()), 5000);
+        else QMessageBox::warning(this, tr("AMIVCS"), QString::fromUtf8(vcsgui_last_message()));
     });
 
     m_job->start();
@@ -508,27 +565,47 @@ void MainWindow::startRemoteJob(RemoteJob::Kind kind, const QString &repoName, c
 
 void MainWindow::onClone()
 {
-    if (!ensureRemoteConfigured()) return;
     bool ok;
-    QString repoName = QInputDialog::getText(this, tr("Clone"), tr("Repository name on server:"), QLineEdit::Normal, QString(), &ok);
-    if (!ok || repoName.isEmpty()) return;
-    QString dir = QFileDialog::getExistingDirectory(this, tr("Clone into..."));
-    if (dir.isEmpty()) return;
-    startRemoteJob(RemoteJob::Clone, repoName, dir);
+    QString url = QInputDialog::getText(this, tr("Clone"), tr("Repository URL (https://server/name):"),
+                                        QLineEdit::Normal, QString(), &ok).trimmed();
+    if (!ok || url.isEmpty()) return;
+    char server[1024], name[256];
+    if (!vcs_url_split(url.toUtf8().constData(), server, sizeof(server), name, sizeof(name))) {
+        QMessageBox::warning(this, tr("Clone"), tr("'%1' is not a repository URL (https://server/name).").arg(url));
+        return;
+    }
+    QString parent = QFileDialog::getExistingDirectory(this, tr("Clone into which directory?"));
+    if (parent.isEmpty()) return;
+    // like git: a new directory named after the repository
+    startRemoteJob(RemoteJob::Clone, url, QDir(parent).filePath(QString::fromUtf8(name)), 0);
 }
 
 void MainWindow::onPush()
 {
     if (!m_session.is_open) return;
-    if (!ensureRemoteConfigured()) return;
-    startRemoteJob(RemoteJob::Push, QString(), QString());
+    char remote[1024], user[64];
+    QString url;
+    if (!vcsgui_remote_info(&m_session, remote, sizeof(remote), user, sizeof(user), nullptr)) {
+        // first push: where to? A new name is created on the server.
+        bool ok;
+        url = QInputDialog::getText(this, tr("Push"), tr("Push to repository URL (https://server/name):"),
+                                    QLineEdit::Normal, QString(), &ok).trimmed();
+        if (!ok || url.isEmpty()) return;
+    }
+    startRemoteJob(RemoteJob::Push, url, QString(), 0);
 }
 
 void MainWindow::onPull()
 {
     if (!m_session.is_open) return;
-    if (!ensureRemoteConfigured()) return;
-    startRemoteJob(RemoteJob::Pull, QString(), QString());
+    char remote[1024], user[64];
+    if (!vcsgui_remote_info(&m_session, remote, sizeof(remote), user, sizeof(user), nullptr)) {
+        QMessageBox::information(this, tr("Pull"),
+                                 tr("This repository has no remote yet. Push it once, or set the URL "
+                                    "under Repository > Settings..."));
+        return;
+    }
+    startRemoteJob(RemoteJob::Pull, QString(), QString(), 0);
 }
 
 void MainWindow::onAbout()

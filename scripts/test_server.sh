@@ -24,8 +24,12 @@ API="${AC_SERVER%/}/api.php"
 REPO="pkgtest-$$"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-CFG="$TMP/amivcs.cfg"
-printf 'server=%s\nuser=%s\npass=%s\nverify_ssl=0\n' "${AC_SERVER%/}" "$AC_USER" "$AC_PASS" > "$CFG"
+# globale Vorgaben in einem eigenen HOME (~/.amivcsconfig), nicht im echten
+export HOME="$TMP/home"
+mkdir -p "$HOME"
+printf 'name=Test Person\nemail=test@example.org\nverify_ssl=0\n' > "$HOME/.amivcsconfig"
+URL="${AC_SERVER%/}/$REPO"
+LOGIN="--user $AC_USER --password $AC_PASS"
 PASSED=0
 FAILED=0
 
@@ -50,47 +54,76 @@ mkdir -p "$A/sub"
 printf 'Hallo AmiVCS\n' > "$A/readme.txt"
 printf 'eins\nzwei\n' > "$A/sub/liste.txt"
 head -c 300000 /dev/urandom > "$A/sub/binaer.dat"
-t "init"                       at "$A" "$VCS" -c "$CFG" init
-t "commit -a"                  at "$A" "$VCS" -c "$CFG" commit -a -m "erster Stand"
-t "push (legt Repo an)"        at "$A" "$VCS" -c "$CFG" push "$REPO"
+t "init"                       at "$A" "$VCS" init
+t "commit -a"                  at "$A" "$VCS" commit -a -m "erster Stand"
+t "Autor aus globaler Vorgabe" sh -c "cd '$A' && '$VCS' log | grep -q 'Test Person <test@example.org>'"
+tnot "push ohne Remote"        at "$A" "$VCS" push $LOGIN
+tnot "push ohne Passwort"      at "$A" "$VCS" push "$URL" --user "$AC_USER"
+tnot "push mit falschem Passwort" at "$A" "$VCS" push "$URL" --user "$AC_USER" --password falsch
+t "push mit URL (legt Repo an)" at "$A" "$VCS" push "$URL" $LOGIN
+t "Remote gemerkt"             sh -c "cd '$A' && test \"\$('$VCS' remote)\" = '$URL'"
+t "Benutzer gemerkt, Passwort nicht" sh -c "grep -q '^user=$AC_USER\$' '$A/.amivcs/config' && ! grep -q '^pass=' '$A/.amivcs/config'"
 t "refs zeigt den Branch"      json "action=refs&repo=$REPO" "'refs/heads/main' in json.dumps(j)"
 
 echo "== Klonen"
 B="$TMP/b"
-t "clone"                      at "$TMP" "$VCS" -c "$CFG" clone "$REPO" b
+t "clone (Verzeichnis = Name)" at "$TMP" "$VCS" clone "$URL" $LOGIN --remember-password
+t "Klon liegt in $REPO"        test -d "$TMP/$REPO/.amivcs"
+mv "$TMP/$REPO" "$B"
 for f in readme.txt sub/liste.txt sub/binaer.dat; do
     t "geklont gleich: $f"     same "$A/$f" "$B/$f"
 done
+t "Klon kennt Remote und Passwort" sh -c "grep -q '^remote=$URL\$' '$B/.amivcs/config' && grep -q '^pass=' '$B/.amivcs/config'"
+t "config zeigt pass verdeckt" sh -c "cd '$B' && '$VCS' config | grep -q '^pass=\*\*\*\*'"
 
 echo "== Aenderung hin und zurueck"
 printf 'drei\n' >> "$A/sub/liste.txt"
 printf 'neu\n' > "$A/neu.txt"
-t "commit Aenderung"           at "$A" "$VCS" -c "$CFG" commit -a -m "zweiter Stand"
-t "push Aenderung"             at "$A" "$VCS" -c "$CFG" push
-t "pull im Klon"               at "$B" "$VCS" -c "$CFG" pull
+t "commit Aenderung"           at "$A" "$VCS" commit -a -m "zweiter Stand"
+t "push Aenderung"             at "$A" "$VCS" push $LOGIN
+t "pull im Klon (gemerktes Passwort)" at "$B" "$VCS" pull
 t "gepullt: liste.txt"         same "$A/sub/liste.txt" "$B/sub/liste.txt"
 t "gepullt: neu.txt"           same "$A/neu.txt" "$B/neu.txt"
-t "log im Klon hat beide Commits" sh -c "cd '$B' && '$VCS' -c '$CFG' log | grep -q 'zweiter Stand' && '$VCS' -c '$CFG' log | grep -q 'erster Stand'"
+t "log im Klon hat beide Commits" sh -c "cd '$B' && '$VCS' log | grep -q 'zweiter Stand' && '$VCS' log | grep -q 'erster Stand'"
+
+echo "== Identitaet pro Repository"
+t "name nur fuer b"            at "$B" "$VCS" config name "Klon Person"
+printf 'aus b\n' > "$B/anders.txt"
+t "commit in b"                at "$B" "$VCS" commit -a -m "b hinten"
+t "Autor aus dem Repository"   sh -c "cd '$B' && '$VCS' log | grep -q 'Klon Person <test@example.org>'"
 
 echo "== Veralteter Push wird abgelehnt"
 printf 'aus a\n' > "$A/konflikt.txt"
-t "commit in a"                at "$A" "$VCS" -c "$CFG" commit -a -m "a vorn"
-t "push aus a"                 at "$A" "$VCS" -c "$CFG" push
-printf 'aus b\n' > "$B/anders.txt"
-t "commit in b"                at "$B" "$VCS" -c "$CFG" commit -a -m "b hinten"
-tnot "push aus b ohne pull"    at "$B" "$VCS" -c "$CFG" push
-t "pull in b fuehrt zusammen"  at "$B" "$VCS" -c "$CFG" pull
-t "push aus b nach pull"       at "$B" "$VCS" -c "$CFG" push
-t "pull in a"                  at "$A" "$VCS" -c "$CFG" pull
+t "commit in a"                at "$A" "$VCS" commit -a -m "a vorn"
+t "push aus a"                 at "$A" "$VCS" push $LOGIN
+tnot "push aus b ohne pull"    at "$B" "$VCS" push
+t "pull in b fuehrt zusammen"  at "$B" "$VCS" pull
+t "push aus b nach pull"       at "$B" "$VCS" push
+t "pull in a"                  at "$A" "$VCS" pull $LOGIN
 t "a hat anders.txt"           same "$A/anders.txt" "$B/anders.txt"
 
 echo "== Zweiter Branch"
-t "branch dev"                 at "$A" "$VCS" -c "$CFG" branch dev
-t "switch dev"                 at "$A" "$VCS" -c "$CFG" switch dev
+t "branch dev"                 at "$A" "$VCS" branch dev
+t "switch dev"                 at "$A" "$VCS" switch dev
 printf 'dev\n' > "$A/dev.txt"
-t "commit auf dev"             at "$A" "$VCS" -c "$CFG" commit -a -m "auf dev"
-t "push dev"                   at "$A" "$VCS" -c "$CFG" push
+t "commit auf dev"             at "$A" "$VCS" commit -a -m "auf dev"
+t "push dev"                   at "$A" "$VCS" push $LOGIN
 t "refs zeigt dev"             json "action=refs&repo=$REPO" "'refs/heads/dev' in json.dumps(j)"
+
+echo "== Passwort vergessen, ohne Namen kein Commit"
+t "config --unset pass"        at "$B" "$VCS" config --unset pass
+tnot "pull ohne Passwort"      at "$B" "$VCS" pull
+rm "$HOME/.amivcsconfig"
+C="$TMP/c"; mkdir -p "$C"; printf 'x\n' > "$C/x"
+t "init ohne Identitaet"       at "$C" "$VCS" init
+tnot "commit ohne Namen"       at "$C" "$VCS" commit -a -m "anonym"
+t "config --global name"       at "$C" "$VCS" config --global name "Neu"
+t "commit mit globalem Namen"  at "$C" "$VCS" commit -a -m "jetzt"
+
+echo "== Remote vorher gesetzt, Repository fehlt noch"
+t "remote setzen"              at "$C" "$VCS" remote "$URL-2"
+t "push legt das Repository an" at "$C" "$VCS" push $LOGIN
+t "refs des neuen Repositorys" json "action=refs&repo=$REPO-2" "'refs/heads/main' in json.dumps(j)"
 
 echo "== Ergebnis: $PASSED ok, $FAILED fehlgeschlagen =="
 [ "$FAILED" -eq 0 ]

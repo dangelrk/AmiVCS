@@ -6,9 +6,10 @@
 ; Aufruf: Icon Uninstall-AmiVCS doppelt anklicken (IconX), oder in einer
 ; Shell:  Execute Uninstall-AmiVCS
 ;
-; Löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AMIVCSPrefs und
-; HELP:AmiVCS.guide. Die Einstellungen (ENV:/ENVARC:amivcs.cfg) werden
-; nur nach Rückfrage gelöscht. Repositories bleiben unberührt.
+; Löscht C:amivcs, C:amivcs-gui, SYS:Prefs/AmiVCSConfig (und das alte
+; AMIVCSPrefs) und HELP:AmiVCS.guide. Die Einstellungen
+; (ENV:/ENVARC:AmiVCS, alte amivcs.cfg) werden nur nach Rückfrage
+; gelöscht. Repositories samt ihrer .amivcs/config bleiben unberührt.
 
 FailAt 21
 
@@ -29,6 +30,13 @@ If EXISTS C:amivcs-gui
   Delete C:amivcs-gui QUIET
   Echo "  C:amivcs-gui gelöscht."
 EndIf
+If EXISTS SYS:Prefs/AmiVCSConfig
+  Delete SYS:Prefs/AmiVCSConfig QUIET
+  Echo "  SYS:Prefs/AmiVCSConfig gelöscht."
+EndIf
+If EXISTS SYS:Prefs/AmiVCSConfig.info
+  Delete SYS:Prefs/AmiVCSConfig.info QUIET
+EndIf
 If EXISTS SYS:Prefs/AMIVCSPrefs
   Delete SYS:Prefs/AMIVCSPrefs QUIET
   Echo "  SYS:Prefs/AMIVCSPrefs gelöscht."
@@ -48,10 +56,31 @@ If NOT WARN
   EndIf
 EndIf
 
+Set unpref 0
+If EXISTS ENVARC:AmiVCS
+  Set unpref 1
+EndIf
+If EXISTS ENV:AmiVCS
+  Set unpref 1
+EndIf
 If EXISTS ENVARC:amivcs.cfg
-  Ask "Einstellungen ENVARC:amivcs.cfg und ENV:amivcs.cfg auch löschen? (y/n)"
+  Set unpref 1
+EndIf
+If EXISTS ENV:amivcs.cfg
+  Set unpref 1
+EndIf
+If $unpref EQ 1
+  Ask "Einstellungen (ENV:/ENVARC:AmiVCS, alte amivcs.cfg) auch löschen? (y/n)"
   If WARN
-    Delete ENVARC:amivcs.cfg QUIET
+    If EXISTS ENVARC:AmiVCS
+      Delete ENVARC:AmiVCS ALL QUIET
+    EndIf
+    If EXISTS ENV:AmiVCS
+      Delete ENV:AmiVCS ALL QUIET
+    EndIf
+    If EXISTS ENVARC:amivcs.cfg
+      Delete ENVARC:amivcs.cfg QUIET
+    EndIf
     If EXISTS ENV:amivcs.cfg
       Delete ENV:amivcs.cfg QUIET
     EndIf
@@ -59,15 +88,8 @@ If EXISTS ENVARC:amivcs.cfg
   Else
     Echo "  Einstellungen bleiben erhalten."
   EndIf
-Else
-  If EXISTS ENV:amivcs.cfg
-    Ask "Einstellungen ENV:amivcs.cfg auch löschen? (y/n)"
-    If WARN
-      Delete ENV:amivcs.cfg QUIET
-      Echo "  ENV:amivcs.cfg gelöscht."
-    EndIf
-  EndIf
 EndIf
+UnSet unpref
 
 Echo ""
 Echo "AmiVCS ist deinstalliert. Ihre Repositories (Verzeichnisse mit"

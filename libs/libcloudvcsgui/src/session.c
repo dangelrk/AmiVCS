@@ -12,6 +12,9 @@
 #include "session.h"
 #include "vcsname.h"
 #include "ui_hooks.h"
+#include "vcsconfig.h"
+#include "remote.h"
+#include <stdio.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -104,9 +107,30 @@ int vcsgui_add_all(VcsGuiSession *s)
     return vcsgui_refresh(s);
 }
 
+int vcsgui_identity(VcsGuiSession *s, char *out, size_t sz)
+{
+    char local[300];
+    if (s->author[0]) { vcs_utf8_copy(out, sz, s->author); return 1; }
+    if (!vcs_identity(s->is_open ? s->repo.amivcs_dir : NULL, local, sizeof(local))) {
+        if (sz) out[0] = '\0';
+        return 0;
+    }
+    {
+        char *u = vcs_text_from_local(local);   /* commit text is UTF-8 */
+        vcs_utf8_copy(out, sz, u ? u : local);
+        free(u);
+    }
+    return 1;
+}
+
 int vcsgui_commit(VcsGuiSession *s, const char *message, int stage_all, VcsOid *out_oid)
 {
-    LOCKED(vcs_repo_commit(&s->repo, s->author, message, stage_all, out_oid));
+    char author[300];
+    if (!vcsgui_identity(s, author, sizeof(author))) {
+        ui_notify(UI_ERROR, "amivcs: no author name set -- set name and email first");
+        return 0;
+    }
+    LOCKED(vcs_repo_commit(&s->repo, author, message, stage_all, out_oid));
     return vcsgui_refresh(s);
 }
 
@@ -179,45 +203,112 @@ void vcsgui_request_cancel(VcsGuiSession *s)
     s->cancel_requested = 1;
 }
 
-int vcsgui_clone(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name, const char *local_dir)
+/* Puts the login into cfg: what the caller gives wins over what the
+ * repository remembers (already in cfg from vcs_remote_resolve()). */
+static void apply_login(AcConfig *cfg, const VcsGuiLogin *login)
 {
+    if (!login) return;
+    if (login->user[0]) {
+        strncpy(cfg->username, login->user, sizeof(cfg->username) - 1);
+        cfg->username[sizeof(cfg->username) - 1] = '\0';
+    }
+    if (login->pass[0]) {
+        strncpy(cfg->password, login->pass, sizeof(cfg->password) - 1);
+        cfg->password[sizeof(cfg->password) - 1] = '\0';
+    }
+}
+
+static void remember_login(const char *amivcs_dir, const AcConfig *cfg, const VcsGuiLogin *login)
+{
+    if (cfg->username[0]) vcs_repo_config_set(amivcs_dir, "user", cfg->username);
+    if (login && login->remember && cfg->password[0]) vcs_repo_config_set(amivcs_dir, "pass", cfg->password);
+}
+
+int vcsgui_remote_info(VcsGuiSession *s, char *url, size_t usz, char *user, size_t nsz, int *has_pass)
+{
+    VcsRepoConfig rc;
+    if (usz) url[0] = '\0';
+    if (nsz) user[0] = '\0';
+    if (has_pass) *has_pass = 0;
+    if (!s->is_open) return 0;
+    vcs_repo_config_load(s->repo.amivcs_dir, &rc);
+    strncpy(url, rc.remote, usz - 1); url[usz - 1] = '\0';
+    strncpy(user, rc.user, nsz - 1); user[nsz - 1] = '\0';
+    if (has_pass) *has_pass = rc.pass[0] != '\0';
+    return url[0] != '\0';
+}
+
+int vcsgui_auth_failed(void) { return vcs_remote_auth_failed(); }
+
+int vcsgui_clone(VcsGuiSession *s, const AcConfig *opts, const char *url,
+                 const VcsGuiLogin *login, const char *local_dir)
+{
+    AcConfig cfg = *opts;
+    char repo_name[256], amivcs_dir[1100];
     int ok;
 
+    if (!vcs_url_split(url, cfg.server, sizeof(cfg.server), repo_name, sizeof(repo_name))) {
+        ui_notify(UI_ERROR, "amivcs: '%s' is not a repository URL (https://server/<name>)", url);
+        return 0;
+    }
+    cfg.username[0] = cfg.password[0] = '\0';
+    apply_login(&cfg, login);
     g_active_session = s;
     s->cancel_requested = 0;
-    ok = vcs_remote_clone(cfg, repo_name, local_dir);
+    ok = vcs_remote_clone(&cfg, repo_name, local_dir);
     g_active_session = NULL;
 
     if (!ok) return 0;
+    snprintf(amivcs_dir, sizeof(amivcs_dir), "%s", local_dir);
+    {
+        size_t n = strlen(amivcs_dir);
+        const char *sep = (n && (amivcs_dir[n - 1] == '/' || amivcs_dir[n - 1] == ':')) ? "" : "/";
+        snprintf(amivcs_dir + n, sizeof(amivcs_dir) - n, "%s.amivcs", sep);
+    }
+    remember_login(amivcs_dir, &cfg, login);
     return vcsgui_open(s, local_dir);
 }
 
-int vcsgui_push(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name)
+/* push and pull share resolving, logging in and remembering */
+static int remote_op(VcsGuiSession *s, const AcConfig *opts, const char *url,
+                     const VcsGuiLogin *login, int push, const char *branch)
 {
+    AcConfig cfg = *opts;
+    char repo_name[256];
     int ok;
 
     if (!s->is_open) return 0;
+    cfg.username[0] = cfg.password[0] = '\0';
+    if (!vcs_remote_resolve(s->repo.amivcs_dir, url, &cfg, repo_name, sizeof(repo_name))) return 0;
+    apply_login(&cfg, login);
     g_active_session = s;
     s->cancel_requested = 0;
-    ok = vcs_remote_push(&s->repo, cfg, repo_name);
+    if (push) {
+        ok = vcs_remote_push(&s->repo, &cfg, repo_name, url && url[0]);
+    } else {
+        if (!vcs_repo_lock(s->repo.amivcs_dir)) { g_active_session = NULL; return 0; }
+        ok = vcs_remote_pull(&s->repo, &cfg, repo_name, branch);
+        vcs_repo_unlock(s->repo.amivcs_dir);
+    }
     g_active_session = NULL;
-
     if (!ok) return 0;
+
+    if (url && url[0]) {
+        char full[AC_MAX_URL + 256];
+        snprintf(full, sizeof(full), "%s/%s", cfg.server, repo_name);
+        vcs_repo_config_set(s->repo.amivcs_dir, "remote", full);
+    }
+    remember_login(s->repo.amivcs_dir, &cfg, login);
     return vcsgui_refresh(s);
 }
 
-int vcsgui_pull(VcsGuiSession *s, const AcConfig *cfg, const char *repo_name, const char *branch)
+int vcsgui_push(VcsGuiSession *s, const AcConfig *opts, const char *url, const VcsGuiLogin *login)
 {
-    int ok;
+    return remote_op(s, opts, url, login, 1, NULL);
+}
 
-    if (!s->is_open) return 0;
-    g_active_session = s;
-    s->cancel_requested = 0;
-    if (!vcs_repo_lock(s->repo.amivcs_dir)) { g_active_session = NULL; return 0; }
-    ok = vcs_remote_pull(&s->repo, cfg, repo_name, branch);
-    vcs_repo_unlock(s->repo.amivcs_dir);
-    g_active_session = NULL;
-
-    if (!ok) return 0;
-    return vcsgui_refresh(s);
+int vcsgui_pull(VcsGuiSession *s, const AcConfig *opts, const char *url, const VcsGuiLogin *login,
+                const char *branch)
+{
+    return remote_op(s, opts, url, login, 0, branch);
 }

@@ -8,10 +8,11 @@
 ;     CD RAM:AmiVCS
 ;     Execute Install-AmiVCS.shell
 ;
-; Kopiert amivcs und amivcs-gui nach C:, AMIVCSPrefs nach SYS:Prefs/ und
-; das Handbuch nach HELP: (nur wenn HELP: existiert). Jeder Schritt wird
-; einzeln abgefragt. Vorhandene Einstellungen (ENV:/ENVARC:amivcs.cfg)
-; werden nie angelegt oder überschrieben. Ein erneuter Aufruf aktualisiert
+; Kopiert amivcs und amivcs-gui nach C:, AmiVCSConfig nach SYS:Prefs/
+; (das alte AMIVCSPrefs wird entfernt) und das Handbuch nach HELP: (nur
+; wenn HELP: existiert). Jeder Schritt wird einzeln abgefragt. Vorhandene
+; Einstellungen (ENV:/ENVARC:AmiVCS/config) werden nie angelegt oder
+; überschrieben. Ein erneuter Aufruf aktualisiert
 ; eine vorhandene Installation; ist ein installiertes Programm neuer als
 ; das im Archiv, fragt das Skript nach.
 
@@ -61,9 +62,17 @@ If WARN
 EndIf
 
 ; ---- Einstellungs-Editor ----------------------------------------------
-Ask "AMIVCSPrefs (Einstellungen) nach SYS:Prefs/ kopieren? (y/n)"
+Ask "AmiVCSConfig (Einstellungen) nach SYS:Prefs/ kopieren? (y/n)"
 If WARN
-  Execute Install-Datei AMIVCSPrefs SYS:Prefs/ ICON
+  Execute Install-Datei AmiVCSConfig SYS:Prefs/ ICON
+  ; Vorgänger bis 0.9
+  If EXISTS SYS:Prefs/AMIVCSPrefs
+    Delete SYS:Prefs/AMIVCSPrefs QUIET
+    If EXISTS SYS:Prefs/AMIVCSPrefs.info
+      Delete SYS:Prefs/AMIVCSPrefs.info QUIET
+    EndIf
+    Echo "  Altes SYS:Prefs/AMIVCSPrefs entfernt."
+  EndIf
 EndIf
 
 ; ---- Handbuch ---------------------------------------------------------
@@ -96,18 +105,26 @@ EndIf
 ; ---- Einstellungen: nie überschreiben ----------------------------------
 Echo ""
 If EXISTS ENVARC:amivcs.cfg
-  Echo "ENVARC:amivcs.cfg ist vorhanden und bleibt unverändert."
+  Echo "ENVARC:amivcs.cfg wird ab dieser Version nicht mehr gelesen:"
+  Echo "Die Server-Adresse steht jetzt in jedem Repository (amivcs remote),"
+  Echo "Benutzer und Passwort fragt AmiVCS beim ersten clone/push/pull."
+  Echo "Die alte Datei kann gelöscht werden."
+  Echo ""
+EndIf
+If EXISTS ENVARC:AmiVCS/config
+  Echo "ENVARC:AmiVCS/config ist vorhanden und bleibt unverändert."
 Else
-  Echo "Es gibt noch keine ENVARC:amivcs.cfg. Sie wird nur für clone,"
-  Echo "push und pull gebraucht (und für den Autornamen der Commits)."
-  If EXISTS SYS:Prefs/AMIVCSPrefs
-    Ask "AMIVCSPrefs jetzt starten, um Server und Benutzer einzutragen? (y/n)"
+  Echo "Noch sind kein Name und keine E-Mail für die Commits eingetragen"
+  Echo "(ohne Namen lehnt amivcs commit ab)."
+  If EXISTS SYS:Prefs/AmiVCSConfig
+    Ask "AmiVCSConfig jetzt starten? (y/n)"
     If WARN
-      SYS:Prefs/AMIVCSPrefs
+      SYS:Prefs/AmiVCSConfig
     EndIf
   Else
-    Echo "Vorlage: Examples/amivcs.cfg.example nach ENVARC:amivcs.cfg"
-    Echo "kopieren, anpassen und zusätzlich nach ENV: kopieren."
+    Echo "Alternativ im Shell-Fenster:"
+    Echo "  amivcs config --global name *"Vorname Nachname*""
+    Echo "  amivcs config --global email name@example.org"
   EndIf
 EndIf
 

@@ -15,6 +15,7 @@
  * tree, a tree entry's is_dir flag says blob or tree -- so the expected
  * type is always known from context before the request is even made.
  */
+#include "vcsconfig.h"
 #include "remote.h"
 #include "merge.h"
 #include "treeutil.h"
@@ -55,7 +56,6 @@ static void progress_line(const char *label, long done, long total, int final)
     fflush(stdout);
 }
 
-#define REMOTE_CONFIG_FILE "config"
 /* OIDs per action=has query. Each costs 33 characters in the URL; at 100
  * the query (~3.4 KB) overran the 2048-byte URL buffers (AC_MAX_URL) --
  * cut short on PC, and on the Amiga every push with more than ~55
@@ -63,59 +63,8 @@ static void progress_line(const char *label, long done, long total, int final)
  * including server URL and a 128-character repository name. */
 #define HAS_BATCH 50
 
-/* ------------------------------------------------------------------ */
-/* <amivcs_dir>/config -- just enough to remember which server-side repo */
-/* this working copy is linked to (plan section 8's ".amivcs/config").   */
-
-static int load_remote_repo(const char *amivcs_dir, char *out, size_t sz)
-{
-    char path[1024];
-    FILE *fp;
-    char line[300];
-
-    out[0] = '\0';
-    localfs_join(path, sizeof(path), amivcs_dir, REMOTE_CONFIG_FILE);
-    fp = fopen(path, "r");
-    if (!fp) return 0;
-
-    while (fgets(line, sizeof(line), fp)) {
-        char key[64], val[256];
-        if (sscanf(line, " %63[^= \t] = %255[^\n]", key, val) == 2 && strcmp(key, "remote_repo") == 0) {
-            strncpy(out, val, sz - 1);
-            out[sz - 1] = '\0';
-        }
-    }
-    fclose(fp);
-    return out[0] != '\0';
-}
-
-static int save_remote_repo(const char *amivcs_dir, const char *repo_name)
-{
-    char path[1024];
-    FILE *fp;
-
-    localfs_join(path, sizeof(path), amivcs_dir, REMOTE_CONFIG_FILE);
-    fp = fopen(path, "w");
-    if (!fp) return 0;
-    fprintf(fp, "remote_repo=%s\n", repo_name);
-    fclose(fp);
-    return 1;
-}
-
-/* Resolves repo_name (if given, remembering it) or falls back to
- * .amivcs/config's remembered remote. Returns 1 on success. */
-static int resolve_repo_name(VcsRepo *repo, const char *repo_name, char *out, size_t sz)
-{
-    if (repo_name && repo_name[0]) {
-        strncpy(out, repo_name, sz - 1);
-        out[sz - 1] = '\0';
-        save_remote_repo(repo->amivcs_dir, out);
-        return 1;
-    }
-    if (load_remote_repo(repo->amivcs_dir, out, sz)) return 1;
-    ui_notify(UI_ERROR, "amivcs: no remote repository configured -- give one explicitly");
-    return 0;
-}
+/* The remote's URL and credentials live in .amivcs/config (vcsconfig.h);
+ * callers resolve them before calling in here. */
 
 /* ------------------------------------------------------------------ */
 /* HTTP + JSON plumbing.                                                 */
@@ -149,6 +98,11 @@ static void build_auth(const AcConfig *cfg, char *out, size_t sz)
  * a broken connection. */
 static int g_request_aborted = 0;
 
+/* 1 if the last request was answered 401: wrong or missing credentials. */
+static int g_auth_failed = 0;
+
+int vcs_remote_auth_failed(void) { return g_auth_failed; }
+
 static HttpResponse *api_request(const AcConfig *cfg, const char *method, const char *query,
                                  const void *data, long len, int retry)
 {
@@ -159,6 +113,7 @@ static HttpResponse *api_request(const AcConfig *cfg, const char *method, const 
     build_url(cfg, url, sizeof(url), query);
     build_auth(cfg, auth, sizeof(auth));
     g_request_aborted = 0;
+    g_auth_failed = 0;
 
     for (attempt = 0; attempt < (retry ? REQUEST_TRIES : 1); attempt++) {
         http_response_free(resp);
@@ -175,6 +130,7 @@ static HttpResponse *api_request(const AcConfig *cfg, const char *method, const 
         return NULL;
     }
     if (!resp) ui_notify(UI_ERROR, "amivcs: network error");
+    if (resp && resp->status_code == 401) g_auth_failed = 1;
     return resp;
 }
 
@@ -302,7 +258,9 @@ int vcs_remote_create_repo(const AcConfig *cfg, const char *repo_name)
     return ok;
 }
 
-static int fetch_remote_refs(const AcConfig *cfg, const char *repo_name, VcsRefList *out)
+/* missing (may be NULL): set to 1, without an error message, if the
+ * server has no such repository (code 404) -- a push creates it then. */
+static int fetch_remote_refs(const AcConfig *cfg, const char *repo_name, VcsRefList *out, int *missing)
 {
     char query[300];
     JSON_Value *val;
@@ -315,7 +273,13 @@ static int fetch_remote_refs(const AcConfig *cfg, const char *repo_name, VcsRefL
 
     snprintf(query, sizeof(query), "action=refs&repo=%s", repo_name);
     if (!api_get_json(cfg, query, &val, &obj, 1)) return 0;
-    if (!json_is_ok(obj)) { report_json_error(obj, "refs request failed"); json_value_free(val); return 0; }
+    if (missing) *missing = 0;
+    if (!json_is_ok(obj)) {
+        if (missing && AC_DTOL(json_object_get_number(obj, "code")) == 404) *missing = 1;
+        else report_json_error(obj, "refs request failed");
+        json_value_free(val);
+        return 0;
+    }
 
     arr = json_object_get_array(obj, "refs");
     n = arr ? json_array_get_count(arr) : 0;
@@ -536,6 +500,16 @@ static void remove_tree(const char *path)
     localfs_remove(path);
 }
 
+/* A fresh clone remembers where it came from and as whom (not the
+ * password -- that is the caller's choice, see vcsconfig.h). */
+static void remember_remote(const char *amivcs_dir, const AcConfig *cfg, const char *repo_name)
+{
+    char url[AC_MAX_URL + 256];
+    snprintf(url, sizeof(url), "%s/%s", cfg->server, repo_name);
+    vcs_repo_config_set(amivcs_dir, "remote", url);
+    if (cfg->username[0]) vcs_repo_config_set(amivcs_dir, "user", cfg->username);
+}
+
 int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *local_dir)
 {
     VcsRefList remote_refs;
@@ -573,11 +547,11 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
         set_clone_pending(repo.amivcs_dir, repo_name);
     }
 
-    if (!fetch_remote_refs(cfg, repo_name, &remote_refs)) return 0;
+    if (!fetch_remote_refs(cfg, repo_name, &remote_refs, NULL)) return 0;
     if (remote_refs.n == 0) {
         ui_notify(UI_INFO, "Cloned empty repository '%s'.", repo_name);
         vcs_refs_free(&remote_refs);
-        save_remote_repo(repo.amivcs_dir, repo_name);
+        remember_remote(repo.amivcs_dir, cfg, repo_name);
         set_clone_pending(repo.amivcs_dir, NULL);
         return 1;
     }
@@ -645,7 +619,7 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
         ui_notify(UI_INFO, "Cloned '%s' into %s, checked out '%s'.", repo_name, local_dir, vcs_shown(checkout_branch));
     }
 
-    save_remote_repo(repo.amivcs_dir, repo_name);
+    remember_remote(repo.amivcs_dir, cfg, repo_name);
     set_clone_pending(repo.amivcs_dir, NULL);
     vcs_refs_free(&remote_refs);
     return 1;
@@ -715,9 +689,9 @@ static int is_ancestor_or_equal(const VcsObjStore *store, const VcsOid *ancestor
     return found;
 }
 
-int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
+int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, int create)
 {
-    char resolved_name[256];
+    const char *resolved_name = repo_name;
     VcsHead head;
     VcsOid local_commit;
     VcsOidSet reachable;
@@ -729,8 +703,8 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
     char fullname[192];
     char remote_old_hex[VCS_OID_HEX];
 
-    if (!resolve_repo_name(repo, repo_name, resolved_name, sizeof(resolved_name))) return 0;
-    if (repo_name && repo_name[0] && !ensure_repo_exists(cfg, resolved_name)) return 0;
+    if (!repo_name || !repo_name[0]) { ui_notify(UI_ERROR, "amivcs: no remote repository"); return 0; }
+    if (create && !ensure_repo_exists(cfg, resolved_name)) return 0;
 
     if (!vcs_head_load(repo->amivcs_dir, &head)) return 0;
     if (head.detached) { ui_notify(UI_ERROR, "amivcs: HEAD is detached -- switch to a branch first"); return 0; }
@@ -745,7 +719,21 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
      * diverged push -- skipping this check would let a push silently
      * overwrite someone else's commits instead of being refused. */
     snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, head.branch);
-    if (!fetch_remote_refs(cfg, resolved_name, &remote_refs)) return 0;
+    {
+        int missing = 0;
+        if (!fetch_remote_refs(cfg, resolved_name, &remote_refs, &missing)) {
+            /* a remote URL set beforehand (amivcs remote, AmiVCSConfig)
+             * whose repository does not exist yet: create it, like a push
+             * with the URL would */
+            if (!missing || create) {
+                if (missing) ui_notify(UI_ERROR, "amivcs: No such repository");
+                return 0;
+            }
+            if (!ensure_repo_exists(cfg, resolved_name)) return 0;
+            ui_notify(UI_INFO, "amivcs: created %s on the server", resolved_name);
+            if (!fetch_remote_refs(cfg, resolved_name, &remote_refs, NULL)) return 0;
+        }
+    }
     {
         VcsRef *r = vcs_refs_find(&remote_refs, fullname);
         VcsOid remote_oid = r ? r->oid : VCS_OID_ZERO;
@@ -901,7 +889,7 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
     vcs_oidset_free(&reachable); /* also frees oids, which aliased reachable.items */
 
     /* Ref update, CAS against whatever the server currently has. */
-    if (!fetch_remote_refs(cfg, resolved_name, &remote_refs)) return 0;
+    if (!fetch_remote_refs(cfg, resolved_name, &remote_refs, NULL)) return 0;
     snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, head.branch);
     remote_old_hex[0] = '\0';
     {
@@ -940,7 +928,7 @@ int vcs_remote_push(VcsRepo *repo, const AcConfig *cfg, const char *repo_name)
 
 int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, const char *branch)
 {
-    char resolved_name[256];
+    const char *resolved_name = repo_name;
     VcsHead head;
     const char *branch_name;
     VcsRefList remote_refs;
@@ -953,7 +941,7 @@ int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, c
     int ok;
     char label[256];
 
-    if (!resolve_repo_name(repo, repo_name, resolved_name, sizeof(resolved_name))) return 0;
+    if (!repo_name || !repo_name[0]) { ui_notify(UI_ERROR, "amivcs: no remote repository"); return 0; }
 
     if (branch && branch[0]) {
         branch_name = branch;
@@ -963,7 +951,7 @@ int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, c
         branch_name = head.branch;
     }
 
-    if (!fetch_remote_refs(cfg, resolved_name, &remote_refs)) return 0;
+    if (!fetch_remote_refs(cfg, resolved_name, &remote_refs, NULL)) return 0;
     snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, branch_name);
     r = vcs_refs_find(&remote_refs, fullname);
     if (!r) {

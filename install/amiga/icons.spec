@@ -13,6 +13,6 @@ THIRD-PARTY-NOTICES        project doc       tool=SYS:Utilities/MultiView pos=19
 Install-AmiVCS.shell       project doc       tool=C:IconX tt=WINDOW=CON:0/20/640/300/Install-AmiVCS/CLOSE/WAIT pos=362,132
 
 Docs/AmiVCS.guide          project guide     tool=SYS:Utilities/MultiView pos=72,6
-C/AMIVCSPrefs              tool    prefs     stack=32768 pos=72,6
-Examples/amivcs.cfg.example project doc      tool=SYS:Utilities/MultiView pos=82,6
+C/AmiVCSConfig             tool    prefs     stack=65536 pos=72,6
+Examples/config.example    project doc       tool=SYS:Utilities/MultiView pos=82,6
 Server/ReadMe              project doc       tool=SYS:Utilities/MultiView pos=62,6

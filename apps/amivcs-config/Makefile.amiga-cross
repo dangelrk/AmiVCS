@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Ronny Krueger
-# amivcs-prefs -- AmigaOS 3.x (VBCC), CROSS-compiled from a host (macOS/
+# amivcs-config (AmiVCSConfig) -- AmigaOS 3.x (VBCC), CROSS-compiled from a host (macOS/
 # Linux/Windows) using the toolchain described in
 # docs/BUILD.md. GadTools/Intuition only (see core/common/
 # src/prefsgui.c) -- no MUI, so no MUI_INC/mui_stubs.[ch] and no -lamiga
@@ -27,11 +27,16 @@ LIBS_DIR   = ../../core
 CORE_DIR   = $(LIBS_DIR)/libcloudcore
 COMMON_DIR = ../../core/common
 
+FS_DIR     = $(LIBS_DIR)/libcloudfs
+VCS_DIR    = ../../libs/libcloudvcs
+
 CORE_INC   = $(CORE_DIR)/include/cloudcore
 COMMON_INC = $(COMMON_DIR)/include/common
+FS_INC     = $(FS_DIR)/include/cloudfs
+VCS_INC    = $(VCS_DIR)/include/cloudvcs
 
 CFLAGS  = $(TARGET) -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=$(CPU) \
-          -I$(COMMON_INC) -I$(CORE_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
+          -I$(COMMON_INC) -I$(VCS_INC) -I$(CORE_INC) -I$(FS_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
 # -lmieee: config.c/parson (libcloudcore) use double arithmetic, which on
 # a 68000 (no FPU) needs mathieeedoubbas.library's stub routines --
 # undefined-symbol link errors otherwise.
@@ -39,10 +44,14 @@ LDFLAGS = $(TARGET) -L$(RUNTIME_LIB) -lmieee
 
 OBJDIR = obj/amiga
 BINDIR = ../../bin/amiga
-TARGET_BIN = $(BINDIR)/AMIVCSPrefs
+TARGET_BIN = $(BINDIR)/AmiVCSConfig
 
-CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress
+CORE_SRCS = config base64 parson md5 ui_hooks cloudtime progress wbstartup charset
 CORE_OBJS = $(CORE_SRCS:%=$(OBJDIR)/core_%.o)
+FS_SRCS   = localfs_amiga localfs_util pattern_amiga
+FS_OBJS   = $(FS_SRCS:%=$(OBJDIR)/fs_%.o)
+VCS_SRCS  = vcsconfig
+VCS_OBJS  = $(VCS_SRCS:%=$(OBJDIR)/vcs_%.o)
 
 OWN_SRCS = main
 OWN_OBJS = $(OWN_SRCS:%=$(OBJDIR)/%.o) $(OBJDIR)/prefsgui.o
@@ -52,8 +61,8 @@ all: $(OBJDIR) $(BINDIR) $(TARGET_BIN)
 $(OBJDIR) $(BINDIR):
 	mkdir -p $@
 
-$(TARGET_BIN): $(OWN_OBJS) $(CORE_OBJS)
-	$(CC) $(LDFLAGS) -o $(TARGET_BIN) $(OWN_OBJS) $(CORE_OBJS)
+$(TARGET_BIN): $(OWN_OBJS) $(VCS_OBJS) $(FS_OBJS) $(CORE_OBJS)
+	$(CC) $(LDFLAGS) -o $(TARGET_BIN) $(OWN_OBJS) $(VCS_OBJS) $(FS_OBJS) $(CORE_OBJS)
 
 $(OBJDIR)/%.o: src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -62,6 +71,12 @@ $(OBJDIR)/prefsgui.o: $(COMMON_DIR)/src/prefsgui.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/core_%.o: $(CORE_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/fs_%.o: $(FS_DIR)/src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/vcs_%.o: $(VCS_DIR)/src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Header dependencies: vbcc writes no dependency files usable here (its

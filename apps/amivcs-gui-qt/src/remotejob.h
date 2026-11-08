@@ -23,11 +23,13 @@ class RemoteJob : public QThread
 public:
     enum Kind { Clone, Push, Pull };
 
-    /* repoName may be empty (reuse .amivcs/config's remembered remote,
-     * push/pull only). extra is the clone target directory (Clone) or
-     * the branch to pull (Pull, empty = current branch); unused for Push. */
-    RemoteJob(Kind kind, VcsGuiSession *session, const AcConfig &cfg,
-             const QString &repoName, const QString &extra, QObject *parent = nullptr);
+    /* url may be empty (the repository's remote=, push/pull only).
+     * login: typed in (empty fields = what the repository remembers).
+     * extra is the clone target directory (Clone) or the branch to pull
+     * (Pull, empty = current branch); unused for Push. */
+    RemoteJob(Kind kind, VcsGuiSession *session, const AcConfig &opts,
+             const QString &url, const VcsGuiLogin &login, const QString &extra, QObject *parent = nullptr);
+    ~RemoteJob() override;
 
     void requestCancel();
     bool ok() const { return m_ok; }
@@ -45,7 +47,8 @@ private:
     Kind m_kind;
     VcsGuiSession *m_session;
     AcConfig m_cfg;
-    QString m_repoName;
+    QString m_url;
+    VcsGuiLogin m_login;
     QString m_extra;
     bool m_ok;
 };

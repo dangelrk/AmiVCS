@@ -8,7 +8,7 @@
 PROJECT    = AmiVCS
 PC_DIRS    = apps/amivcs
 QT_DIRS    = apps/amivcs-gui-qt
-AMIGA_DIRS = apps/amivcs apps/amivcs-gui-mui apps/amivcs-prefs
+AMIGA_DIRS = apps/amivcs apps/amivcs-gui-mui apps/amivcs-config
 
 # Server-Paket (make server-release): Abschnitt aus docs/INSTALL.md
 SERVER_DOC_HEADING = \#\# 3. AmiVCS-Server einrichten

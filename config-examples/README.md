@@ -1,52 +1,55 @@
 # Konfigurationsbeispiele
 
-AmiVCS kennt genau eine Client-Konfigurationsdatei und eine
-Server-Konfiguration. Beide sind von AmiCloud und AmiOwnCloud vollständig
-getrennt – keine gemeinsamen Server, keine gemeinsamen Zugangsdaten.
+AmiVCS kennt eine globale Client-Konfiguration, eine pro Repository und
+die Server-Konfiguration. Alle sind von AmiCloud und AmiOwnCloud
+vollständig getrennt – keine gemeinsamen Server, keine gemeinsamen
+Zugangsdaten.
 
 | Datei | Ablage im Betrieb | Gelesen von | Geschrieben von |
 |---|---|---|---|
-| [amivcs.cfg.example](amivcs.cfg.example) | Amiga: `ENV:amivcs.cfg` (aktiv) und `ENVARC:amivcs.cfg` (dauerhaft); PC: `~/.amivcsrc` | `amivcs` (CLI), `amivcs-gui` (MUI und Qt), `AMIVCSPrefs` | `AMIVCSPrefs` (`apps/amivcs-prefs`, Amiga) oder von Hand |
+| [config.example](config.example) (global) | Amiga: `ENV:AmiVCS/config` (aktiv) und `ENVARC:AmiVCS/config` (dauerhaft); macOS/Linux: `~/.amivcsconfig`; Windows: `%USERPROFILE%\.amivcsconfig` | `amivcs` (CLI), `amivcs-gui` (MUI und Qt), `AmiVCSConfig` | `AmiVCSConfig` (`apps/amivcs-config`, Amiga), `amivcs config --global`, Qt-Einstellungsdialog oder von Hand |
+| `.amivcs/config` (pro Repository) | im Repository, nicht versioniert | dieselben | `amivcs clone`/`push <url>`/`remote`/`config`, die Login-Dialoge der GUIs, `AmiVCSConfig` |
 | [`server/config.php.example`](../server/config.php.example) | `config.php` im Web-Root des Servers | `server/api.php`, `server/web.php` | von Hand (siehe [docs/INSTALL.md](../docs/INSTALL.md#3-amivcs-server-einrichten)) |
 
-## amivcs.cfg
+Format beider Client-Dateien: eine Einstellung pro Zeile als
+`schlüssel=wert` im lokalen Zeichensatz, Zeilen mit `#` am Anfang sind
+Kommentare.
 
-Nur für `clone`, `push` und `pull` nötig – bis auf `user`, das auch
-lokal als Commit-Autor dient. Suchreihenfolge:
+## Globale Vorgaben (ENVARC:AmiVCS/config, ~/.amivcsconfig)
 
-| Programm | Suchreihenfolge |
-|---|---|
-| `amivcs` auf dem Amiga | `-c <datei>`, sonst `ENV:amivcs.cfg`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
-| `amivcs` unter macOS/Linux | `-c <datei>`, sonst `~/.amivcsrc` |
-| `amivcs` als Windows-Build | `-c <datei>`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
-| `amivcs-gui` (MUI) | `ENV:amivcs.cfg`, sonst `amivcs.cfg` im aktuellen Verzeichnis |
-| `amivcs-gui` (Qt) | `~/.amivcsrc` (Windows: `%USERPROFILE%\.amivcsrc`) |
-| `AMIVCSPrefs` | `ENV:amivcs.cfg`, sonst `ENVARC:amivcs.cfg` |
-
-Format: eine Einstellung pro Zeile als `schlüssel=wert`, Zeilen mit `#`
-am Anfang sind Kommentare. Der Parser stammt aus
-`core/libcloudcore/src/config.c` (AmiCloudCore).
+Rein lokal (init/add/commit/log/branch/merge) wird nur der Name
+gebraucht – ohne ihn lehnt `amivcs commit` ab, wie git.
 
 | Schlüssel | Bedeutung |
 |---|---|
-| `server` | Basis-URL des AmiVCS-Servers, z. B. `https://amivcs.example.com` (ohne `/api.php`; ein abschließender `/` wird entfernt). Auf dem Amiga nur `https://` |
-| `user` (auch `username`) | Benutzername am Server **und** Commit-Autor in `amivcs log`; `amivcs --author <name>` überschreibt ihn für einen Aufruf |
-| `pass` (auch `password`) | Passwort am Server – am besten ein App-Passwort aus der Weboberfläche, das sich je Gerät widerrufen lässt |
+| `name` | Autor der Commits (wie `user.name` bei git); ein Repository kann einen eigenen haben |
+| `email` | E-Mail des Autors (wie `user.email`); der Autor erscheint als `Name <email>` |
 | `verify_ssl` | `1` (Standard) prüft das TLS-Zertifikat, `0` nur zum Testen |
 | `timeout` | Netz-Timeout in Sekunden (Standard `120`): so lange darf eine Verbindung ganz ohne Datenfluss bleiben; nie eine Grenze für einen ganzen `clone`/`push`/`pull` |
+| `charset` | lokaler Zeichensatz der Dateinamen (Amiga, mit codesets.library) |
+| `debug` | Diagnoseausgaben |
 
-Der gemeinsame Parser versteht außerdem `basepath`, `debug`, `gmt_offset`
-und `dst`; AmiVCS wertet diese Schlüssel nicht aus.
+`AmiVCSConfig` schreibt mit **Speichern** `ENV:` und `ENVARC:`, mit
+**Abbrechen** nichts (die Werte des Repositorys sind ohnehin eine Datei,
+ein „Benutzen“ gibt es deshalb nicht mehr).
 
-`AMIVCSPrefs` folgt der klassischen Workbench-Prefs-Semantik:
-**Benutzen** schreibt nur `ENV:amivcs.cfg`, **Speichern** schreibt
-`ENVARC:amivcs.cfg` und `ENV:amivcs.cfg`, **Abbrechen** schreibt
-nichts. Unterscheiden sich `ENV:` und `ENVARC:`, weist die Statuszeile
-darauf hin (angezeigt wird dann der Inhalt von `ENV:`).
+## Pro Repository: .amivcs/config
 
-Beide Oberflächen (`amivcs-gui`) fragen Server, Benutzer und Passwort
-beim ersten Clone/Push/Pull ab, wenn sie in der Datei fehlen. Diese
-Eingaben gelten nur bis zum Programmende und werden nicht gespeichert.
+| Schlüssel | Bedeutung |
+|---|---|
+| `remote` | Remote-URL wie bei git: `https://amivcs.example.com/<repository>` – alles vor dem letzten `/` ist der Server (dort liegt `api.php`), dahinter der Name des Repositorys auf dem Server. Auf dem Amiga nur `https://` |
+| `user` | Benutzername an diesem Server |
+| `pass` | Passwort, **nur** wenn beim Login „Passwort merken“ gewählt wurde – im Klartext; am besten ein App-Passwort aus der Weboberfläche, das sich je Gerät widerrufen lässt. `amivcs config --unset pass` vergisst es |
+| `name`, `email` | Autor nur für dieses Repository (leer = globale Vorgabe) |
+
+Fehlen Benutzer oder Passwort oder meldet der Server 401, fragen
+`amivcs` (im Terminal, Passwort ohne Echo), `amivcs-gui` und die IDE
+(per Dialog) danach. Beim `clone` gibt es noch kein Repository: gefragt
+wird vorher, gespeichert im neuen Repository.
+
+Die frühere `amivcs.cfg` (`server=`, `user=`, `pass=`) und
+`remote_repo=` in `.amivcs/config` werden seit der Version nach 0.9 nicht mehr
+gelesen.
 
 ## Server: config.php
 
@@ -57,14 +60,9 @@ im selben Verzeichnis ablegen. Die Konstanten (`AMIVCS_DB_*`,
 beschrieben. `config.php` enthält Zugangsdaten und ist per `.gitignore`
 von der Versionsverwaltung ausgenommen.
 
-## Pro Repository: .amivcsignore und .amivcs/config
+## .amivcsignore
 
-Keine Konfigurationsdateien im engeren Sinn, aber gut zu kennen:
-
-- `.amivcsignore` im Repository-Wurzelverzeichnis – Muster für Dateien,
-  die nicht versioniert werden (legt `amivcs init` mit Standardinhalt
-  an; Syntax im Handbuch).
-- `.amivcs/config` – merkt sich nach `clone` bzw. `push <repo>` den
-  Namen des Server-Repositories (`remote_repo=<name>`), damit spätere
-  `push`/`pull` ohne Namen auskommen. Wird von `amivcs` selbst
-  geschrieben.
+Keine Konfigurationsdatei im engeren Sinn, aber gut zu kennen:
+`.amivcsignore` im Repository-Wurzelverzeichnis enthält Muster für
+Dateien, die nicht versioniert werden (legt `amivcs init` mit
+Standardinhalt an; Syntax im Handbuch).

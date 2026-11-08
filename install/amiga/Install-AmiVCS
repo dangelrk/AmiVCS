@@ -9,9 +9,10 @@
 ; Ohne Installer gibt es dasselbe als Shell-Skript:
 ;     Execute Install-AmiVCS.shell
 ;
-; Kopiert amivcs und amivcs-gui nach C:, AMIVCSPrefs nach SYS:Prefs und
-; das Handbuch nach HELP:. Einstellungen (ENV:/ENVARC:amivcs.cfg) werden
-; nie angelegt oder überschrieben.
+; Kopiert amivcs und amivcs-gui nach C:, AmiVCSConfig nach SYS:Prefs und
+; das Handbuch nach HELP:; das alte SYS:Prefs/AMIVCSPrefs wird entfernt.
+; Einstellungen (ENV:/ENVARC:AmiVCS/config) werden nie angelegt oder
+; überschrieben.
 ; Ein erneuter Start über eine vorhandene Installation aktualisiert sie:
 ; Programme werden nur ersetzt, wenn die installierte Version nicht neuer
 ; ist (im Expertenmodus fragt der Installer), vorhandene Icons bleiben.
@@ -135,13 +136,14 @@
     (help "amivcs: der Kommandozeilen-Client, nach C:.\n\n"
           "amivcs-gui: die MUI-Oberfläche, nach C:. Aufruf im "
           "Shell-Fenster, im Verzeichnis eines Repositories.\n\n"
-          "AMIVCSPrefs: Einstellungs-Editor für Server, Benutzer und "
-          "Autorname, mit Icon nach SYS:Prefs.\n\n"
+          "AmiVCSConfig: Einstellungen - Name und E-Mail für die "
+          "Commits, pro Repository Server-Adresse und Benutzer; mit "
+          "Icon nach SYS:Prefs. Ersetzt das alte AMIVCSPrefs.\n\n"
           "Handbuch: AmiVCS.guide nach HELP: (falls zugewiesen).\n\n"
           @askoptions-help)
     (choices "amivcs (Kommandozeile, C:)"
              "amivcs-gui (MUI-Oberfläche, C:)"
-             "Einstellungen AMIVCSPrefs (SYS:Prefs)"
+             "Einstellungen AmiVCSConfig (SYS:Prefs)"
              "Handbuch (HELP:)")
     (default 15)))
 
@@ -157,7 +159,14 @@
 (complete 50)
 
 (if (IN #teile 2)
-  ((set #ziel "SYS:Prefs") (set #datei "AMIVCSPrefs") (P_TOOL)))
+  (
+    (set #ziel "SYS:Prefs") (set #datei "AmiVCSConfig") (P_TOOL)
+    ; Vorgänger bis 0.9: liest niemand mehr
+    (if (> (exists "SYS:Prefs/AMIVCSPrefs" (noreq)) 0)
+      (delete "SYS:Prefs/AMIVCSPrefs" (infos)
+        (prompt "Das alte AMIVCSPrefs wird entfernt.")
+        (help @delete-help)))
+  ))
 (complete 75)
 
 (if (IN #teile 3)
@@ -171,20 +180,27 @@
 (complete 90)
 
 ; ---- Einstellungen: nie anlegen oder überschreiben -----------------------
-(if (= 0 (exists "ENVARC:amivcs.cfg" (noreq)))
-  (if (> (exists "SYS:Prefs/AMIVCSPrefs" (noreq)) 0)
+(if (> (exists "ENVARC:amivcs.cfg" (noreq)) 0)
+  (message "\nENVARC:amivcs.cfg wird ab dieser Version\n"
+           "nicht mehr gelesen: Die Server-Adresse steht\n"
+           "jetzt in jedem Repository (amivcs remote <url>),\n"
+           "Benutzer und Passwort fragt AmiVCS beim ersten\n"
+           "clone/push/pull. Name und E-Mail für die Commits\n"
+           "trägt AmiVCSConfig ein. Die alte Datei kann weg."))
+(if (= 0 (exists "ENVARC:AmiVCS/config" (noreq)))
+  (if (> (exists "SYS:Prefs/AmiVCSConfig" (noreq)) 0)
     (if (askbool
-          (prompt "Es gibt noch keine ENVARC:amivcs.cfg.\n"
-                  "Sie wird nur für clone, push und pull und\n"
-                  "für den Autornamen der Commits gebraucht.\n\n"
-                  "Jetzt AMIVCSPrefs starten?")
-          (help "AMIVCSPrefs schreibt ENV:amivcs.cfg und "
-                "ENVARC:amivcs.cfg. Ohne sie funktioniert alles "
-                "Lokale; als Autor wird dann der Standardname "
-                "eingetragen.\n\n" @askbool-help)
+          (prompt "Noch sind kein Name und keine E-Mail für\n"
+                  "die Commits eingetragen (ohne Namen lehnt\n"
+                  "amivcs commit ab).\n\n"
+                  "Jetzt AmiVCSConfig starten?")
+          (help "AmiVCSConfig schreibt ENV:AmiVCS/config und "
+                "ENVARC:AmiVCS/config. Server, Benutzer und Passwort "
+                "gehören zu jedem Repository und werden beim ersten "
+                "clone/push/pull gefragt.\n\n" @askbool-help)
           (choices "Starten" "Später")
           (default 1))
-      (run "SYS:Prefs/AMIVCSPrefs"))))
+      (run "SYS:Prefs/AmiVCSConfig"))))
 (complete 100)
 
 (P_BEHALTEN)

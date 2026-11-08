@@ -12,17 +12,19 @@ V="$ROOT/bin/pc/amivcs"
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 O="$T/out.pc"
-CFG="$T/cfg"
-printf 'user=Tester\n' > "$CFG"
+# globale Vorgabe (Autor) in einem eigenen HOME
+export HOME="$T/home"
+mkdir -p "$HOME"
+printf 'name=Tester\n' > "$HOME/.amivcsconfig"
 PASSED=0; FAILED=0
 ok()  { PASSED=$((PASSED + 1)); echo "ok    $1"; }
 bad() { FAILED=$((FAILED + 1)); echo "FEHLER $1"; [ -f "$O" ] && sed 's/^/      /' "$O"; }
-v()   { "$V" -c "$CFG" --porcelain-out "$O" "$@" >/dev/null 2>&1; }
+v()   { "$V" --porcelain-out "$O" "$@" >/dev/null 2>&1; }
 has() { grep -qF -- "$(printf "$1")" "$O"; }
 chk() { name=$1; shift; if "$@"; then ok "$name"; else bad "$name"; fi; }
 
 mkdir "$T/r" && cd "$T/r" || exit 1
-"$V" -c "$CFG" init >/dev/null
+"$V" init >/dev/null
 printf 'a\n' > a.txt; printf 'b\n' > b.txt; mkdir d; printf 'x\n' > d/x.txt
 printf 'x' > "$(printf 'tab\tname.txt')"
 
@@ -49,7 +51,7 @@ printf 'a2\n' > a.txt; v add a.txt; v unstage a.txt
 chk "unstage einer geaenderten Datei" sh -c "grep -qF \"\$(printf 'change\tU\tM\ta.txt')\" '$O' && ! grep -q 'change	S' '$O'"
 printf 'n\n' > n.txt; v add n.txt; v unstage n.txt
 chk "unstage einer neuen Datei" has 'change\tU\tN\tn.txt'
-"$V" -c "$CFG" checkout >/dev/null 2>&1 || true
+"$V" checkout >/dev/null 2>&1 || true
 printf 'a\n' > a.txt
 
 echo "== Loeschen bereitstellen"

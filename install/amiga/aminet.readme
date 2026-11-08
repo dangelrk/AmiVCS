@@ -14,7 +14,7 @@ a web interface for browsing repositories, history and diffs.
 
   amivcs        command line client
   amivcs-gui    MUI front end (history graph, staging, diffs)
-  AMIVCSPrefs   settings editor (server, user, author name)
+  AmiVCSConfig  settings: author name/e-mail, per repository server URL
 
 The server (PHP 7.4+, MariaDB/MySQL) is included: the drawer Server
 holds AmiVCS-Server-@VERSION@.tar.gz with its installation guide.

@@ -24,6 +24,8 @@
 #include "localfs.h"
 #include "http.h"
 #include "vcsname.h"
+#include "vcsconfig.h"
+#include <dos/dostags.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,6 +50,9 @@
 #define ID_STAGED_ACTIVE   17
 #define ID_UNSTAGED_DCLICK 18
 #define ID_STAGED_DCLICK   19
+#define ID_SETTINGS        20
+#define ID_LOGIN_OK        903
+#define ID_LOGIN_CANCEL    904
 
 /* TextEditor.mcc is optional (AmiVCS needs only MUI 3.8): with it the
  * commit message is multi-line like git gui's, without it a String
@@ -84,6 +89,7 @@ static char *dupstr(const char *t)
 }
 
 static Object *g_input_window, *g_input_string, *g_input_ok, *g_input_cancel;
+static Object *g_login_window, *g_login_text, *g_login_user, *g_login_pass, *g_login_remember;
 static Object *g_progress_window, *g_progress_text, *g_cancel_button;
 /* Put to sleep during clone/push/pull instead of the whole application:
  * MUIA_Application_Sleep also froze the progress window and its
@@ -185,6 +191,87 @@ static int ask_string(const char *title, const char *initial, char *out, size_t 
 }
 
 /* ------------------------------------------------------------------ */
+/* Login for clone/push/pull: user, password (hidden), "remember".       */
+/* ------------------------------------------------------------------ */
+static void build_login_dialog(void)
+{
+    Object *ok, *cancel;
+    g_login_text     = TextObject, MUIA_Text_Contents, "", End;
+    g_login_user     = StringObject, StringFrame, MUIA_String_MaxLen, 63, MUIA_CycleChain, 1, End;
+    g_login_pass     = StringObject, StringFrame, MUIA_String_MaxLen, 127, MUIA_String_Secret, TRUE,
+                           MUIA_CycleChain, 1, End;
+    g_login_remember = CheckMark(FALSE);
+    ok               = SimpleButton("_Login");
+    cancel           = SimpleButton("_Cancel");
+
+    g_login_window = WindowObject,
+        MUIA_Window_ID,    MAKE_ID('L','O','G','N'),
+        MUIA_Window_Title, "Login",
+        MUIA_Window_Menu,  MUIV_Window_Menu_NoMenu,
+        WindowContents, VGroup,
+            Child, g_login_text,
+            Child, ColGroup(2),
+                Child, Label2("User:"),     Child, g_login_user,
+                Child, Label2("Password:"), Child, g_login_pass,
+                Child, Label1("Remember password:"), Child, HGroup,
+                    Child, g_login_remember,
+                    Child, LLabel1("(plain text in .amivcs/config)"),
+                    Child, HSpace(0),
+                End,
+            End,
+            Child, HGroup, Child, ok, Child, cancel, End,
+        End,
+    End;
+    DoMethod(g_app, OM_ADDMEMBER, g_login_window);
+    DoMethod(g_login_window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
+             g_app, 2, MUIM_Application_ReturnID, ID_LOGIN_CANCEL);
+    DoMethod(ok, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_LOGIN_OK);
+    DoMethod(cancel, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_LOGIN_CANCEL);
+    DoMethod(g_login_pass, MUIM_Notify, MUIA_String_Acknowledge, MUIV_EveryTime,
+             g_app, 2, MUIM_Application_ReturnID, ID_LOGIN_OK);
+    DoMethod(g_login_user, MUIM_Notify, MUIA_String_Acknowledge, MUIV_EveryTime,
+             g_login_window, 3, MUIM_Set, MUIA_Window_ActiveObject, g_login_pass);
+}
+
+/* Asks for user/password for `url`; *login keeps the user as a default.
+ * failed: the server refused the last try. Returns 0 on Cancel. */
+static int ask_login(const char *url, int failed, VcsGuiLogin *login)
+{
+    char text[600];
+    ULONG sigs = 0;
+
+    snprintf(text, sizeof(text), "%s%s", failed ? "\33bLogin refused\33n -- try again\n" : "", url);
+    set(g_login_text, MUIA_Text_Contents, text);
+    set(g_login_user, MUIA_String_Contents, login->user);
+    set(g_login_pass, MUIA_String_Contents, "");
+    set(g_login_remember, MUIA_Selected, login->remember ? TRUE : FALSE);
+    set(g_login_window, MUIA_Window_Open, TRUE);
+    set(g_login_window, MUIA_Window_ActiveObject, login->user[0] ? g_login_pass : g_login_user);
+    if (g_main_window) set(g_main_window, MUIA_Window_Sleep, TRUE);
+
+    for (;;) {
+        LONG id = DoMethod(g_app, MUIM_Application_NewInput, &sigs);
+        if (id == ID_LOGIN_OK || id == ID_LOGIN_CANCEL) {
+            STRPTR v = NULL;
+            ULONG rem = FALSE;
+            get(g_login_user, MUIA_String_Contents, &v);
+            strncpy(login->user, v ? (char *)v : "", sizeof(login->user) - 1);
+            login->user[sizeof(login->user) - 1] = '\0';
+            get(g_login_pass, MUIA_String_Contents, &v);
+            strncpy(login->pass, v ? (char *)v : "", sizeof(login->pass) - 1);
+            login->pass[sizeof(login->pass) - 1] = '\0';
+            get(g_login_remember, MUIA_Selected, &rem);
+            login->remember = rem ? 1 : 0;
+            set(g_login_pass, MUIA_String_Contents, "");
+            set(g_login_window, MUIA_Window_Open, FALSE);
+            if (g_main_window) set(g_main_window, MUIA_Window_Sleep, FALSE);
+            return id == ID_LOGIN_OK && login->user[0] && login->pass[0];
+        }
+        if (sigs) Wait(sigs);
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* Remote progress/cancel bridge -- see session.h's vcsgui_install_
  * progress_hook()/VcsGuiSession::progress_cb. Synchronous polling of
  * MUIM_Application_NewInput exactly like amicloud-commander-mui's
@@ -266,7 +353,7 @@ static void refresh_lists(void)
 
 static void refresh_ui(void)
 {
-    char buf[300];
+    char buf[1200];
 
     refresh_lists();
     set_preview("", NULL);
@@ -275,7 +362,12 @@ static void refresh_ui(void)
         const char *branch = g_session.head.detached ? "(detached)" : g_session.head.branch;
         char shown[128];
         vcs_text_to_local_buf(branch, shown, sizeof(shown));
-        snprintf(buf, sizeof(buf), "Current branch: \33b%s\33n      Repository: %s", shown, g_session.root);
+        char remote[AC_MAX_URL], ruser[64];
+        vcsgui_remote_info(&g_session, remote, sizeof(remote), ruser, sizeof(ruser), NULL);
+        /* the URL on a line of its own: on a 640 pixel screen the three
+         * did not fit side by side */
+        snprintf(buf, sizeof(buf), "Current branch: \33b%s\33n      Repository: %s\nRemote: %s",
+                 shown, g_session.root, remote[0] ? remote : "(none)");
     } else {
         strcpy(buf, "(not a repository -- Project/Init Repository Here)");
     }
@@ -384,7 +476,13 @@ static void move_active(Object *list_obj, const VcsChangeList *changes, int stag
 }
 
 /* ------------------------------------------------------------------ */
-static void do_refresh(void) { refresh_ui(); }
+/* Rescan: read the working tree again (files changed outside), then
+ * redraw -- refresh_ui() alone only redraws what the session holds */
+static void do_refresh(void)
+{
+    if (g_session.is_open) vcsgui_refresh(&g_session);
+    refresh_ui();
+}
 
 static void open_or_offer_init(const char *cwd)
 {
@@ -505,6 +603,7 @@ static void do_commit(void)
     char *text;
 
     get(g_stage_all_check, MUIA_Selected, &stage_all);
+    if (stage_all) do_refresh();   /* -a takes what is changed now */
     if (g_session.staged.n == 0 && !(stage_all && g_session.unstaged.n > 0)) {
         MUI_Request(g_app, g_main_window, 0, "Commit", "_OK",
                     "Nothing to commit.\n\n"
@@ -512,6 +611,21 @@ static void do_commit(void)
                     "or \"Stage selected\"/\"Stage all\"), or tick\n"
                     "\"Stage all changed files before commit\".");
         return;
+    }
+    {
+        /* like git: no commit without a name; asked once, kept globally */
+        char ident[300];
+        if (!vcsgui_identity(&g_session, ident, sizeof(ident))) {
+            char name[128], email[128];
+            MUI_Request(g_app, g_main_window, 0, "Commit", "_OK",
+                        "Who are you? Commits carry your name and e-mail.\n"
+                        "They are kept as defaults for every repository\n"
+                        "(Repository > Settings... changes them).");
+            if (!ask_string("Your name", "", name, sizeof(name)) || !name[0]) return;
+            if (!ask_string("Your e-mail (may be empty)", "", email, sizeof(email))) return;
+            vcs_global_set("name", name);
+            vcs_global_set("email", email);
+        }
     }
     text = get_commit_message();
     if (!text) {
@@ -638,38 +752,51 @@ static int ensure_network(const char *title)
     return 1;
 }
 
-static int ensure_remote_configured(void)
+/* Runs one clone/push/pull, asking for the login when the repository
+ * has no password or the server refuses it (up to three times).
+ * Returns 1 on success, 0 on failure, -1 if the user cancelled the login. */
+#define OP_CLONE 0
+#define OP_PUSH  1
+#define OP_PULL  2
+static int run_remote(int op, const char *url, const char *local_dir)
 {
-    char server[AC_MAX_URL], user[64], pass[128];
+    VcsGuiLogin login;
+    char shown_url[AC_MAX_URL], user[64];
+    int has_pass = 0, tries, ok = 0;
 
-    if (g_cfg.server[0] && g_cfg.username[0] && g_cfg.password[0]) return 1;
-
-    if (!ask_string("Remote server URL", g_cfg.server, server, sizeof(server)) || !server[0]) return 0;
-    if (!ask_string("Remote username", g_cfg.username, user, sizeof(user)) || !user[0]) return 0;
-    if (!ask_string("Remote password", "", pass, sizeof(pass)) || !pass[0]) return 0;
-
-    strncpy(g_cfg.server, server, sizeof(g_cfg.server) - 1);
-    strncpy(g_cfg.username, user, sizeof(g_cfg.username) - 1);
-    strncpy(g_cfg.password, pass, sizeof(g_cfg.password) - 1);
-    g_cfg.verify_ssl = 1;
-    if (!g_cfg.basepath[0]) { g_cfg.basepath[0] = '/'; g_cfg.basepath[1] = '\0'; }
-    return 1;
+    memset(&login, 0, sizeof(login));
+    if (op == OP_CLONE) {
+        strncpy(shown_url, url, sizeof(shown_url) - 1);
+        shown_url[sizeof(shown_url) - 1] = '\0';
+    } else {
+        vcsgui_remote_info(&g_session, shown_url, sizeof(shown_url), user, sizeof(user), &has_pass);
+        if (url && url[0]) { strncpy(shown_url, url, sizeof(shown_url) - 1); has_pass = 0; }
+        strncpy(login.user, user, sizeof(login.user) - 1);
+    }
+    for (tries = 0; tries < 3 && !ok; tries++) {
+        if ((tries > 0 || !has_pass) && !ask_login(shown_url, tries > 0, &login)) return -1;
+        begin_remote_op();
+        if (op == OP_CLONE)      ok = vcsgui_clone(&g_session, &g_cfg, url, &login, local_dir);
+        else if (op == OP_PUSH)  ok = vcsgui_push(&g_session, &g_cfg, url, &login);
+        else                     ok = vcsgui_pull(&g_session, &g_cfg, url, &login, NULL);
+        end_remote_op();
+        if (!ok && !vcsgui_auth_failed()) break;
+    }
+    memset(login.pass, 0, sizeof(login.pass));
+    return ok;
 }
 
 static void do_clone(void)
 {
-    char repo_name[128], local_dir[512];
+    char url[AC_MAX_URL], local_dir[512];
     int ok;
 
     if (!ensure_network("Clone")) return;
-    if (!ensure_remote_configured()) return;
-    if (!ask_string("Clone: repository name on server", "", repo_name, sizeof(repo_name)) || !repo_name[0]) return;
+    if (!ask_string("Clone: repository URL (https://server/<name>)", "", url, sizeof(url)) || !url[0]) return;
     if (!ask_string("Clone: local directory", "", local_dir, sizeof(local_dir)) || !local_dir[0]) return;
 
-    begin_remote_op();
-    ok = vcsgui_clone(&g_session, &g_cfg, repo_name, local_dir);
-    end_remote_op();
-
+    ok = run_remote(OP_CLONE, url, local_dir);
+    if (ok < 0) return;
     if (!ok) MUI_Request(g_app, NULL, 0, "Clone", "_OK", (char *)vcsgui_last_message());
     else set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     refresh_ui();
@@ -677,15 +804,19 @@ static void do_clone(void)
 
 static void do_push(void)
 {
+    char remote[AC_MAX_URL], user[64], url[AC_MAX_URL];
+    const char *use_url = NULL;
     int ok;
+
     if (!g_session.is_open) return;
     if (!ensure_network("Push")) return;
-    if (!ensure_remote_configured()) return;
-
-    begin_remote_op();
-    ok = vcsgui_push(&g_session, &g_cfg, NULL);
-    end_remote_op();
-
+    if (!vcsgui_remote_info(&g_session, remote, sizeof(remote), user, sizeof(user), NULL)) {
+        /* first push: where to? A new name is created on the server. */
+        if (!ask_string("Push to repository URL (https://server/<name>)", "", url, sizeof(url)) || !url[0]) return;
+        use_url = url;
+    }
+    ok = run_remote(OP_PUSH, use_url, NULL);
+    if (ok < 0) return;
     if (!ok) MUI_Request(g_app, NULL, 0, "Push", "_OK", (char *)vcsgui_last_message());
     else set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     refresh_ui();
@@ -693,18 +824,57 @@ static void do_push(void)
 
 static void do_pull(void)
 {
+    char remote[AC_MAX_URL], user[64];
     int ok;
+
     if (!g_session.is_open) return;
     if (!ensure_network("Pull")) return;
-    if (!ensure_remote_configured()) return;
-
-    begin_remote_op();
-    ok = vcsgui_pull(&g_session, &g_cfg, NULL, NULL);
-    end_remote_op();
-
+    if (!vcsgui_remote_info(&g_session, remote, sizeof(remote), user, sizeof(user), NULL)) {
+        MUI_Request(g_app, NULL, 0, "Pull", "_OK",
+                    "This repository has no remote yet.\n"
+                    "Push it once, or set the URL under\n"
+                    "Repository > Settings...");
+        return;
+    }
+    ok = run_remote(OP_PULL, NULL, NULL);
+    if (ok < 0) return;
     if (!ok) MUI_Request(g_app, NULL, 0, "Pull", "_OK", (char *)vcsgui_last_message());
     else set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     refresh_ui();
+}
+
+/* Repository > Settings...: AmiVCSConfig on this repository, detached;
+ * Rescan picks up a changed remote afterwards. */
+static void do_settings(void)
+{
+    static const char *const progs[] = { "SYS:Prefs/AmiVCSConfig", "AmiVCSConfig", NULL };
+    char cmd[1200];
+    int k;
+
+    for (k = 0; progs[k]; k++) {
+        struct TagItem tags[4];
+        BPTR nil_in = Open((STRPTR)"NIL:", MODE_OLDFILE);
+        BPTR nil_out = Open((STRPTR)"NIL:", MODE_NEWFILE);
+        LONG rc;
+        snprintf(cmd, sizeof(cmd), "%s \"%s\"", progs[k], g_session.is_open ? g_session.root : g_cwd);
+        tags[0].ti_Tag = SYS_Input;  tags[0].ti_Data = (ULONG)nil_in;
+        tags[1].ti_Tag = SYS_Output; tags[1].ti_Data = (ULONG)nil_out;
+        tags[2].ti_Tag = SYS_Asynch; tags[2].ti_Data = TRUE;
+        tags[3].ti_Tag = TAG_DONE;   tags[3].ti_Data = 0;
+        if (k == 0) {   /* the full path only if it is there */
+            BPTR lock = Lock((STRPTR)progs[0], ACCESS_READ);
+            if (!lock) { Close(nil_in); Close(nil_out); continue; }
+            UnLock(lock);
+        }
+        rc = SystemTagList((STRPTR)cmd, tags);
+        if (rc != -1) {
+            set(g_main_status, MUIA_Text_Contents, "AmiVCSConfig started -- Rescan after saving.");
+            return;
+        }
+        Close(nil_in);
+        Close(nil_out);
+    }
+    MUI_Request(g_app, NULL, 0, "Settings", "_OK", "AmiVCSConfig was not found (SYS:Prefs/).");
 }
 
 static void do_about(void)
@@ -727,6 +897,7 @@ static struct NewMenu MenuData[] = {
     { NM_TITLE, "Repository", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Init Repository Here", 0, 0, 0, (APTR)ID_INIT_REPO },
     { NM_ITEM,  "Refresh", "R", 0, 0, (APTR)ID_REFRESH },
+    { NM_ITEM,  "Settings...", ",", 0, 0, (APTR)ID_SETTINGS },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "New Branch...", "B", 0, 0, (APTR)ID_NEW_BRANCH },
     { NM_ITEM,  "Switch Branch...", "S", 0, 0, (APTR)ID_SWITCH_BRANCH },
@@ -752,11 +923,6 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     vcsgui_session_init(&g_session);
     g_cfg = *cfg;
-    {
-        char *author = cfg->username[0] ? vcs_text_from_local(cfg->username) : NULL;
-        vcsgui_set_author(&g_session, author);
-        free(author);
-    }
     if (repo_path && repo_path[0]) {
         strncpy(g_cwd, repo_path, sizeof(g_cwd) - 1);
         g_cwd[sizeof(g_cwd) - 1] = '\0';
@@ -766,7 +932,8 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     vcsgui_install_hooks();
 
-    g_status_text = TextObject, MUIA_Text_Contents, "", End;
+    /* SetMin FALSE: a long remote URL must not widen the window */
+    g_status_text = TextObject, MUIA_Text_Contents, "", MUIA_Text_SetMin, FALSE, End;
     g_main_status = TextObject, MUIA_Text_Contents, "", End;
 
     g_unstaged_list = ListObject, InputListFrame, MUIA_List_DisplayHook, &change_display_hook, End;
@@ -919,11 +1086,13 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     DoMethod(g_app, OM_ADDMEMBER, g_progress_window);
     build_input_dialog();
+    build_login_dialog();
 
     /* every window reopens where it was left, also after a reboot */
     mui_remember_window(window);
     mui_remember_window(g_input_window);
     mui_remember_window(g_progress_window);
+    mui_remember_window(g_login_window);
 
     DoMethod(window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
             g_app, 2, MUIM_Application_ReturnID, ID_QUIT);
@@ -970,6 +1139,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         case ID_PUSH:           do_push(); break;
         case ID_PULL:           do_pull(); break;
         case ID_ABOUT:          do_about(); break;
+        case ID_SETTINGS:       do_settings(); break;
         default: break;
         }
         /* A Ctrl-C (only possible when started from a Shell) cancels the

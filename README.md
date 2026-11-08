@@ -26,7 +26,7 @@ und Branch-Zeiger; jede Merge-Entscheidung fällt auf dem Client.
 | `amivcs` (`apps/amivcs`) | Amiga + PC | Kommandozeilen-Client: init, status, add, remove, commit, log, branch, switch, checkout, merge, gc, cat-file, clone, push, pull |
 | `amivcs-gui` (`apps/amivcs-gui-mui`) | Amiga (MUI 3.8+) | git-gui-artige Oberfläche: Vormerken, Commit, Branches, Historie mit Commit-Graph, Clone/Push/Pull |
 | `amivcs-gui` (`apps/amivcs-gui-qt`) | PC (Qt 6) | dieselbe Oberfläche für macOS/Linux/Windows |
-| `AMIVCSPrefs` (`apps/amivcs-prefs`) | Amiga | Einstellungs-Editor für `ENV:`/`ENVARC:amivcs.cfg` |
+| `AmiVCSConfig` (`apps/amivcs-config`) | Amiga | Einstellungen: Name/E-Mail global (`ENVARC:AmiVCS/config`), Remote-URL, Benutzer, Name/E-Mail pro Repository (`.amivcs/config`) |
 | `libs/libcloudvcs` | beide | Objektmodell, Objektspeicher, Index, Merge, Packs, Remote-Protokoll |
 | `libs/libcloudvcsgui` | beide | GUI-neutrale Steuerschicht (Sitzung, Graph-Layout) für beide Oberflächen |
 | `server/` | Webserver (PHP + MariaDB) | AmiVCS-Server: `api.php` (Objekt-/Ref-Speicher für die Clients), `web.php` (Weboberfläche im Stil von Gitea: Code, Historie, Diffs, öffentliche/private Repos, App-Passwörter, Benutzerverwaltung) |

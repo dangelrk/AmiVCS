@@ -39,7 +39,7 @@ Alle Ziele werden im Projektverzeichnis aufgerufen (`make help` zeigt sie):
 |---|---|
 | `make pc` | Kommandozeilenprogramm `amivcs` für den Host → `bin/pc/` |
 | `make qt` | Qt-6-Oberfläche `amivcs-gui` per CMake (Build-Ordner `build/amivcs-gui-qt/`) → `bin/pc/` |
-| `make amiga` | Amiga-Programme `amivcs`, `amivcs-gui`, `AMIVCSPrefs` per vbcc-Cross-Compiler → `bin/amiga/` |
+| `make amiga` | Amiga-Programme `amivcs`, `amivcs-gui`, `AmiVCSConfig` per vbcc-Cross-Compiler → `bin/amiga/` |
 | `make dist-amiga` | baut `make amiga` und legt die Installationsschublade `build/dist/AmiVCS/` mit Icons an, dazu `build/AmiVCS.lha` |
 | `make release` | wie `dist-amiga`, dazu `build/release/AmiVCS-<version>.lha` und `.readme` |
 | `make build-amiga-script` | erzeugt das native Amiga-Buildskript `Build-Amiga` neu |
@@ -149,7 +149,7 @@ Bezugsquellen:
 
 ```sh
 export VBCC=/pfad/zu/vbcc
-make amiga            # -> bin/amiga/amivcs, amivcs-gui, AMIVCSPrefs
+make amiga            # -> bin/amiga/amivcs, amivcs-gui, AmiVCSConfig
 ```
 
 `make amiga` setzt `$VBCC/bin` selbst an den Anfang von `PATH`. Ohne
@@ -228,7 +228,7 @@ Execute Build-Amiga
 ```
 
 Ergebnis: `bin/amiga/amivcs`, `bin/amiga/amivcs-gui`,
-`bin/amiga/AMIVCSPrefs`.
+`bin/amiga/AmiVCSConfig`.
 
 `Build-Amiga` ist eine **erzeugte Datei** – nicht von Hand ändern. Sie
 entsteht aus den `Makefile.amiga-cross`-Dateien:
@@ -257,9 +257,9 @@ AmiVCS/
   Uninstall-AmiVCS   Deinstallationsskript
   ReadMe             Kurzbeschreibung
   LICENSE            GPLv3
-  C/                 amivcs, amivcs-gui, AMIVCSPrefs
+  C/                 amivcs, amivcs-gui, AmiVCSConfig
   Docs/              AmiVCS.guide
-  Examples/          amivcs.cfg.example
+  Examples/          config.example
 ```
 
 Zu allen Teilen der Schublade erzeugt `core/tools/mkicon.py` Workbench-Icons

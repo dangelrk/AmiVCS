@@ -26,9 +26,9 @@ Inhalt der Schublade
   THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
   C/amivcs           Kommandozeilen-Client
   C/amivcs-gui       grafische Oberfläche (MUI)
-  C/AMIVCSPrefs      Einstellungs-Editor für amivcs.cfg
+  C/AmiVCSConfig     Einstellungen (Name/E-Mail, Server pro Repository)
   Docs/AmiVCS.guide  Handbuch (AmigaGuide)
-  Examples/          amivcs.cfg.example (Vorlage für die Einstellungen)
+  Examples/          config.example (Vorlage für ENVARC:AmiVCS/config)
 
 Installation
 ------------

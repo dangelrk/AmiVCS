@@ -76,10 +76,10 @@ try {
 
     <section class="setup">
       <h2>Einrichten</h2>
-      <p>In AMIVCSPrefs bzw. <code>amivcs.cfg</code> diesen Server eintragen:</p>
-      <pre>server=<?= h(serverUrl()) . "\n" ?>
-user=…
-pass=…</pre>
+      <p>Jedes Repository hat eine Adresse auf diesem Server; Benutzer und
+         Passwort fragt <code>amivcs</code> beim ersten Mal:</p>
+      <pre>amivcs clone <?= h(serverUrl()) ?>/&lt;repository&gt;
+amivcs push <?= h(serverUrl()) ?>/&lt;neues-repository&gt;</pre>
     </section>
   </main>
 

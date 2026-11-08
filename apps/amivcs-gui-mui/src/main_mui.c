@@ -8,9 +8,8 @@
  * amicloud-commander-mui's main_mui.c): no server/user/pass are required
  * up front at all -- AMIVCS's local commands (status/add/commit/branch/
  * switch/merge/log) never touch the network. Clone/Push/Pull ask for
- * server/user/pass on first use instead (gui.c's ensure_remote_configured()),
- * so a purely local AMIVCS workflow never needs ~/.amivcsrc/ENV:amivcs.cfg
- * at all.
+ * the remote URL and the login when they need them (gui.c), and keep
+ * both in the repository's .amivcs/config (vcsconfig.h).
  */
 #include <libraries/mui.h>
 #include <proto/exec.h>
@@ -18,6 +17,7 @@
 
 #include "amicloud.h"
 #include "config.h"
+#include "vcsconfig.h"
 #include "http.h"
 #include "gui.h"
 #include "mui_stubs.h"
@@ -121,14 +121,10 @@ int main(int argc, char *argv[])
     cfg.basepath[0] = '/';
     cfg.verify_ssl  = 1;
 
-    /* Own config file, fully separate from amicloud's -- same
-     * ENV:/current-dir fallback the CLI uses (apps/amivcs/src/main.c). */
-    if (!config_load("ENV:amivcs.cfg", &cfg))
-        config_load("amivcs.cfg", &cfg);
-    {
-        size_t len = strlen(cfg.server);
-        if (len > 0 && cfg.server[len - 1] == '/') cfg.server[len - 1] = '\0';
-    }
+    /* program options (charset, timeout, verify_ssl) from the global
+     * defaults; remote, login and identity are per repository
+     * (vcsconfig.h) */
+    vcs_global_load_options(&cfg);
 
     if (!open_libs()) {
         startup_error(argc > 0, "amivcs-gui needs muimaster.library V19 "

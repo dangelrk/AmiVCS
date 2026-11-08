@@ -48,14 +48,15 @@ function renderSettings(?array $newToken): string
 
   <section class="card card-wide" id="devices">
     <h2>Geräte &amp; App-Passwörter</h2>
-    <p class="form-hint">Für jeden Amiga oder PC ein eigenes Passwort anlegen und in <code>amivcs.cfg</code>
-       bzw. AMIVCSPrefs statt des Kontopassworts eintragen. Geht ein Gerät verloren, widerrufen Sie nur dessen Passwort.</p>
+    <p class="form-hint">Für jeden Amiga oder PC ein eigenes Passwort anlegen und beim Login von
+       <code>amivcs</code> (bzw. amivcs-gui, AmigaIDE) statt des Kontopassworts eingeben. Geht ein Gerät verloren, widerrufen Sie nur dessen Passwort.</p>
 
     <?php if ($newToken !== null): ?>
     <div class="newtoken">
       <strong>Neues App-Passwort für „<?= h($newToken['name']) ?>“</strong>
-      <p>Es wird nur jetzt angezeigt. Für <code>amivcs.cfg</code>:</p>
-      <pre data-copy-src>server=<?= h($server) . "\n" ?>user=<?= h(Auth::$username) . "\n" ?>pass=<?= h($newToken['token']) ?></pre>
+      <p>Es wird nur jetzt angezeigt. Beim Login als Passwort eingeben (Benutzer
+         <code><?= h(Auth::$username) ?></code>, Server <code><?= h($server) ?></code>):</p>
+      <pre data-copy-src><?= h($newToken['token']) ?></pre>
       <button type="button" class="btn" data-copy><?= icon('copy') ?>Kopieren</button>
     </div>
     <?php endif; ?>
@@ -93,8 +94,9 @@ function renderSettings(?array $newToken): string
 
   <section class="card">
     <h2>Clients einrichten</h2>
-    <p class="form-hint">Server-Adresse für AMIVCSPrefs, <code>amivcs</code> und <code>amivcs-gui</code>:</p>
-    <pre data-copy-src><?= h($server) ?></pre>
+    <p class="form-hint">Remote-URL eines Repositorys für <code>amivcs</code>, <code>amivcs-gui</code> und die AmigaIDE
+       (Clone, erster Push):</p>
+    <pre data-copy-src><?= h($server) ?>/&lt;repository&gt;</pre>
     <button type="button" class="btn" data-copy><?= icon('copy') ?>Kopieren</button>
   </section>
 </div>

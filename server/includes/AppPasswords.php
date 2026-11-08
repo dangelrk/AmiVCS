@@ -4,7 +4,8 @@
 if (!defined('AMIVCS_SERVER')) { http_response_code(403); exit; }
 
 /* Geraete-/App-Passwoerter: zufaellige Tokens, die statt des
- * Kontopassworts in amivcs.cfg stehen und einzeln widerrufbar sind.
+ * Kontopassworts beim Login der Clients benutzt werden (und mit "Passwort
+ * merken" in .amivcs/config stehen) und einzeln widerrufbar sind.
  * Gespeichert als SHA-256, nicht bcrypt: bei ~124 bit Entropie bringt
  * ein langsamer Hash nichts, kostet aber bei jedem Amiga-Request Zeit. */
 class AppPasswords

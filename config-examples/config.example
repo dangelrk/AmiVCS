@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Ronny Krueger
+# config -- globale Vorgaben fuer AmiVCS (amivcs, amivcs-gui, AmiVCSConfig).
+# Eigenes Format, vollstaendig getrennt von AmiCloud und AmiOwnCloud.
+#
+# Ablage:
+#   Amiga:  ENVARC:AmiVCS/config (dauerhaft) und ENV:AmiVCS/config
+#           (aktiv), am bequemsten ueber SYS:Prefs/AmiVCSConfig
+#   PC:     ~/.amivcsconfig  (Windows: %USERPROFILE%\.amivcsconfig)
+#   oder:   amivcs config --global <schluessel> <wert>
+#
+# Server, Benutzer und Passwort stehen NICHT hier, sondern in jedem
+# Repository (.amivcs/config, siehe "amivcs remote" und "amivcs config"):
+# Jedes Repository kann auf einen anderen Server zeigen. "#" am
+# Zeilenanfang = Kommentar.
+
+# Autor der Commits, wie user.name/user.email bei git. Ein Repository
+# kann eigene Werte haben (amivcs config name ...); ohne Namen lehnt
+# "amivcs commit" ab. Einmalig ueberschreibbar mit "amivcs --author".
+name=Vorname Nachname
+email=name@example.org
+
+# TLS-Zertifikat des Servers pruefen (1 = ja, Standard; 0 = nur zum
+# Testen mit selbstsignierten Zertifikaten):
+#verify_ssl=1
+
+# Netz-Timeout in Sekunden (Standard 120): so lange darf eine Verbindung
+# ganz ohne Datenfluss bleiben. Die Dauer von clone/push/pull ist nie
+# begrenzt; bei sehr langsamen Leitungen (Modem) hoeher setzen:
+#timeout=120

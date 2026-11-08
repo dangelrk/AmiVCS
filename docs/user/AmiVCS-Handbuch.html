@@ -152,7 +152,7 @@ FPU flüssig läuft und das man komplett verstehen kann.</p>
 <tr><th>Bestandteil</th><th>Plattform</th><th>Zweck</th></tr>
 <tr><td><code>amivcs</code></td><td>Amiga + PC</td><td>Kommandozeilen-Client, alle Befehle</td></tr>
 <tr><td><code>amivcs-gui</code></td><td>Amiga (MUI) / PC (Qt 6)</td><td>Oberfläche im Stil von „git gui“</td></tr>
-<tr><td><code>AMIVCSPrefs</code></td><td>Amiga</td><td>Einstellungs-Editor für <code>amivcs.cfg</code></td></tr>
+<tr><td><code>AmiVCSConfig</code></td><td>Amiga</td><td>Einstellungen: Name/E-Mail für die Commits, Remote-URL und Benutzer pro Repository</td></tr>
 <tr><td>Server (<code>server/</code>)</td><td>Webserver</td><td>speichert nur Objekte und Branch-Zeiger; dazu eine nur lesende Web-Oberfläche</td></tr>
 </table>
 
@@ -160,7 +160,7 @@ FPU flüssig läuft und das man komplett verstehen kann.</p>
 das Unterverzeichnis <code>.amivcs</code> und die Datei
 <code>.amivcsignore</code> an; alles andere gehört Ihnen. AmiVCS ist
 von AmiCloud vollständig getrennt: eigener Server, eigene Datenbank,
-eigene Konfigurationsdatei, eigene Zugangsdaten.</p>
+eigene Konfiguration, eigene Zugangsdaten.</p>
 
 <div class="toc">
 <h2>Inhalt</h2>
@@ -168,8 +168,8 @@ eigene Konfigurationsdatei, eigene Zugangsdaten.</p>
 <li><a href="#voraussetzungen">Voraussetzungen</a></li>
 <li><a href="#installation">Installation auf dem Amiga</a></li>
 <li><a href="#installation-pc">Installation auf dem PC</a></li>
-<li><a href="#konfiguration">Konfigurationsdatei</a></li>
-<li><a href="#prefs">AMIVCSPrefs</a></li>
+<li><a href="#konfiguration">Konfiguration</a></li>
+<li><a href="#prefs">AmiVCSConfig</a></li>
 <li><a href="#cli">amivcs – Aufruf und Optionen</a></li>
 <li><a href="#lokal">amivcs – lokale Befehle</a></li>
 <li><a href="#remote">amivcs – Server-Befehle</a></li>
@@ -196,7 +196,7 @@ eigene Konfigurationsdatei, eigene Zugangsdaten.</p>
 <tr><td>TCP/IP-Stack mit <code>bsdsocket.library</code> (z. B. Roadshow, AmiTCP, Miami)</td><td><code>clone</code>/<code>push</code>/<code>pull</code> in <code>amivcs</code> und <code>amivcs-gui</code></td></tr>
 <tr><td>AmiSSL 5 (<code>amisslmaster.library</code>)</td><td>wie oben – alle Verbindungen laufen über HTTPS</td></tr>
 <tr><td>MUI 3.8 oder neuer (<code>muimaster.library</code> ≥ 19)</td><td>nur <code>amivcs-gui</code> auf dem Amiga</td></tr>
-<tr><td>Intuition/GadTools (im Betriebssystem)</td><td><code>AMIVCSPrefs</code></td></tr>
+<tr><td>Intuition/GadTools (im Betriebssystem)</td><td><code>AmiVCSConfig</code></td></tr>
 <tr><td>optional: <code>codesets.library</code> ab Version&nbsp;6 (Aminet <code>util/libs/codesets</code>)</td><td>Umlaute in Dateinamen, Autor und Commit-Text bei anderen Zeichensätzen als ISO-8859-1 (fehlt sie, gilt ISO-8859-1). Im Repository steht alles in UTF-8, damit Amiga und PC dieselben Namen sehen.</td></tr>
 <tr><td>PC: libcurl; für die Oberfläche Qt 6</td><td><code>amivcs</code> bzw. <code>amivcs-gui</code> auf macOS/Linux/Windows</td></tr>
 </table>
@@ -224,9 +224,9 @@ vorheriges <code>Stack</code> ist nicht nötig.</p>
   ReadMe             Kurzbeschreibung
   LICENSE            Lizenztext (GPLv3)
   THIRD-PARTY-NOTICES  Lizenz der Fremdkomponente Parson (MIT)
-  C/                 amivcs, amivcs-gui, AMIVCSPrefs
+  C/                 amivcs, amivcs-gui, AmiVCSConfig
   Docs/              AmiVCS.guide
-  Examples/          amivcs.cfg.example</pre>
+  Examples/          config.example</pre>
 
 <p>Archiv auspacken, z.&nbsp;B. <code>lha x AmiVCS.lha RAM:</code>.</p>
 <p>Alle Teile haben Workbench-Icons. Zum Installieren in der Schublade das
@@ -251,12 +251,13 @@ neuer ist als das im Archiv.</p>
 
 <p>Das Skript fragt, welche Teile installiert werden sollen (im Installer per
 Auswahlliste, im Shell-Skript mit <code>y</code> oder <code>n</code>): <code>amivcs</code> und <code>amivcs-gui</code> nach
-<code>C:</code>, <code>AMIVCSPrefs</code> nach <code>SYS:Prefs/</code>,
+<code>C:</code>, <code>AmiVCSConfig</code> nach <code>SYS:Prefs/</code>
+(ein altes <code>AMIVCSPrefs</code> wird dabei entfernt),
 das AmigaGuide-Handbuch nach <code>HELP:</code> (nur wenn der Assign
 existiert). Es warnt, wenn <code>muimaster.library</code> oder
 <code>amisslmaster.library</code> in <code>LIBS:</code> fehlen, und bietet
-am Ende an, <code>AMIVCSPrefs</code> zu starten, falls es noch keine
-<code>ENVARC:amivcs.cfg</code> gibt. Vorhandene Konfigurationen werden
+am Ende an, <code>AmiVCSConfig</code> zu starten, falls es noch keine
+<code>ENVARC:AmiVCS/config</code> gibt (Name und E-Mail für die Commits). Vorhandene Konfigurationen werden
 nie überschrieben. Es wird kein DOS-Treiber installiert und nichts
 gemountet – AmiVCS enthält keinen Handler.</p>
 
@@ -265,13 +266,13 @@ gemountet – AmiVCS enthält keinen Handler.</p>
 <tr><th>Datei aus der Schublade</th><th>Ziel</th></tr>
 <tr><td><code>C/amivcs</code></td><td><code>C:</code></td></tr>
 <tr><td><code>C/amivcs-gui</code></td><td><code>C:</code> (oder eine beliebige Schublade)</td></tr>
-<tr><td><code>C/AMIVCSPrefs</code></td><td><code>SYS:Prefs/</code></td></tr>
+<tr><td><code>C/AmiVCSConfig</code></td><td><code>SYS:Prefs/</code></td></tr>
 <tr><td><code>Docs/AmiVCS.guide</code></td><td><code>HELP:</code> (oder beliebig)</td></tr>
-<tr><td><code>Examples/amivcs.cfg.example</code></td><td>Vorlage für <code>ENVARC:amivcs.cfg</code></td></tr>
+<tr><td><code>Examples/config.example</code></td><td>Vorlage für <code>ENVARC:AmiVCS/config</code></td></tr>
 </table>
 
-<p>Es werden keine Icons mitgeliefert. <code>AMIVCSPrefs</code> startet
-man im Shell mit <code>SYS:Prefs/AMIVCSPrefs</code>; auf der Workbench
+<p>Es werden keine Icons mitgeliefert. <code>AmiVCSConfig</code> startet
+man im Shell mit <code>SYS:Prefs/AmiVCSConfig [&lt;repository&gt;]</code>; auf der Workbench
 ist es nur sichtbar, wenn im Fenster „Alle Dateien anzeigen“
 eingeschaltet ist. Für <code>amivcs-gui</code> kann ein Projekt-Icon
 angelegt werden; es versteht die Merkmale (Tooltypes)
@@ -280,9 +281,9 @@ angelegt werden; es versteht die Merkmale (Tooltypes)
 <h3>Deinstallation</h3>
 <p><code>Execute Uninstall-AmiVCS</code> aus der Schublade löscht
 <code>C:amivcs</code>, <code>C:amivcs-gui</code>,
-<code>SYS:Prefs/AMIVCSPrefs</code> und <code>HELP:AmiVCS.guide</code> und
-fragt, ob auch <code>ENV:amivcs.cfg</code> und
-<code>ENVARC:amivcs.cfg</code> entfernt werden sollen. Ihre Repositories
+<code>SYS:Prefs/AmiVCSConfig</code> und <code>HELP:AmiVCS.guide</code> und
+fragt, ob auch die Einstellungen <code>ENV:AmiVCS</code> und
+<code>ENVARC:AmiVCS</code> entfernt werden sollen. Ihre Repositories
 bleiben unberührt.</p>
 
 <h2 id="installation-pc">3. Installation auf dem PC</h2>
@@ -294,74 +295,94 @@ gebaut (<a href="#bauen">Kapitel 19</a>) und installiert:</p>
 make qt                 # bin/pc/amivcs-gui
 sudo make install       # nach /usr/local/bin (PREFIX=..., DESTDIR=... möglich)</pre>
 
-<h2 id="konfiguration">4. Konfigurationsdatei</h2>
+<h2 id="konfiguration">4. Konfiguration</h2>
 
-<p>Nur für <code>clone</code>, <code>push</code> und <code>pull</code>
-nötig – mit einer Ausnahme: <code>user</code> ist auch der Autorname
-Ihrer Commits. Eigene Datei, <strong>nicht</strong>
+<p>Wie bei git gibt es zwei Ebenen: globale Vorgaben für alle
+Repositories und die Einstellungen eines Repositorys. Beides sind
+einfache Textdateien, eine Einstellung pro Zeile als
+<code>schlüssel=wert</code>, Zeilen mit <code>#</code> am Anfang sind
+Kommentare. Eigene Dateien, <strong>nicht</strong>
 <code>amicloud.cfg</code>.</p>
 
+<h3>Globale Vorgaben</h3>
+
 <table>
-<tr><th>Programm</th><th>Suchreihenfolge</th></tr>
-<tr><td><code>amivcs</code> (Amiga)</td><td><code>-c &lt;datei&gt;</code>, sonst <code>ENV:amivcs.cfg</code>, sonst <code>amivcs.cfg</code> im aktuellen Verzeichnis</td></tr>
-<tr><td><code>amivcs</code> (macOS/Linux)</td><td><code>-c &lt;datei&gt;</code>, sonst <code>~/.amivcsrc</code></td></tr>
-<tr><td><code>amivcs</code> (Windows-Build)</td><td><code>-c &lt;datei&gt;</code>, sonst <code>amivcs.cfg</code> im aktuellen Verzeichnis</td></tr>
-<tr><td><code>amivcs-gui</code> (MUI)</td><td><code>ENV:amivcs.cfg</code>, sonst <code>amivcs.cfg</code> im aktuellen Verzeichnis</td></tr>
-<tr><td><code>amivcs-gui</code> (Qt)</td><td><code>~/.amivcsrc</code></td></tr>
-<tr><td><code>AMIVCSPrefs</code></td><td><code>ENV:amivcs.cfg</code>, sonst <code>ENVARC:amivcs.cfg</code></td></tr>
+<tr><th>System</th><th>Datei</th></tr>
+<tr><td>Amiga</td><td><code>ENV:AmiVCS/config</code> (aktiv), <code>ENVARC:AmiVCS/config</code> (dauerhaft)</td></tr>
+<tr><td>macOS/Linux</td><td><code>~/.amivcsconfig</code></td></tr>
+<tr><td>Windows</td><td><code>%USERPROFILE%\.amivcsconfig</code></td></tr>
 </table>
 
-<p>Auf dem Amiga gehört die Datei dauerhaft nach <code>ENVARC:</code>;
-beim Systemstart kopiert AmigaOS sie nach <code>ENV:</code>. Format:
-eine Einstellung pro Zeile als <code>schlüssel=wert</code>, Zeilen mit
-<code>#</code> am Anfang sind Kommentare.</p>
-
-<pre>server=https://amivcs.example.com
-user=bob
-pass=geheim
+<pre>name=Vorname Nachname
+email=name@example.org
 #verify_ssl=1
 #timeout=120</pre>
 
 <table>
 <tr><th>Schlüssel</th><th>Bedeutung</th></tr>
-<tr><td><code>server</code></td><td>Basis-URL des AmiVCS-Servers, ohne <code>/api.php</code>; ein abschließender <code>/</code> wird entfernt. Auf dem Amiga nur <code>https://</code></td></tr>
-<tr><td><code>user</code> (auch <code>username</code>)</td><td>Benutzername am Server <strong>und</strong> Commit-Autor (<code>amivcs log</code>); ohne <code>user</code> heißt der Autor „unknown“</td></tr>
-<tr><td><code>pass</code> (auch <code>password</code>)</td><td>Passwort am Server (im Klartext in der Datei)</td></tr>
+<tr><td><code>name</code></td><td>Autor Ihrer Commits (wie <code>user.name</code> bei git). Ohne Namen lehnt <code>amivcs commit</code> ab; die Oberflächen fragen einmal danach</td></tr>
+<tr><td><code>email</code></td><td>E-Mail des Autors; der Autor erscheint als <code>Name &lt;email&gt;</code></td></tr>
 <tr><td><code>verify_ssl</code></td><td><code>1</code> = Zertifikat prüfen (Standard), <code>0</code> = nicht prüfen, nur zum Testen</td></tr>
 <tr><td><code>timeout</code></td><td>Netz-Timeout in Sekunden (Standard 120): so lange darf eine Verbindung ganz ohne Datenfluss bleiben. Die Dauer von <code>clone</code>, <code>push</code> oder <code>pull</code> ist nie begrenzt.</td></tr>
 </table>
 
-<p>Der gemeinsame Parser kennt außerdem <code>basepath</code>,
-<code>debug</code>, <code>gmt_offset</code> und <code>dst</code>; AmiVCS
-wertet diese nicht aus. Den Autor für einen einzelnen Aufruf ändert
-<code>amivcs --author "Ronny" commit -a -m "Text"</code>.</p>
+<h3>Pro Repository: .amivcs/config</h3>
 
-<h2 id="prefs">5. AMIVCSPrefs <span class="platform-tag">Amiga</span></h2>
-
-<p>Einstellungs-Editor für <code>amivcs.cfg</code> im Stil der
-Workbench-Voreinsteller, Aufruf <code>SYS:Prefs/AMIVCSPrefs</code>.
-Felder: <em>Server</em>, <em>Benutzer (= Autor)</em>, <em>Passwort</em>,
-<em>Zertifikat prüfen</em>.</p>
+<pre>remote=https://amivcs.example.com/meinprojekt
+user=bob
+pass=geheim</pre>
 
 <table>
-<tr><th>Knopf</th><th>Wirkung</th></tr>
-<tr><td>Speichern</td><td>schreibt <code>ENVARC:amivcs.cfg</code> <strong>und</strong> <code>ENV:amivcs.cfg</code> – gilt sofort und dauerhaft</td></tr>
-<tr><td>Benutzen</td><td>schreibt nur <code>ENV:amivcs.cfg</code> – gilt bis zum Neustart</td></tr>
-<tr><td>Abbrechen</td><td>schreibt nichts</td></tr>
+<tr><th>Schlüssel</th><th>Bedeutung</th></tr>
+<tr><td><code>remote</code></td><td>Remote-URL wie bei git: alles vor dem letzten <code>/</code> ist der Server (dort liegt <code>api.php</code>), dahinter der Name des Repositorys auf dem Server. Jedes Repository kann auf einen anderen Server zeigen. Auf dem Amiga nur <code>https://</code></td></tr>
+<tr><td><code>user</code></td><td>Benutzername an diesem Server</td></tr>
+<tr><td><code>pass</code></td><td>Passwort – <strong>nur</strong> wenn beim Login „Passwort merken“ gewählt wurde, im Klartext. Am besten ein App-Passwort aus der Web-Oberfläche</td></tr>
+<tr><td><code>name</code>, <code>email</code></td><td>Autor nur für dieses Repository (fehlt er, gilt die globale Vorgabe)</td></tr>
 </table>
 
-<p>Beim Öffnen wird <code>ENV:amivcs.cfg</code> gelesen, ersatzweise
-<code>ENVARC:</code>. Weichen beide ab, meldet die Statuszeile
-„ENV:/ENVARC: unterscheiden sich (angezeigt: ENV:)“.</p>
+<p>Rein lokal braucht AmiVCS nur einen Namen. <code>clone</code> und
+<code>push &lt;url&gt;</code> merken sich die Remote-URL; fehlen
+Benutzer oder Passwort oder meldet der Server „falsches Passwort“,
+fragen <code>amivcs</code> (im Shell-Fenster, das Passwort ohne Echo),
+<code>amivcs-gui</code> und die AmigaIDE danach und bieten an, das
+Passwort zu merken. Gesetzt und gelesen werden alle Werte auch mit
+<code>amivcs config</code> und <code>amivcs remote</code>
+(<a href="#remote">Kapitel 8</a>); den Autor für einen einzelnen Aufruf
+ändert <code>amivcs --author "Ronny" commit -a -m "Text"</code>.</p>
+
+<p>Bis Version 0.9 gab es stattdessen eine einzige
+<code>amivcs.cfg</code> mit <code>server=</code>, <code>user=</code>
+und <code>pass=</code>; sie wird nicht mehr gelesen. Für ein schon
+vorhandenes Repository genügt einmal
+<code>amivcs remote https://server/name</code>.</p>
+
+<h2 id="prefs">5. AmiVCSConfig <span class="platform-tag">Amiga</span></h2>
+
+<p>Einstellungen im Stil der Workbench-Voreinsteller, Aufruf
+<code>SYS:Prefs/AmiVCSConfig [&lt;repository&gt;]</code>. Das
+Repository ist das Argument, das Merkmal <code>REPO=</code> des Icons
+oder das aktuelle Verzeichnis; <code>amivcs-gui</code>
+(<em>Repository &gt; Settings...</em>) und die AmigaIDE starten es mit
+dem geöffneten Repository.</p>
+
+<table>
+<tr><th>Bereich</th><th>Felder</th></tr>
+<tr><td>Vorgaben für alle Repositories</td><td><em>Name</em>, <em>E-Mail</em></td></tr>
+<tr><td>Repository</td><td><em>Remote-URL</em>, <em>Benutzer (Server)</em>, <em>Name</em> und <em>E-Mail</em> nur für dieses Repository (leer = Vorgabe), <em>Passwort vergessen</em> (nur wenn eins gemerkt ist)</td></tr>
+</table>
+
+<p><em>Speichern</em> schreibt <code>ENV:</code> und
+<code>ENVARC:AmiVCS/config</code> sowie <code>.amivcs/config</code> des
+Repositorys, <em>Abbrechen</em> schreibt nichts. Ein „Benutzen“ gibt es
+nicht mehr. Die Fensterposition wird gemerkt.</p>
 
 <h2 id="cli">6. amivcs – Aufruf und Optionen <span class="platform-tag">Amiga + PC</span></h2>
 
-<pre>amivcs [--author &lt;name&gt;] [-c &lt;datei&gt;] &lt;befehl&gt; [argumente]</pre>
+<pre>amivcs [--author &lt;name&gt;] &lt;befehl&gt; [argumente]</pre>
 
 <table>
 <tr><th>Option (vor dem Befehl)</th><th>Bedeutung</th></tr>
 <tr><td><code>--author &lt;name&gt;</code></td><td>Commit-Autor für diesen Aufruf</td></tr>
-<tr><td><code>-c &lt;datei&gt;</code></td><td>andere Konfigurationsdatei verwenden</td></tr>
 <tr><td><code>--args-from &lt;datei&gt;</code></td><td>weitere Argumente aus einer Datei, eines pro Zeile (Pfade, Branch-Namen); <code>\</code>, Tab und Zeilenumbruch als <code>\\</code>, <code>\t</code>, <code>\n</code>. Spart Quoting auf der AmigaDOS-Kommandozeile</td></tr>
 <tr><td><code>--porcelain-out &lt;datei&gt;</code></td><td>Ergebnis zusätzlich maschinenlesbar in eine Datei, für Programme wie AmigaIDE (siehe unten)</td></tr>
 </table>
@@ -413,20 +434,32 @@ Zeichensatz, <code>\</code>/Tab/Zeilenumbruch maskiert wie bei
 &lt;refs&gt; &lt;nachricht&gt;</code> (Zeit in UTC-Sekunden, Listen mit
 Komma), <code>committed &lt;id&gt;</code>, <code>msg info|warn|error
 &lt;text&gt;</code>, <code>progress &lt;fertig&gt; &lt;gesamt&gt;
-&lt;was&gt;</code>, zuletzt immer <code>end &lt;rückgabewert&gt;</code>.
-Ändernde Befehle hängen den neuen Status an.</p>
+&lt;was&gt;</code>, <code>auth-required &lt;url&gt; &lt;benutzer&gt;</code>
+(Benutzer oder Passwort fehlen bzw. wurden abgelehnt), zuletzt immer
+<code>end &lt;rückgabewert&gt;</code>. Ändernde Befehle hängen den neuen
+Status an. Zugangsdaten übergibt ein Programm nie auf der
+Kommandozeile, sondern über <code>--args-from</code> als
+<code>--user</code>, <code>--password</code> und
+<code>--remember-password</code>.</p>
 
 <h2 id="remote">8. amivcs – Server-Befehle</h2>
 
-<p>Brauchen <code>server</code>, <code>user</code> und <code>pass</code>
-in der Konfigurationsdatei (auf dem Amiga außerdem TCP/IP-Stack und
-AmiSSL). Der Fortschritt wird laufend angezeigt.</p>
+<p>Brauchen eine Remote-URL wie
+<code>https://amivcs.example.com/projekt</code> (auf dem Amiga außerdem
+TCP/IP-Stack und AmiSSL). Benutzer und Passwort fragt
+<code>amivcs</code> im Shell-Fenster, wenn sie fehlen oder der Server
+sie ablehnt – das Passwort ohne Echo, danach „merken? (j/n)“. Der
+Fortschritt wird laufend angezeigt.</p>
 
 <table>
 <tr><th>Befehl</th><th>Wirkung</th></tr>
-<tr><td><code>clone &lt;repo&gt; [verz]</code></td><td>holt das Server-Repository in ein neues Verzeichnis (Standard: Name des Repositorys), legt alle Branches an, checkt <code>main</code> aus (sonst den ersten Branch) und merkt sich den Namen in <code>.amivcs/config</code>. Ein abgebrochener <code>clone</code> wird mit demselben Aufruf fortgesetzt.</td></tr>
-<tr><td><code>push [&lt;repo&gt;]</code></td><td>lädt den aktuellen Branch hoch (nur fehlende Objekte, dann den Branch-Zeiger). Mit <code>&lt;repo&gt;</code> wird dieses Server-Repository benutzt, gemerkt und bei Bedarf angelegt; ohne gilt das gemerkte</td></tr>
-<tr><td><code>pull [&lt;branch&gt;]</code></td><td>holt den Branch (Standard: gleichnamig zum aktuellen) und führt ihn wie <code>merge</code> zusammen</td></tr>
+<tr><td><code>clone &lt;url&gt; [verz]</code></td><td>holt das Server-Repository in ein neues Verzeichnis (Standard: Name aus der URL, wie bei git), legt alle Branches an, checkt <code>main</code> aus (sonst den ersten Branch) und merkt sich URL und Benutzer in <code>.amivcs/config</code>. Ein abgebrochener <code>clone</code> wird mit demselben Aufruf fortgesetzt.</td></tr>
+<tr><td><code>push [&lt;url&gt;]</code></td><td>lädt den aktuellen Branch hoch (nur fehlende Objekte, dann den Branch-Zeiger). Mit <code>&lt;url&gt;</code> wird diese Adresse benutzt, als Remote gemerkt; ohne gilt die gemerkte. Fehlt das Repository auf dem Server noch, legt <code>push</code> es an – auch wenn die URL vorher mit <code>amivcs remote</code> oder AmiVCSConfig gesetzt wurde</td></tr>
+<tr><td><code>pull [&lt;url&gt;] [&lt;branch&gt;]</code></td><td>holt den Branch (Standard: gleichnamig zum aktuellen) und führt ihn wie <code>merge</code> zusammen</td></tr>
+<tr><td><code>remote [&lt;url&gt;]</code></td><td>zeigt bzw. setzt die Remote-URL dieses Repositorys</td></tr>
+<tr><td><code>config</code></td><td>zeigt alle Werte (global und dieses Repository; ein gemerktes Passwort verdeckt)</td></tr>
+<tr><td><code>config [--global] &lt;schlüssel&gt; [&lt;wert&gt;]</code></td><td>liest bzw. setzt einen Wert: <code>name</code>, <code>email</code> (mit <code>--global</code> die Vorgabe, sonst nur dieses Repository), <code>remote</code>, <code>user</code>, <code>pass</code> (nur Repository); global außerdem <code>verify_ssl</code>, <code>timeout</code></td></tr>
+<tr><td><code>config [--global] --unset &lt;schlüssel&gt;</code></td><td>entfernt einen Wert; <code>config --unset pass</code> vergisst das gemerkte Passwort</td></tr>
 </table>
 
 <p>Über eine langsame oder wacklige Leitung (Modem): Scheitert eine
@@ -436,8 +469,8 @@ zu zweimal neu. <kbd>Ctrl-C</kbd> bricht <code>clone</code>,
 <code>push</code> lassen sich danach einfach wiederholen, <code>clone</code>
 setzt fort.</p>
 
-<p>Repository-Namen: Buchstaben, Ziffern, <code>_</code>, <code>.</code>,
-<code>-</code>, höchstens 128 Zeichen. Jeder Benutzer sieht nur seine
+<p>Repository-Namen (der letzte Teil der URL): Buchstaben, Ziffern,
+<code>_</code>, <code>.</code>, <code>-</code>, höchstens 128 Zeichen. Jeder Benutzer sieht nur seine
 eigenen Repositories.</p>
 
 <div class="callout"><strong>push überschreibt nie fremde Commits</strong><br>
@@ -448,12 +481,13 @@ first</code>. Dann <code>amivcs pull</code>, ggf. Konflikte lösen, erneut
 Compare-and-Swap, ob sich der Branch zwischenzeitlich geändert hat.</div>
 
 <pre># Amiga
+amivcs config --global name "Ronny"
 amivcs init
 amivcs commit -a -m "Start"
-amivcs push projekt-x          # legt projekt-x auf dem Server an
+amivcs push https://amivcs.example.com/projekt-x   # legt projekt-x an
 
 # PC
-amivcs clone projekt-x
+amivcs clone https://amivcs.example.com/projekt-x
 cd projekt-x
 amivcs commit -a -m "Vom PC"
 amivcs push
@@ -495,22 +529,33 @@ Graph, OID, Author, Date, Message; der Graph besteht aus Zeichen
 Klammern vor der Nachricht. Darunter <em>New Branch…</em>,
 <em>Switch…</em>, <em>Merge…</em>, <em>Clone…</em>.</li>
 <li>Menüs: <em>Project</em> (About…, Quit), <em>Repository</em> (Init
-Repository Here, Refresh, New Branch…, Switch Branch…, Merge Branch…),
+Repository Here, Refresh, Settings…, New Branch…, Switch Branch…, Merge
+Branch…),
 <em>Remote</em> (Clone…, Push, Pull).</li>
 </ul>
 
 <p>Switch und Merge zeigen zuerst die vorhandenen Branches an, danach
-wird der Name eingetippt. Fehlen für Clone/Push/Pull Server, Benutzer
-oder Passwort in <code>amivcs.cfg</code>, fragt das Programm danach;
-diese Eingaben gelten nur bis zum Programmende. Während der Übertragung
-erscheint ein Fenster „Working...“ mit Abbrechen-Knopf.</p>
+wird der Name eingetippt. Die Kopfzeile zeigt die Remote-URL des
+Repositorys.</p>
 
-<div class="callout"><strong>Erstes Push über die Kommandozeile</strong><br>
-Push und Pull der Oberfläche benutzen immer das gemerkte
-Server-Repository. Ein frisch mit <code>init</code> angelegtes Repository
-muss daher einmal mit <code>amivcs push &lt;name&gt;</code> verknüpft
-werden. Geklonte Repositories sind bereits verknüpft. (Gilt ebenso für
-die Qt-Fassung.)</div>
+<ul>
+<li><em>Clone…</em> fragt die Remote-URL
+(<code>https://server/name</code>) und das lokale Verzeichnis.</li>
+<li><em>Push</em> ohne gemerkte Remote-URL fragt sie und legt das
+Repository bei Bedarf auf dem Server an – ein frisch mit
+<code>init</code> angelegtes Repository wird so verknüpft.</li>
+<li>Fehlt das Passwort oder lehnt der Server die Anmeldung ab, erscheint
+das Fenster „Login“ (Benutzer, Passwort, <em>Remember password</em>);
+gemerkt wird in <code>.amivcs/config</code> des Repositorys.</li>
+<li>Gibt es beim ersten Commit noch keinen Namen, fragt das Programm
+nach Name und E-Mail und speichert sie als globale Vorgabe.</li>
+<li><em>Repository &gt; Settings…</em> startet
+<a href="#prefs">AmiVCSConfig</a> für das geöffnete Repository; danach
+<em>Refresh</em>.</li>
+</ul>
+
+<p>Während der Übertragung erscheint ein Fenster „Working...“ mit
+Abbrechen-Knopf. Alle Fenster merken sich ihre Position.</p>
 
 <h2 id="gui-qt">10. amivcs-gui (Qt) <span class="platform-tag">PC</span></h2>
 
@@ -518,19 +563,19 @@ die Qt-Fassung.)</div>
 
 <p>Dieselbe Oberfläche für macOS, Linux und Windows, ebenso wie
 „git gui“ aufgebaut (Reiter <em>Changes</em> mit Listen, Dateivorschau,
-Knöpfen und Nachrichtenfeld; Reiter <em>History</em>); Konfiguration
-<code>~/.amivcsrc</code>. Die Teiler lassen sich verschieben.
+Knöpfen und Nachrichtenfeld; Reiter <em>History</em>); globale
+Vorgaben in <code>~/.amivcsconfig</code>. Die Teiler lassen sich verschieben.
 Unterschiede zur MUI-Fassung:</p>
 <ul>
 <li>Switch/Merge bieten die Branches in einer Auswahlliste an.</li>
-<li>Clone fragt den Namen auf dem Server und wählt das Zielverzeichnis
-per Dateidialog.</li>
+<li>Clone fragt die Remote-URL und wählt das übergeordnete Verzeichnis
+per Dateidialog (der Klon bekommt den Namen aus der URL).</li>
 <li>Der Commit-Graph wird grafisch gezeichnet.</li>
 <li>Menüs <em>Repository</em>, <em>Remote</em>, <em>Help</em>; Refresh
 zusätzlich in der Werkzeugleiste.</li>
-<li>Fehlende Zugangsdaten fragt der Dialog „AMIVCS - Remote Server“ ab
-(Server URL, Username, Password, Verify TLS certificate) – nur bis zum
-Programmende.</li>
+<li><em>Repository &gt; Settings…</em> öffnet einen eigenen Dialog
+„AMIVCS Settings“: Remote-URL, Benutzer, Passwort vergessen, Name und
+E-Mail für dieses Repository sowie die globalen Vorgaben.</li>
 </ul>
 
 <h2 id="workflow">11. Typischer Arbeitsablauf</h2>
@@ -550,12 +595,12 @@ amivcs merge experiment
 amivcs log
 
 # mit Server: einmal verknüpfen, danach nur noch pull/push
-amivcs push meinprojekt
+amivcs push https://amivcs.example.com/meinprojekt
 amivcs pull
 amivcs push
 
 # auf einem zweiten Rechner
-amivcs clone meinprojekt
+amivcs clone https://amivcs.example.com/meinprojekt
 
 # ab und zu aufräumen
 amivcs gc</pre>
@@ -647,7 +692,7 @@ Branch-Wechsel bleiben ignorierte Dateien stehen.</p>
   HEAD               aktueller Branch
   packed-refs        alle Branches
   index              Vormerkungen (die OID eines Trees)
-  config             gemerktes Server-Repository (remote_repo=...)
+  config             Remote-URL, Benutzer, ggf. Passwort, Name/E-Mail
   objects/&lt;2&gt;/&lt;30&gt;   lose Objekte
   objects/pack/      Pack-Dateien aus "amivcs gc"</pre>
 
@@ -706,8 +751,9 @@ curl -u bob:geheim "https://amivcs.example.com/api.php?action=status"
 <tr><td><code>AMIVCS_ALLOW_HTTP</code></td><td>nur für lokale Tests (<code>php -S</code>): erlaubt Klartext-HTTP – nie in Produktion</td></tr>
 </table>
 
-<p>Auf den Clients genügt dann <code>server=https://amivcs.example.com</code>.
-Repositories entstehen beim ersten <code>amivcs push &lt;name&gt;</code>
+<p>Die Clients brauchen dann nur noch die Remote-URL eines Repositorys,
+z.&nbsp;B. <code>https://amivcs.example.com/projekt</code>.
+Repositories entstehen beim ersten <code>amivcs push &lt;url&gt;</code>
 oder in der Web-Oberfläche. Weitere Benutzer legt der Administrator in der
 Web-Oberfläche an.
 Datensicherung: Datenbank <strong>und</strong> Speicherverzeichnis
@@ -717,7 +763,9 @@ gemeinsam sichern.</p>
 
 <p>Unter <code>https://amivcs.example.com/</code> (Adresse Ihres Servers)
 bedient sich AmiVCS im Browser ähnlich wie Gitea: Anmeldung mit denselben
-Zugangsdaten wie in <code>amivcs.cfg</code>.</p>
+Zugangsdaten wie beim Login der Clients. Der Dialog <em>Klonen</em>
+eines Repositorys zeigt die fertige Zeile
+<code>amivcs clone https://…/&lt;name&gt;</code>.</p>
 <ul>
 <li><strong>Code</strong>: Dateibaum je Branch oder Commit, README darunter,
 Dateiansicht mit Zeilennummern, Bilder (PNG/JPEG/GIF), ZIP-Download.
@@ -731,7 +779,7 @@ zeilenweise Änderungen.</li>
 öffentlich/privat, Standard-Branch, Löschen.</li>
 <li><strong>Persönliche Einstellungen</strong>: Profil, Passwort,
 App-Passwörter (eines je Gerät, einzeln widerrufbar – statt des
-Kontopassworts in <code>amivcs.cfg</code> eintragen).</li>
+Kontopassworts beim Login eingeben).</li>
 <li><strong>Benutzer</strong> (nur Administratoren).</li>
 </ul>
 <p>Öffentliche Repositories sieht jeder, auch ohne Konto (Startseite und
@@ -766,8 +814,10 @@ jeder Anfrage (Kontopasswort oder App-Passwort; nach 5 Fehlversuchen
 <tr><td><code>working tree has uncommitted changes -- commit first</code></td><td>switch/checkout/merge/pull überschreiben keine ungesicherte Arbeit: <code>amivcs status</code>, committen, erneut versuchen</td></tr>
 <tr><td>commit ohne Wirkung</td><td>vorher <code>amivcs add …</code> oder <code>commit -a</code></td></tr>
 <tr><td><code>cannot branch -- no commits yet</code></td><td>Branches erst nach dem ersten Commit</td></tr>
-<tr><td><code>… requires server=/user=/pass= in the config file</code></td><td><code>amivcs.cfg</code> fehlt oder ist unvollständig (<a href="#konfiguration">Kapitel 4</a>)</td></tr>
-<tr><td><code>no remote repository configured -- give one explicitly</code></td><td>einmal <code>amivcs push &lt;name&gt;</code> aufrufen</td></tr>
+<tr><td><code>who are you? Set your name first</code></td><td>noch kein Name für die Commits: <code>amivcs config --global name "…"</code> (oder AmiVCSConfig, <a href="#konfiguration">Kapitel 4</a>)</td></tr>
+<tr><td><code>no remote URL set</code></td><td>einmal <code>amivcs push &lt;url&gt;</code> oder <code>amivcs remote &lt;url&gt;</code> aufrufen</td></tr>
+<tr><td><code>… is not a repository URL (https://server/&lt;name&gt;)</code></td><td>die Adresse braucht Schema, Server und den Namen des Repositorys, z.&nbsp;B. <code>https://amivcs.example.com/projekt</code></td></tr>
+<tr><td><code>login refused … -- wrong user or password</code></td><td>Benutzer oder Passwort falsch; <code>amivcs</code> fragt neu. Ein falsch gemerktes Passwort vergisst <code>amivcs config --unset pass</code></td></tr>
 <tr><td><code>rejected -- the server has commits you don't have; pull and merge first</code></td><td>jemand hat vorher gepusht: <code>amivcs pull</code>, ggf. <a href="#konflikte">Konflikte</a> lösen, erneut <code>push</code></td></tr>
 <tr><td><code>network error, retrying</code> / <code>clone</code> bricht ab</td><td>Die Leitung ist abgerissen oder hing länger als <code>timeout</code> Sekunden (Standard 120) ohne Daten. <code>amivcs</code> versucht jede Anfrage bis zu dreimal; bei sehr langsamen Leitungen <code>timeout=300</code> setzen. Einen abgebrochenen <code>clone</code> mit demselben Aufruf fortsetzen.</td></tr>
 <tr><td><code>... would be one file here</code> (bei <code>clone</code>, <code>switch</code>, <code>merge</code>)</td><td>Zwei Namen im Repository wären auf diesem Rechner dieselbe Datei: sie unterscheiden sich nur in Groß-/Kleinschreibung (<code>README</code> und <code>Readme</code>, auch <code>Äpfel</code> und <code>äpfel</code>), oder beide enthalten ein Zeichen, das der lokale Zeichensatz nicht kennt. Es wird nichts geschrieben; ein <code>clone</code> wird ganz zurückgenommen (ein neu angelegtes Verzeichnis verschwindet wieder). Einen der beiden Namen auf einem System umbenennen, das sie unterscheidet (z.&nbsp;B. Linux), pushen und erneut klonen.</td></tr>
