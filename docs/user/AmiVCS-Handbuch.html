@@ -125,7 +125,7 @@
 <div class="wrap">
 
 <h1>AmiVCS</h1>
-<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 07.11.2026 (Programmversion 0.9)</p>
+<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 08.11.2026 (Programmversion 0.10)</p>
 
 <div class="callout"><strong>Hinweis:</strong> Experimentelle Software, entwickelt mit Hilfe von Claude (KI-Assistent von Anthropic) und in erster Linie für den Eigengebrauch des Autors geschrieben. Bitte zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.</div>
 
@@ -831,7 +831,7 @@ jeder Anfrage (Kontopasswort oder App-Passwort; nach 5 Fehlversuchen
 
 <h2 id="bauen">19. Bauen aus den Quellen</h2>
 
-<p>Die Quellen werden später auf GitHub veröffentlicht. Bis dahin gibt es die Amiga-Programme als Archiv auf Aminet.</p>
+<p>Die Quellen liegen auf GitHub: <a href="https://github.com/dangelrk/AmiVCS">github.com/dangelrk/AmiVCS</a>; die Amiga-Programme gibt es auch als Archiv auf Aminet.</p>
 
 <pre>git clone --recurse-submodules https://github.com/dangelrk/AmiVCS.git
 cd AmiVCS
@@ -858,11 +858,12 @@ Quelltext. Es gibt keine Gewährleistung. Maßgeblich ist der Lizenztext in
 Parson steht unter der MIT-Lizenz; ihr Wortlaut liegt als
 <code>THIRD-PARTY-NOTICES</code> in der Installationsschublade.</p>
 
-<p>Fehlermeldungen und Wünsche: <a href="mailto:amitools@planet-rk.de">amitools@planet-rk.de</a> ·
+<p>Fehlermeldungen und Wünsche: <a href="mailto:amitools@planet-rk.de">amitools@planet-rk.de</a> · Quellen und Fehlerberichte: <a href="https://github.com/dangelrk/AmiVCS">github.com/dangelrk/AmiVCS</a> ·
 Schwesterprojekte: AmiCloudCore, AmiCloud, AmiOwnCloud.</p>
 
 <table>
 <tr><th>Datum</th><th>Änderung</th></tr>
+<tr><td>08.11.2026</td><td>Programmversion 0.10: Remote-URL pro Repository wie bei git (<code>clone</code>/<code>push</code>/<code>pull &lt;url&gt;</code>, <code>remote</code>), Benutzer und Passwort werden bei Bedarf gefragt und auf Wunsch im Repository gemerkt, Name und E-Mail des Autors wie bei git (<code>config</code>, global oder pro Repository, auch für Merge-Commits), <code>commit</code> ohne Namen lehnt ab; AmiVCSConfig ersetzt AMIVCSPrefs, <code>amivcs.cfg</code> wird nicht mehr gelesen; <code>push</code> legt ein fehlendes Repository auch bei vorher gesetzter URL an; amivcs-gui: Login-Fenster, Repository &gt; Settings, Remote-URL in der Kopfzeile, Rescan liest den Arbeitsbaum wirklich neu ein, Fenster merken ihre Position</td></tr>
 <tr><td>07.11.2026</td><td>Programmversion 0.9: <code>push</code> lädt Branches mit Umlauten oder Zeichen wie <code>&amp; + #</code> hoch (braucht den Server ab 0.9; vorher lehnte er sie ab, mit der irreführenden Meldung „pull and merge first“); <code>branch</code> lehnt Namen ab, die der Server nicht annimmt; Server: gleichzeitiges Hochladen desselben Objekts scheitert nicht mehr mit Fehler 500; Hinweis auf den experimentellen Status</td></tr>
 <tr><td>07.11.2026</td><td>Programmversion 0.8: Handbuch überarbeitet; der Installer meldet es jetzt, wenn er nicht aus seiner Schublade gestartet wird, statt mit „object in use“ abzubrechen</td></tr>
 <tr><td>02.11.2026</td><td>Programmversion 0.7: <code>clone</code>, <code>switch</code> und <code>merge</code> behandeln auch <code>Äpfel</code>/<code>äpfel</code> auf Amiga, macOS und Windows als dieselbe Datei; ein <code>clone</code> mit zwei solchen Namen wird ganz zurückgenommen, statt ein Repository ohne Dateien zu hinterlassen</td></tr>
@@ -880,7 +881,7 @@ Schwesterprojekte: AmiCloudCore, AmiCloud, AmiOwnCloud.</p>
 </table>
 
 <footer>
-AmiVCS-Handbuch · Stand 07.11.2026 · Amiga-Fassung:
+AmiVCS-Handbuch · Stand 08.11.2026 · Amiga-Fassung:
 <code>AmiVCS.guide</code> (AmigaGuide) ·
 <a href="#">nach oben</a>
 </footer>

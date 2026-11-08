@@ -1,5 +1,5 @@
 @database "AmiVCS.guide"
-@$VER: AmiVCS.guide 0.9 (07.11.2026)
+@$VER: AmiVCS.guide 0.10 (08.11.2026)
 @author "Ronny Krueger"
 @(c) "2026 Ronny Krueger, GPL-3.0-or-later"
 @wordwrap
@@ -1102,8 +1102,8 @@ Server testen
 Bauen aus den Quellen
 ---------------------
 
-Die Quellen werden später auf GitHub veröffentlicht. Bis dahin gibt
-es die Amiga-Programme als Archiv auf Aminet.
+Die Quellen liegen auf GitHub, https://github.com/dangelrk/AmiVCS;
+die Amiga-Programme gibt es auch als Archiv auf Aminet.
 Beim Klonen das Submodul core/ (AmiCloudCore) mitnehmen:
 
   git clone --recurse-submodules https://github.com/dangelrk/AmiVCS.git
@@ -1175,6 +1175,10 @@ Fehlermeldungen und Wünsche:
 
   amitools@planet-rk.de
 
+Quellen und Fehlerberichte (Issues) auf GitHub:
+
+  https://github.com/dangelrk/AmiVCS
+
 Schwesterprojekte:
 
   AmiCloudCore  gemeinsame Bibliotheken
@@ -1190,6 +1194,21 @@ Schwesterprojekte:
 
 Versionsgeschichte
 ------------------
+
+Programmversion 0.10 (08.11.2026)
+  - Remote-URL pro Repository wie bei git: clone/push/pull <url>,
+    remote. Benutzer und Passwort werden bei Bedarf gefragt und auf
+    Wunsch im Repository gemerkt.
+  - Name und E-Mail des Autors wie bei git (amivcs config, global
+    oder pro Repository, auch für Merge-Commits); commit ohne Namen
+    lehnt ab.
+  - AmiVCSConfig ersetzt AMIVCSPrefs; amivcs.cfg wird nicht mehr
+    gelesen.
+  - push legt ein fehlendes Repository auch bei vorher gesetzter URL
+    an.
+  - amivcs-gui: Login-Fenster, Repository > Settings, Remote-URL in
+    der Kopfzeile, Rescan liest den Arbeitsbaum wirklich neu ein,
+    Fenster merken ihre Position.
 
 Programmversion 0.9 (07.11.2026)
   - push: Branches mit Umlauten oder Zeichen wie & + # lassen sich

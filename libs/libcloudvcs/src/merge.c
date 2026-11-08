@@ -10,6 +10,7 @@
 #include "oidset.h"
 #include "localfs.h"
 #include "vcsname.h"
+#include "vcsconfig.h"
 #include "ui_hooks.h"
 
 #include <stdio.h>
@@ -355,7 +356,15 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
         commit.parents[1] = theirs_commit;
         commit.nparents = 2;
         commit.mtime = (long)time(NULL);
-        vcs_utf8_copy(commit.author, sizeof(commit.author), "amivcs");
+        {
+            /* the configured identity (vcsconfig.h), like a commit;
+             * "amivcs" only if no name is set anywhere */
+            char ident[300];
+            char *utf8 = vcs_identity(repo->amivcs_dir, ident, sizeof(ident))
+                             ? vcs_text_from_local(ident) : NULL;
+            vcs_utf8_copy(commit.author, sizeof(commit.author), utf8 ? utf8 : "amivcs");
+            free(utf8);
+        }
         {
             char msg[192];
             snprintf(msg, sizeof(msg), "Merge branch '%s'", theirs_label);

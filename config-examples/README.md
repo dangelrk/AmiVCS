@@ -48,7 +48,7 @@ Fehlen Benutzer oder Passwort oder meldet der Server 401, fragen
 wird vorher, gespeichert im neuen Repository.
 
 Die frühere `amivcs.cfg` (`server=`, `user=`, `pass=`) und
-`remote_repo=` in `.amivcs/config` werden seit der Version nach 0.9 nicht mehr
+`remote_repo=` in `.amivcs/config` werden seit Version 0.10 nicht mehr
 gelesen.
 
 ## Server: config.php

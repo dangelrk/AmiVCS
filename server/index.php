@@ -98,7 +98,8 @@ amivcs push <?= h(serverUrl()) ?>/&lt;neues-repository&gt;</pre>
   <?php endif; ?>
 
   <footer class="landing-footer">
-    AmiVCS v<?= h(AMIVCS_VERSION) ?> · GPL-3.0 · AmigaOS 3.x, bsdsocket + AmiSSL
+    AmiVCS v<?= h(AMIVCS_VERSION) ?> · GPL-3.0 · AmigaOS 3.x, bsdsocket + AmiSSL ·
+    <a href="https://github.com/dangelrk/AmiVCS">Quellen auf GitHub</a>
   </footer>
 </body>
 </html>

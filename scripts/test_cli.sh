@@ -79,6 +79,7 @@ v merge dev
 chk "merge" sh -c "tail -1 '$O' | grep -qx 'end	0'"
 v log --all
 chk "Merge-Commit hat zwei Eltern" sh -c "grep \"Merge branch 'dev'\" '$O' | cut -f3 | grep -q ','"
+chk "Merge-Commit traegt die Identitaet" sh -c "grep \"Merge branch 'dev'\" '$O' | cut -f5 | grep -qx 'Tester'"
 v status
 chk "fremde Datei nicht eingesammelt" has 'change\tU\tN\tfremd.txt'
 

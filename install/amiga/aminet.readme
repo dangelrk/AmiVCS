@@ -45,7 +45,22 @@ Try it with copies of your data first; use at your own risk.
 Documentation and user interface are in German.
 Die Dokumentation (Docs/AmiVCS.guide) und die Programme sind deutsch.
 
+Disclaimer
+----------
+This software is provided "as is", without warranty of any kind,
+express or implied, including but not limited to the warranties of
+merchantability and fitness for a particular purpose. The entire risk
+as to its quality and performance is with you. In no event shall the
+author be liable for any damages arising from its use or inability to
+use it, including but not limited to loss or corruption of data, lost
+files on the computer or on a server, system crashes or downtime, even
+if advised of the possibility of such damages. Make backups before you
+use it (see also sections 15 and 16 of the GNU GPL).
+Keine Gewaehrleistung und keine Haftung fuer Datenverlust oder sonstige
+Schaeden; Benutzung auf eigene Gefahr, vorher Sicherungskopien anlegen.
+
 License
 -------
 GNU General Public License, version 3 or later. Contains the JSON parser
 Parson (MIT license, see THIRD-PARTY-NOTICES).
+Source code: https://github.com/dangelrk/AmiVCS
