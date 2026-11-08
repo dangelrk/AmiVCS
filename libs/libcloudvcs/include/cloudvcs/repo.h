@@ -30,6 +30,7 @@
 #include "object.h"
 #include "objstore.h"
 #include "refs.h"
+#include "mergestate.h"
 
 #define VCS_IGNORE_FILE ".amivcsignore"
 
@@ -66,9 +67,14 @@ typedef struct {
  * would pick up). A repo whose index still implicitly mirrors HEAD (see
  * vcs_index_load()) reports an empty `staged` -- exactly like a fresh
  * git repo before the first `git add`. */
+/* merge: the merge in progress (mergestate.h; merge.active 0 if none) --
+ * its conflict entries (vcs_mergestate_is_conflict()) are what status
+ * shows as "Unmerged paths". The <path>.theirs files that merge wrote
+ * are left out of `unstaged`, so `add -A` doesn't pick them up. */
 typedef struct {
     VcsChangeList staged;
     VcsChangeList unstaged;
+    VcsMergeState merge;
 } VcsStatus;
 
 /* Fills *out with the current staged/unstaged change lists. Returns 1 on
@@ -129,7 +135,11 @@ int vcs_repo_materialize_tree(VcsRepo *repo, const VcsOid *tree_oid);
  * stage_all stages every unstaged change first (index.h's
  * vcs_index_add_all()) -- the CLI's `-a`/`--all`, git convention: without
  * it, a plain commit with nothing previously add()ed commits nothing.
- * out_oid, if non-NULL, receives the new commit's OID. */
+ * out_oid, if non-NULL, receives the new commit's OID.
+ * During a merge (mergestate.h) it refuses while a conflict is
+ * unresolved; otherwise the commit gets both parents (HEAD and the
+ * merged commit), an empty message becomes "Merge branch '<label>'",
+ * and the merge state and the merge's .theirs files are removed. */
 int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int stage_all, VcsOid *out_oid);
 
 /* One commit's history-view data: full parent list (not just first-

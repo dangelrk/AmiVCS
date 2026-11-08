@@ -36,6 +36,80 @@ extern "C" {
 #include <QFontDatabase>
 #include <QFile>
 #include <QDir>
+#include <QFrame>
+#include <QTextCursor>
+#include <QTextCharFormat>
+#include <QItemSelectionModel>
+#include <QVector>
+#include <QPair>
+#include <cstring>
+
+// ---- diff rendering (repodiff.h sink -> coloured lines) ----
+namespace {
+struct DiffLines {
+    QVector<QPair<char, QString>> lines;   // ' ' '+' '-' '@' (hunk) 'F' (file) '!' (note)
+    int limit = 4000;
+    bool cut = false;
+    void add(char op, const QString &t)
+    {
+        if (lines.size() >= limit) { cut = true; return; }
+        lines.append(qMakePair(op, t));
+    }
+};
+
+void dl_file(const VcsFileDiff *f, void *ctx)
+{
+    auto *d = static_cast<DiffLines *>(ctx);
+    char *u = vcs_text_utf8(f->path);
+    QString path = QString::fromUtf8(u ? u : f->path);
+    free(u);
+    d->add('F', path);
+    if (f->binary) d->add('!', QObject::tr("(binary file or larger than 512 KB -- no line diff)"));
+}
+
+void dl_hunk(long as, long ac, long bs, long bc, void *ctx)
+{
+    static_cast<DiffLines *>(ctx)->add('@', QStringLiteral("@@ -%1,%2 +%3,%4 @@").arg(as).arg(ac).arg(bs).arg(bc));
+}
+
+void dl_line(char op, const char *text, long len, int eol, void *ctx)
+{
+    auto *d = static_cast<DiffLines *>(ctx);
+    d->add(op, QString::fromUtf8(text, (int)len));
+    if (!eol) d->add('!', QObject::tr("\\ No newline at end of file"));
+}
+
+const VcsRepoDiffSink kDiffSink = { dl_file, { dl_hunk, dl_line } };
+
+// writes the lines with tinted backgrounds that work on light and dark palettes
+void renderDiff(QPlainTextEdit *view, const DiffLines &d, bool showFileHeads)
+{
+    view->clear();
+    QTextCursor c(view->document());
+    QTextCharFormat plain, add, del, hunk, file, note;
+    add.setBackground(QColor(40, 170, 60, 60));
+    del.setBackground(QColor(220, 50, 50, 60));
+    hunk.setForeground(QColor(120, 120, 200));
+    file.setFontWeight(QFont::Bold);
+    note.setFontItalic(true);
+    bool first = true;
+    for (const auto &l : d.lines) {
+        if (l.first == 'F' && !showFileHeads) continue;
+        if (!first) c.insertText(QStringLiteral("\n"), plain);
+        first = false;
+        switch (l.first) {
+        case '+': c.insertText(QStringLiteral("+") + l.second, add); break;
+        case '-': c.insertText(QStringLiteral("-") + l.second, del); break;
+        case '@': c.insertText(l.second, hunk); break;
+        case 'F': c.insertText(QStringLiteral("\n") + l.second, file); break;
+        case '!': c.insertText(l.second, note); break;
+        default:  c.insertText(QStringLiteral(" ") + l.second, plain); break;
+        }
+    }
+    if (d.cut) c.insertText(QObject::tr("\n\n... (only the first %1 lines shown)").arg(d.limit), note);
+    view->moveCursor(QTextCursor::Start);
+}
+} // namespace
 
 static QString kindLabel(char kind)
 {
@@ -83,6 +157,22 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     m_branchLabel->setTextFormat(Qt::RichText);
     mainLayout->addWidget(m_branchLabel);
 
+    // shown while a merge with conflicts is in progress
+    m_mergeBanner = new QFrame(this);
+    m_mergeBanner->setFrameShape(QFrame::StyledPanel);
+    m_mergeBanner->setStyleSheet(QStringLiteral("QFrame { background: rgba(230, 160, 0, 60); }"));
+    auto *bannerLayout = new QHBoxLayout(m_mergeBanner);
+    m_mergeLabel = new QLabel(m_mergeBanner);
+    m_mergeLabel->setTextFormat(Qt::RichText);
+    m_mergeLabel->setWordWrap(true);
+    bannerLayout->addWidget(m_mergeLabel, 1);
+    auto *abortBtn = new QPushButton(tr("A&bort Merge"), m_mergeBanner);
+    abortBtn->setToolTip(tr("Give up the merge: every file goes back to how it was before"));
+    bannerLayout->addWidget(abortBtn);
+    connect(abortBtn, &QPushButton::clicked, this, &MainWindow::onAbortMerge);
+    m_mergeBanner->hide();
+    mainLayout->addWidget(m_mergeBanner);
+
     auto *tabs = new QTabWidget(this);
     mainLayout->addWidget(tabs, 1);
 
@@ -92,6 +182,31 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     auto *vertSplit = new QSplitter(Qt::Vertical, changesPage);
     auto *topSplit = new QSplitter(Qt::Horizontal, vertSplit);
     auto *listsSplit = new QSplitter(Qt::Vertical, topSplit);
+
+    m_conflictBox = new QWidget(listsSplit);
+    auto *conflictLayout = new QVBoxLayout(m_conflictBox);
+    conflictLayout->setContentsMargins(0, 0, 0, 0);
+    conflictLayout->addWidget(new QLabel(tr("<b>Conflicts</b> (edit the file and mark it resolved, or take one side)"), this));
+    m_conflictList = new QListWidget(this);
+    m_conflictList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    conflictLayout->addWidget(m_conflictList);
+    auto *conflictBtns = new QHBoxLayout;
+    auto *oursBtn = new QPushButton(tr("Take &ours"), this);
+    auto *theirsBtn = new QPushButton(tr("Take th&eirs"), this);
+    auto *resolvedBtn = new QPushButton(tr("&Mark resolved"), this);
+    oursBtn->setToolTip(tr("Keep this branch's version of the whole file"));
+    theirsBtn->setToolTip(tr("Use the merged branch's version of the whole file"));
+    resolvedBtn->setToolTip(tr("The file is fixed by hand -- stage it as it is now"));
+    conflictBtns->addWidget(oursBtn);
+    conflictBtns->addWidget(theirsBtn);
+    conflictBtns->addWidget(resolvedBtn);
+    conflictLayout->addLayout(conflictBtns);
+    connect(oursBtn, &QPushButton::clicked, this, &MainWindow::onTakeOurs);
+    connect(theirsBtn, &QPushButton::clicked, this, &MainWindow::onTakeTheirs);
+    connect(resolvedBtn, &QPushButton::clicked, this, &MainWindow::onMarkResolved);
+    connect(m_conflictList, &QListWidget::currentItemChanged, this,
+            [this](QListWidgetItem *item) { showConflictPreview(item); });
+    m_conflictBox->hide();
 
     auto *unstagedBox = new QWidget(listsSplit);
     auto *unstagedLayout = new QVBoxLayout(unstagedBox);
@@ -170,11 +285,25 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     m_historyView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_historyView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_historyView->horizontalHeader()->setStretchLastSection(true);
-    historyLayout->addWidget(m_historyView);
+    m_historyView->setSelectionMode(QAbstractItemView::SingleSelection);
+    auto *historySplit = new QSplitter(Qt::Vertical, historyPage);
+    historySplit->addWidget(m_historyView);
+    m_commitDiff = new QPlainTextEdit(this);
+    m_commitDiff->setReadOnly(true);
+    m_commitDiff->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_commitDiff->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_commitDiff->setPlaceholderText(tr("Select a commit to see its changes."));
+    historySplit->addWidget(m_commitDiff);
+    historySplit->setStretchFactor(0, 55);
+    historySplit->setStretchFactor(1, 45);
+    historyLayout->addWidget(historySplit);
+    connect(m_historyView->selectionModel(), &QItemSelectionModel::currentRowChanged, this,
+            [this](const QModelIndex &, const QModelIndex &) { onHistorySelected(); });
     auto *branchBtns = new QHBoxLayout;
     auto *newBranchBtn = new QPushButton(tr("New Branch..."), this);
     auto *switchBtn = new QPushButton(tr("Switch..."), this);
     auto *mergeBtn = new QPushButton(tr("Merge..."), this);
+    m_mergeBtn = mergeBtn;
     auto *cloneBtn = new QPushButton(tr("Clone..."), this);
     branchBtns->addWidget(newBranchBtn);
     branchBtns->addWidget(switchBtn);
@@ -208,6 +337,7 @@ MainWindow::MainWindow(const QString &cwd, const AcConfig &cfg, QWidget *parent)
     m_actNewBranch = repoMenu->addAction(tr("&New Branch..."), this, &MainWindow::onNewBranch);
     m_actSwitch = repoMenu->addAction(tr("&Switch Branch..."), this, &MainWindow::onSwitchBranch);
     m_actMerge = repoMenu->addAction(tr("&Merge Branch..."), this, &MainWindow::onMerge);
+    m_actAbortMerge = repoMenu->addAction(tr("&Abort Merge"), this, &MainWindow::onAbortMerge);
 
     auto *remoteMenu = menuBar()->addMenu(tr("Remo&te"));
     m_actClone = remoteMenu->addAction(tr("&Clone..."), this, &MainWindow::onClone);
@@ -287,6 +417,39 @@ void MainWindow::refreshUI()
             m_stagedList->addItem(item);
         }
 
+        m_conflictList->clear();
+        if (m_session.merge.active) {
+            for (int i = 0; i < m_session.merge.n; i++) {
+                const VcsMergeFile &f = m_session.merge.items[i];
+                if (!vcs_mergestate_is_conflict(&f)) continue;
+                QString text = QStringLiteral("%1  %2").arg(QString::fromLatin1(f.kind), shownPath(f.path));
+                if (f.status != 'U') text += tr("  (resolved)");
+                else if (f.theirs_file) text += tr("  (theirs beside it as .theirs)");
+                auto *item = new QListWidgetItem(text);
+                item->setData(Qt::UserRole, QByteArray(f.path));
+                item->setData(Qt::UserRole + 1, QChar(f.status));
+                if (f.status != 'U') item->setForeground(palette().color(QPalette::Disabled, QPalette::Text));
+                m_conflictList->addItem(item);
+            }
+            const int open = vcsgui_conflicts_open(&m_session);
+            const QString label = QString::fromUtf8(m_session.merge.label).toHtmlEscaped();
+            m_mergeLabel->setText(open
+                ? tr("<b>Merging '%1'</b> -- %n conflict(s) to resolve. Edit the files (look for the "
+                     "&lt;&lt;&lt;&lt;&lt;&lt;&lt; markers) and mark them resolved, or take one side; "
+                     "then commit.", nullptr, open).arg(label)
+                : tr("<b>Merging '%1'</b> -- all conflicts resolved. Commit to finish the merge.").arg(label));
+            // the message box gets the usual merge message, once
+            const QString mergeMsg = QStringLiteral("Merge branch '%1'").arg(QString::fromUtf8(m_session.merge.label));
+            if (m_commitMsg->toPlainText().trimmed().isEmpty() && m_mergeMsgShown != mergeMsg) {
+                m_commitMsg->setPlainText(mergeMsg);
+                m_mergeMsgShown = mergeMsg;
+            }
+        } else {
+            m_mergeMsgShown.clear();
+        }
+        m_mergeBanner->setVisible(m_session.merge.active);
+        m_conflictBox->setVisible(m_session.merge.active);
+
         QString branchText = m_session.head.detached
             ? tr("(detached HEAD)")
             : shortBranchName(m_session.head.branch);
@@ -299,10 +462,13 @@ void MainWindow::refreshUI()
         setWindowTitle(QStringLiteral("AMIVCS GUI - %1 [%2]").arg(m_cwd, branchText));
     } else {
         m_branchLabel->setText(tr("(not a repository -- use Repository > Init Repository Here)"));
+        m_mergeBanner->hide();
+        m_conflictBox->hide();
         setWindowTitle(tr("AMIVCS GUI"));
     }
 
     showPreview(nullptr);
+    m_commitDiff->clear();
     m_logModel->refresh();
     m_historyView->resizeColumnsToContents();
     updateActionsEnabled();
@@ -315,21 +481,23 @@ void MainWindow::updateActionsEnabled()
     m_actRefresh->setEnabled(open);
     m_actNewBranch->setEnabled(open);
     m_actSwitch->setEnabled(open);
-    m_actMerge->setEnabled(open);
+    m_actMerge->setEnabled(open && !m_session.merge.active);
+    m_mergeBtn->setEnabled(open && !m_session.merge.active);
+    m_actAbortMerge->setEnabled(open && m_session.merge.active);
     m_actPush->setEnabled(open);
     m_actPull->setEnabled(open);
     m_stageBtn->setEnabled(open);
     m_unstageBtn->setEnabled(open);
     m_stageAllBtn->setEnabled(open);
-    m_commitBtn->setEnabled(open);
+    m_commitBtn->setEnabled(open && vcsgui_conflicts_open(&m_session) == 0);
     m_rescanBtn->setEnabled(open);
     m_pushBtn->setEnabled(open);
     m_pullBtn->setEnabled(open);
     m_actSettings->setEnabled(open);
 }
 
-// The right-hand pane: the selected file's current content (the first
-// 32 KB, binary files only named) -- a diff is to come.
+// The right-hand pane: what changed in the selected file, as a line
+// diff (staged: against HEAD; unstaged: against what is staged).
 void MainWindow::showPreview(QListWidgetItem *item)
 {
     if (!item) {
@@ -339,28 +507,141 @@ void MainWindow::showPreview(QListWidgetItem *item)
     }
     const QByteArray raw = item->data(Qt::UserRole).toByteArray();
     const QChar kind = item->data(Qt::UserRole + 1).toChar();
+    const bool staged = item->listWidget() == m_stagedList;
     const QString shown = shownPath(raw.constData());
-    m_previewTitle->setText(QStringLiteral("<b>%1</b>&nbsp;&nbsp;(%2)")
-                                .arg(shown.toHtmlEscaped(), kindLabel(kind.toLatin1())));
-    if (kind == QLatin1Char('D')) {
-        m_preview->setPlainText(tr("(file deleted in the working directory)"));
-        return;
-    }
-    QFile f(QDir(m_cwd).filePath(QString::fromUtf8(raw)));
-    if (!f.open(QIODevice::ReadOnly)) {
+    m_previewTitle->setText(QStringLiteral("<b>%1</b>&nbsp;&nbsp;(%2, %3)")
+                                .arg(shown.toHtmlEscaped(), kindLabel(kind.toLatin1()),
+                                     staged ? tr("staged") : tr("not staged")));
+    DiffLines d;
+    const int n = vcsgui_diff_file(&m_session, raw.constData(), staged ? 1 : 0, &kDiffSink, &d);
+    if (n < 0) {
         m_preview->setPlainText(tr("(cannot read the file)"));
         return;
     }
-    const qint64 limit = 32 * 1024;
-    QByteArray data = f.read(limit);
-    if (data.contains('\0')) {
-        m_preview->setPlainText(tr("(binary file)"));
+    if (d.lines.size() <= 1) {   // only the file head: no line changes
+        m_preview->setPlainText(d.lines.isEmpty() || d.lines.first().first != 'F'
+                                    ? tr("(no changes)") : tr("(no line changes)"));
+        if (d.lines.size() == 1 && d.lines.first().first == '!') renderDiff(m_preview, d, false);
         return;
     }
-    QString text = QString::fromUtf8(data);
-    if (f.size() > limit)
-        text += tr("\n\n... (only the first 32 KB shown)");
-    m_preview->setPlainText(text);
+    renderDiff(m_preview, d, false);
+}
+
+// A conflicting file as it is now in the working tree, with the
+// conflict markers highlighted.
+void MainWindow::showConflictPreview(QListWidgetItem *item)
+{
+    if (!item) return;
+    const QByteArray raw = item->data(Qt::UserRole).toByteArray();
+    m_previewTitle->setText(QStringLiteral("<b>%1</b>&nbsp;&nbsp;(%2)")
+                                .arg(shownPath(raw.constData()).toHtmlEscaped(), tr("conflict")));
+    QFile f(QDir(m_cwd).filePath(QString::fromUtf8(raw)));
+    if (!f.open(QIODevice::ReadOnly)) {
+        m_preview->setPlainText(tr("(the file is not in the working tree -- take a side, "
+                                   "or mark it resolved to keep it deleted)"));
+        return;
+    }
+    const qint64 limit = 512 * 1024;
+    QByteArray data = f.read(limit);
+    if (data.contains('\0')) {
+        m_preview->setPlainText(tr("(binary file -- the other side is beside it as .theirs)"));
+        return;
+    }
+    m_preview->clear();
+    QTextCursor c(m_preview->document());
+    QTextCharFormat plain, marker, ours, theirs;
+    marker.setFontWeight(QFont::Bold);
+    marker.setBackground(QColor(230, 160, 0, 90));
+    ours.setBackground(QColor(60, 120, 220, 45));
+    theirs.setBackground(QColor(40, 170, 60, 45));
+    int zone = 0;   // 0 outside, 1 ours, 2 theirs
+    const QList<QByteArray> lines = data.split('\n');
+    for (int i = 0; i < lines.size(); i++) {
+        QByteArray l = lines[i];
+        if (l.endsWith('\r')) l.chop(1);
+        if (i) c.insertText(QStringLiteral("\n"), plain);
+        const QString t = QString::fromUtf8(l);
+        if (l.startsWith("<<<<<<<")) { zone = 1; c.insertText(t, marker); }
+        else if (l.startsWith("=======") && zone == 1) { zone = 2; c.insertText(t, marker); }
+        else if (l.startsWith(">>>>>>>") && zone == 2) { zone = 0; c.insertText(t, marker); }
+        else c.insertText(t, zone == 1 ? ours : zone == 2 ? theirs : plain);
+    }
+    m_preview->moveCursor(QTextCursor::Start);
+}
+
+void MainWindow::onHistorySelected()
+{
+    const QModelIndex idx = m_historyView->currentIndex();
+    m_commitDiff->clear();
+    if (!idx.isValid() || idx.row() >= m_session.log_all.n) return;
+    const VcsLogEntry &e = m_session.log_all.items[idx.row()];
+    DiffLines d;
+    char hex[VCS_OID_HEX];
+    vcs_oid_to_hex(&e.oid, hex);
+    d.add('!', tr("commit %1%2").arg(QString::fromLatin1(hex),
+                                     e.nparents > 1 ? tr("  (merge -- changes against the first parent)") : QString()));
+    d.add('!', QString::fromUtf8(e.message ? e.message : "").trimmed());
+    if (vcsgui_diff_commit(&m_session, &e.oid, &kDiffSink, &d) < 0) d.add('!', tr("(cannot read the commit)"));
+    renderDiff(m_commitDiff, d, true);
+}
+
+void MainWindow::resolveSelected(int how)
+{
+    QList<QListWidgetItem *> items = m_conflictList->selectedItems();
+    if (items.isEmpty() && m_conflictList->currentItem()) items << m_conflictList->currentItem();
+    if (items.isEmpty()) {
+        QMessageBox::information(this, tr("Conflicts"), tr("Select a conflict in the list first."));
+        return;
+    }
+    for (QListWidgetItem *item : items) {
+        const QByteArray path = item->data(Qt::UserRole).toByteArray();
+        const int ok = how == 2 ? vcsgui_add(&m_session, path.constData())
+                                : vcsgui_resolve(&m_session, path.constData(), how);
+        if (!ok) {
+            QMessageBox::warning(this, tr("Conflicts"), QString::fromUtf8(vcsgui_last_message()));
+            break;
+        }
+    }
+    refreshUI();
+}
+
+void MainWindow::onTakeOurs() { resolveSelected(0); }
+void MainWindow::onTakeTheirs() { resolveSelected(1); }
+
+void MainWindow::onMarkResolved()
+{
+    // a file still holding markers is most likely not done yet
+    QList<QListWidgetItem *> items = m_conflictList->selectedItems();
+    if (items.isEmpty() && m_conflictList->currentItem()) items << m_conflictList->currentItem();
+    for (QListWidgetItem *item : items) {
+        QFile f(QDir(m_cwd).filePath(QString::fromUtf8(item->data(Qt::UserRole).toByteArray())));
+        QByteArray head;
+        if (f.open(QIODevice::ReadOnly)) head = f.read(512 * 1024);
+        if (head.startsWith("<<<<<<< ") || head.contains("\n<<<<<<< ")) {
+            if (QMessageBox::question(this, tr("Mark resolved"),
+                    tr("%1 still contains conflict markers (<<<<<<<).\n\nMark it resolved anyway?")
+                        .arg(item->text())) != QMessageBox::Yes)
+                return;
+        }
+    }
+    resolveSelected(2);
+}
+
+void MainWindow::onAbortMerge()
+{
+    if (!m_session.merge.active) return;
+    if (QMessageBox::question(this, tr("Abort Merge"),
+            tr("Give up merging '%1'?\n\nEvery file the merge changed goes back to how it was before, "
+               "including your edits to conflicting files. Files not under version control stay.")
+                .arg(QString::fromUtf8(m_session.merge.label))) != QMessageBox::Yes)
+        return;
+    if (!vcsgui_merge_abort(&m_session)) {
+        QMessageBox::warning(this, tr("Abort Merge"), QString::fromUtf8(vcsgui_last_message()));
+    } else {
+        if (m_commitMsg->toPlainText().trimmed() == m_mergeMsgShown) m_commitMsg->clear();
+        statusBar()->showMessage(tr("Merge aborted."), 5000);
+    }
+    refreshUI();
 }
 
 // Refresh: read the working tree again (files changed outside), then
@@ -402,7 +683,8 @@ void MainWindow::onStageAll()
 void MainWindow::onCommit()
 {
     if (m_stageAllCheck->isChecked()) onRefresh();   // -a takes what is changed now
-    if (m_session.staged.n == 0 && !(m_stageAllCheck->isChecked() && m_session.unstaged.n > 0)) {
+    if (!m_session.merge.active && m_session.staged.n == 0
+        && !(m_stageAllCheck->isChecked() && m_session.unstaged.n > 0)) {
         QMessageBox::information(this, tr("Commit"),
             tr("Nothing to commit.\n\nStage files first (double-click them in \"Unstaged Changes\", "
                "or \"Stage selected\"/\"Stage all\"), or tick \"Stage all changed files before commit\"."));
@@ -426,7 +708,7 @@ void MainWindow::onCommit()
         }
     }
     QString msg = m_commitMsg->toPlainText().trimmed();
-    if (msg.isEmpty()) {
+    if (msg.isEmpty() && !m_session.merge.active) {
         QMessageBox::information(this, tr("Commit"),
             tr("Please type a commit message into the \"Commit message\" field first."));
         m_commitMsg->setFocus();
@@ -482,8 +764,16 @@ void MainWindow::onMerge()
 {
     QString branch = pickBranch(tr("Merge Branch"), tr("Merge which branch into the current one?"));
     if (branch.isEmpty()) return;
+    if (m_session.merge.active) return;   // the buttons are off; finish or abort it first
     if (!vcsgui_merge(&m_session, branch.toUtf8().constData())) {
-        QMessageBox::warning(this, tr("Merge"), QString::fromUtf8(vcsgui_last_message()));
+        vcsgui_refresh(&m_session);
+        if (m_session.merge.active)
+            QMessageBox::information(this, tr("Merge"),
+                tr("The merge stopped on %n conflict(s). They are listed under \"Conflicts\": "
+                   "edit each file and mark it resolved, or take one side as a whole. "
+                   "Then commit -- or abort the merge.", nullptr, vcsgui_conflicts_open(&m_session)));
+        else
+            QMessageBox::warning(this, tr("Merge"), QString::fromUtf8(vcsgui_last_message()));
     } else {
         statusBar()->showMessage(QString::fromUtf8(vcsgui_last_message()), 5000);
     }

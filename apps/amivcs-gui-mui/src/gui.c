@@ -51,6 +51,12 @@
 #define ID_UNSTAGED_DCLICK 18
 #define ID_STAGED_DCLICK   19
 #define ID_SETTINGS        20
+#define ID_ABORT_MERGE     21
+#define ID_TAKE_OURS       22
+#define ID_TAKE_THEIRS     23
+#define ID_MARK_RESOLVED   24
+#define ID_CONFLICT_ACTIVE 25
+#define ID_HISTORY_ACTIVE  26
 #define ID_LOGIN_OK        903
 #define ID_LOGIN_CANCEL    904
 
@@ -78,6 +84,8 @@ static Object *g_commit_string;     /* TextEditor or String, see g_msg_is_editor
 static int     g_msg_is_editor;
 static Object *g_stage_all_check;
 static Object *g_preview_title, *g_preview_text;
+static Object *g_merge_group, *g_merge_text, *g_conflict_group, *g_conflict_list;
+static Object *g_commit_diff, *g_bt_commit, *g_bt_merge;
 static void set_preview(const char *title, char *text);
 
 /* vbcc's C library has no strdup() */
@@ -125,6 +133,92 @@ static __saveds LONG change_display_func(__reg("a0") struct Hook *hook,
     return 0;
 }
 static struct Hook change_display_hook = { { NULL, NULL }, (APTR)change_display_func, NULL, NULL };
+
+/* Conflict list: "kind  path  (state)" */
+static char g_disp_conflict[320];
+
+static __saveds LONG conflict_display_func(__reg("a0") struct Hook *hook,
+                                           __reg("a2") char **array,
+                                           __reg("a1") VcsMergeFile *f)
+{
+    (void)hook;
+    if (!f) { array[0] = "Conflict"; return 0; }
+    {
+        char shown[256];
+        vcs_text_to_local_buf(f->path, shown, sizeof(shown));
+        snprintf(g_disp_conflict, sizeof(g_disp_conflict), "%s%-13s %s%s",
+                 f->status == 'U' ? "" : "\33i", f->kind, shown,
+                 f->status != 'U' ? "  (resolved)" : f->theirs_file ? "  (+ .theirs)" : "");
+    }
+    array[0] = g_disp_conflict;
+    return 0;
+}
+static struct Hook conflict_display_hook = { { NULL, NULL }, (APTR)conflict_display_func, NULL, NULL };
+
+/* ------------------------------------------------------------------ */
+/* Diff lines into a list (repodiff.h sink). Text engine styles mark the */
+/* kind of line; the +/- in front says it too, for every screen mode.    */
+/* ------------------------------------------------------------------ */
+#define DIFF_MAX_ROWS 2000
+
+typedef struct {
+    Object *list;
+    int rows;
+} DiffTarget;
+
+static void diff_row(DiffTarget *t, const char *style, char op, const char *text, long len)
+{
+    char row[260];
+    int col = 0, out;
+    long i;
+    if (t->rows >= DIFF_MAX_ROWS) {
+        if (t->rows == DIFF_MAX_ROWS)
+            DoMethod(t->list, MUIM_List_InsertSingle, "\33i... (more lines not shown)", MUIV_List_Insert_Bottom);
+        t->rows++;
+        return;
+    }
+    out = snprintf(row, sizeof(row), "%s", style);
+    if (op) row[out++] = op;
+    for (i = 0; i < len && out < (int)sizeof(row) - 1; i++) {
+        char ch = text[i];
+        if (ch == '\t') {
+            do { if (out < (int)sizeof(row) - 1) row[out++] = ' '; col++; } while (col % 8);
+            continue;
+        }
+        if (ch == '\33' || ch == '\r') ch = ' ';   /* ESC would start a style */
+        row[out++] = ch;
+        col++;
+    }
+    row[out] = '\0';
+    DoMethod(t->list, MUIM_List_InsertSingle, row, MUIV_List_Insert_Bottom);
+    t->rows++;
+}
+
+static void dl_file(const VcsFileDiff *f, void *ctx)
+{
+    DiffTarget *t = (DiffTarget *)ctx;
+    char shown[256];
+    vcs_text_to_local_buf(f->path, shown, sizeof(shown));
+    if (t->list == g_commit_diff) diff_row(t, "\33b", 0, shown, (long)strlen(shown));
+    if (f->binary) diff_row(t, "\33i", 0, "(binary file or larger than 512 KB)", 35);
+}
+
+static void dl_hunk(long as, long ac, long bs, long bc, void *ctx)
+{
+    char h[64];
+    snprintf(h, sizeof(h), "@@ -%ld,%ld +%ld,%ld @@", as, ac, bs, bc);
+    diff_row((DiffTarget *)ctx, "\33b", 0, h, (long)strlen(h));
+}
+
+static void dl_line(char op, const char *text, long len, int eol, void *ctx)
+{
+    DiffTarget *t = (DiffTarget *)ctx;
+    /* pen 5 (FILLPEN) for added, bold for removed */
+    diff_row(t, op == '+' ? "\0335" : op == '-' ? "\33b" : "", op, text, len);
+    if (!eol) diff_row(t, "\33i", 0, "\\ No newline at end of file", 28);
+}
+
+static const VcsRepoDiffSink g_diff_sink = { dl_file, { dl_hunk, dl_line } };
 
 /* ------------------------------------------------------------------ */
 /* Small modal-ish string input window -- copied verbatim (generic, not  */
@@ -337,6 +431,14 @@ static void refresh_lists(void)
     set(g_staged_list, MUIA_List_Quiet, FALSE);
     DoMethod(g_staged_list, MUIM_List_Redraw, MUIV_List_Redraw_All);
 
+    set(g_conflict_list, MUIA_List_Quiet, TRUE);
+    DoMethod(g_conflict_list, MUIM_List_Clear);
+    for (i = 0; i < g_session.merge.n; i++) {
+        if (vcs_mergestate_is_conflict(&g_session.merge.items[i]))
+            DoMethod(g_conflict_list, MUIM_List_InsertSingle, &g_session.merge.items[i], MUIV_List_Insert_Bottom);
+    }
+    set(g_conflict_list, MUIA_List_Quiet, FALSE);
+
     historylist_free(g_history_rows);
     g_history_rows = NULL;
     g_history_n = 0;
@@ -357,6 +459,24 @@ static void refresh_ui(void)
 
     refresh_lists();
     set_preview("", NULL);
+    DoMethod(g_commit_diff, MUIM_List_Clear);
+
+    if (g_session.is_open && g_session.merge.active) {
+        int open = vcsgui_conflicts_open(&g_session);
+        char label[200];
+        vcs_text_to_local_buf(g_session.merge.label, label, sizeof(label));
+        if (open)
+            snprintf(buf, sizeof(buf), "\33bMerging '%s'\33n -- %d conflict(s): edit the files and\n"
+                     "mark them resolved, or take one side; then commit.", label, open);
+        else
+            snprintf(buf, sizeof(buf), "\33bMerging '%s'\33n -- all conflicts resolved.\n"
+                     "Commit to finish the merge.", label);
+        set(g_merge_text, MUIA_Text_Contents, buf);
+    }
+    set(g_merge_group, MUIA_ShowMe, g_session.is_open && g_session.merge.active);
+    set(g_conflict_group, MUIA_ShowMe, g_session.is_open && g_session.merge.active);
+    set(g_bt_commit, MUIA_Disabled, vcsgui_conflicts_open(&g_session) > 0);
+    set(g_bt_merge, MUIA_Disabled, g_session.merge.active ? TRUE : FALSE);
 
     if (g_session.is_open) {
         const char *branch = g_session.head.detached ? "(detached)" : g_session.head.branch;
@@ -375,8 +495,8 @@ static void refresh_ui(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* File preview (git gui's right-hand pane, without the diff for now):   */
-/* the selected file's current content from the working directory.       */
+/* File preview (git gui's right-hand pane): the selected file's line    */
+/* diff, or a conflicting file's content with its markers.               */
 /* ------------------------------------------------------------------ */
 #define PREVIEW_MAX 32768
 
@@ -403,38 +523,61 @@ static void set_preview(const char *title, char *text)
             p++;
         }
         row[col < (int)sizeof(row) - 1 ? col : (int)sizeof(row) - 1] = '\0';
-        DoMethod(g_preview_text, MUIM_List_InsertSingle, row, MUIV_List_Insert_Bottom);
+        if (strncmp(row, "<<<<<<<", 7) == 0 || strncmp(row, "=======", 7) == 0
+            || strncmp(row, ">>>>>>>", 7) == 0) {
+            char marked[260];   /* conflict markers stand out */
+            snprintf(marked, sizeof(marked), "\33b\0335%s", row);
+            DoMethod(g_preview_text, MUIM_List_InsertSingle, marked, MUIV_List_Insert_Bottom);
+        } else {
+            DoMethod(g_preview_text, MUIM_List_InsertSingle, row, MUIV_List_Insert_Bottom);
+        }
         if (*p == '\n') p++;
     }
     set(g_preview_text, MUIA_List_Quiet, FALSE);
     free(text);
 }
 
-static void show_preview(const VcsChange *c)
+static void show_preview(const VcsChange *c, int staged)
 {
-    char shown[256], path[1024], title[320];
+    char shown[256], title[320];
     const char *kind;
-    BPTR fh;
-    char *buf;
-    LONG n, i;
+    DiffTarget t;
+    int n;
 
     if (!c) { set_preview("", NULL); return; }
     kind = c->kind == 'N' ? "new" : c->kind == 'M' ? "modified" : "deleted";
     vcs_text_to_local_buf(c->path, shown, sizeof(shown));
-    snprintf(title, sizeof(title), "\33b%s\33n  (%s)", shown, kind);
-    if (c->kind == 'D') {
-        set_preview(title, dupstr("(file deleted in the working directory)"));
-        return;
-    }
+    snprintf(title, sizeof(title), "\33b%s\33n  (%s, %s)", shown, kind, staged ? "staged" : "not staged");
+    set_preview(title, NULL);
+    t.list = g_preview_text;
+    t.rows = 0;
+    set(g_preview_text, MUIA_List_Quiet, TRUE);
+    n = vcsgui_diff_file(&g_session, c->path, staged, &g_diff_sink, &t);
+    if (n < 0) DoMethod(g_preview_text, MUIM_List_InsertSingle, "(cannot read the file)", MUIV_List_Insert_Bottom);
+    else if (t.rows == 0) DoMethod(g_preview_text, MUIM_List_InsertSingle, "(no line changes)", MUIV_List_Insert_Bottom);
+    set(g_preview_text, MUIA_List_Quiet, FALSE);
+}
+
+/* A conflicting file as it is now: the working-tree content, markers
+ * in bold (the shared set_preview() turns it into rows). */
+static void show_conflict(const VcsMergeFile *f)
+{
+    char shown[256], path[1024], title[320];
+    BPTR fh;
+    char *buf;
+    LONG n, i;
+
+    if (!f) { set_preview("", NULL); return; }
+    vcs_text_to_local_buf(f->path, shown, sizeof(shown));
+    snprintf(title, sizeof(title), "\33b%s\33n  (conflict: %s)", shown, f->kind);
     strncpy(path, g_session.root, sizeof(path) - 1);
     path[sizeof(path) - 1] = '\0';
     AddPart((STRPTR)path, (STRPTR)shown, sizeof(path));
-
     buf = (char *)malloc(PREVIEW_MAX + 64);
     if (!buf) { set_preview(title, NULL); return; }
     fh = Open((STRPTR)path, MODE_OLDFILE);
     if (!fh) {
-        strcpy(buf, "(cannot read the file)");
+        strcpy(buf, "(not in the working tree -- take a side, or\nmark it resolved to keep it deleted)");
         set_preview(title, buf);
         return;
     }
@@ -442,23 +585,32 @@ static void show_preview(const VcsChange *c)
     Close(fh);
     if (n < 0) n = 0;
     for (i = 0; i < n; i++) {
-        if (buf[i] == '\0') {   /* binary: say so instead of showing noise */
-            strcpy(buf, "(binary file)");
+        if (buf[i] == '\0') {
+            strcpy(buf, "(binary file -- the other side is beside it as .theirs)");
             set_preview(title, buf);
             return;
         }
-        if (buf[i] == '\33') buf[i] = ' '; /* the list would read ESC as a style code */
+        if (buf[i] == '\33') buf[i] = ' ';
     }
     buf[n] = '\0';
-    if (n == PREVIEW_MAX) strcat(buf, "\n\n... (only the first 32 KB shown)");
     set_preview(title, buf);
+}
+
+static void conflict_active(void)
+{
+    LONG active = -1;
+    VcsMergeFile *f = NULL;
+    get(g_conflict_list, MUIA_List_Active, &active);
+    if (active >= 0) DoMethod(g_conflict_list, MUIM_List_GetEntry, active, &f);
+    show_conflict(f);
 }
 
 static void preview_active(Object *list_obj, const VcsChangeList *changes)
 {
     LONG active = -1;
     get(list_obj, MUIA_List_Active, &active);
-    show_preview(active >= 0 && active < changes->n ? &changes->items[active] : NULL);
+    show_preview(active >= 0 && active < changes->n ? &changes->items[active] : NULL,
+                 list_obj == g_staged_list);
 }
 
 /* Double-click moves one file across, like clicking its icon in git gui. */
@@ -545,7 +697,7 @@ static int collect_selected_paths(Object *list_obj, const VcsChangeList *changes
 
 static void do_stage_selected(void)
 {
-    char paths[MAX_BATCH][1024];
+    static char paths[MAX_BATCH][1024];   /* 64 KB: never on the stack */
     int n = collect_selected_paths(g_unstaged_list, &g_session.unstaged, paths);
     int i;
     for (i = 0; i < n; i++) vcsgui_add(&g_session, paths[i]);
@@ -554,7 +706,7 @@ static void do_stage_selected(void)
 
 static void do_unstage_selected(void)
 {
-    char paths[MAX_BATCH][1024];
+    static char paths[MAX_BATCH][1024];   /* 64 KB: never on the stack */
     int n = collect_selected_paths(g_staged_list, &g_session.staged, paths);
     int i;
     for (i = 0; i < n; i++) vcsgui_remove(&g_session, paths[i]);
@@ -604,7 +756,7 @@ static void do_commit(void)
 
     get(g_stage_all_check, MUIA_Selected, &stage_all);
     if (stage_all) do_refresh();   /* -a takes what is changed now */
-    if (g_session.staged.n == 0 && !(stage_all && g_session.unstaged.n > 0)) {
+    if (!g_session.merge.active && g_session.staged.n == 0 && !(stage_all && g_session.unstaged.n > 0)) {
         MUI_Request(g_app, g_main_window, 0, "Commit", "_OK",
                     "Nothing to commit.\n\n"
                     "Stage files first (double-click them in \"Unstaged Changes\",\n"
@@ -628,6 +780,7 @@ static void do_commit(void)
         }
     }
     text = get_commit_message();
+    if (!text && g_session.merge.active) text = dupstr("");   /* "Merge branch '...'" */
     if (!text) {
         MUI_Request(g_app, g_main_window, 0, "Commit", "_OK",
                     "Please type a commit message into the\n"
@@ -641,7 +794,7 @@ static void do_commit(void)
         free(msg);
         free(text);
         if (!ok) {
-            MUI_Request(g_app, g_main_window, 0, "Commit", "_OK", (char *)vcsgui_last_message());
+            MUI_Request(g_app, g_main_window, 0, "Commit", "_OK", "%s", (char *)vcsgui_last_message());
             return;
         }
     }
@@ -667,7 +820,7 @@ static void show_branch_list_hint(void)
         n = snprintf(msg + used, sizeof(msg) - (size_t)used, "  %s\n", shown);
         if (n > 0) used += n;
     }
-    MUI_Request(g_app, NULL, 0, "Branches", "_OK", msg);
+    MUI_Request(g_app, NULL, 0, "Branches", "_OK", "%s", msg);
 }
 
 static void do_new_branch(void)
@@ -680,7 +833,7 @@ static void do_new_branch(void)
         if (u) { vcs_utf8_copy(name, sizeof(name), u); free(u); }
     }
     if (!vcsgui_branch_create(&g_session, name)) {
-        MUI_Request(g_app, NULL, 0, "New Branch", "_OK", (char *)vcsgui_last_message());
+        MUI_Request(g_app, NULL, 0, "New Branch", "_OK", "%s", (char *)vcsgui_last_message());
     }
     refresh_ui();
 }
@@ -700,7 +853,7 @@ static void do_switch_branch(void)
         if (u) { vcs_utf8_copy(name, sizeof(name), u); free(u); }
     }
     if (!vcsgui_switch(&g_session, name)) {
-        MUI_Request(g_app, NULL, 0, "Switch Branch", "_OK", (char *)vcsgui_last_message());
+        MUI_Request(g_app, NULL, 0, "Switch Branch", "_OK", "%s", (char *)vcsgui_last_message());
     }
     refresh_ui();
 }
@@ -712,6 +865,12 @@ static void do_merge_branch(void)
         MUI_Request(g_app, NULL, 0, "Merge Branch", "_OK", "No branches yet -- commit first.");
         return;
     }
+    if (g_session.merge.active) {
+        MUI_Request(g_app, NULL, 0, "Merge", "_OK",
+                    "A merge is in progress: finish it with Commit,\n"
+                    "or use Abort Merge.");
+        return;
+    }
     show_branch_list_hint();
     if (!ask_string("Merge which branch into the current one?", "", name, sizeof(name))) return;
     if (!name[0]) return;
@@ -719,12 +878,103 @@ static void do_merge_branch(void)
         char *u = g_session.is_open ? vcs_repo_branch_name(&g_session.repo, name) : vcs_text_from_local(name);
         if (u) { vcs_utf8_copy(name, sizeof(name), u); free(u); }
     }
+    if (g_session.merge.active) {
+        MUI_Request(g_app, NULL, 0, "Merge", "_OK",
+                    "A merge is in progress: finish it with Commit,\n"
+                    "or use Abort Merge.");
+        return;
+    }
     if (!vcsgui_merge(&g_session, name)) {
-        MUI_Request(g_app, NULL, 0, "Merge", "_OK", (char *)vcsgui_last_message());
+        vcsgui_refresh(&g_session);
+        refresh_ui();   /* the lists point into the session again */
+        if (g_session.merge.active)
+            MUI_Request(g_app, NULL, 0, "Merge", "_OK",
+                        "The merge stopped on %ld conflict(s), listed under\n"
+                        "\"Conflicts\": edit each file and mark it resolved,\n"
+                        "or take one side as a whole. Then commit --\n"
+                        "or abort the merge.", (long)vcsgui_conflicts_open(&g_session));
+        else
+            MUI_Request(g_app, NULL, 0, "Merge", "_OK", "%s", (char *)vcsgui_last_message());
     } else {
         set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     }
     refresh_ui();
+}
+
+static void do_abort_merge(void)
+{
+    char label[200];
+    if (!g_session.merge.active) return;
+    vcs_text_to_local_buf(g_session.merge.label, label, sizeof(label));
+    if (MUI_Request(g_app, g_main_window, 0, "Abort Merge", "_Abort merge|_Cancel",
+                    "Give up merging '%s'?\n\n"
+                    "Every file the merge changed goes back to how it was\n"
+                    "before, including your edits to conflicting files.\n"
+                    "Files not under version control stay.", label) != 1)
+        return;
+    if (!vcsgui_merge_abort(&g_session))
+        MUI_Request(g_app, NULL, 0, "Abort Merge", "_OK", "%s", (char *)vcsgui_last_message());
+    else
+        set(g_main_status, MUIA_Text_Contents, "Merge aborted.");
+    refresh_ui();
+}
+
+/* how: 0 ours, 1 theirs, 2 marked resolved (staged as it is) */
+static void do_resolve(int how)
+{
+    static char paths[MAX_BATCH][1024];   /* 64 KB: never on the stack */
+    LONG cookie = MUIV_List_NextSelected_Start;
+    int n = 0, i;
+
+    for (;;) {   /* paths first: every call below reloads the session */
+        VcsMergeFile *f = NULL;
+        DoMethod(g_conflict_list, MUIM_List_NextSelected, &cookie);
+        if (cookie == MUIV_List_NextSelected_End || n >= MAX_BATCH) break;
+        DoMethod(g_conflict_list, MUIM_List_GetEntry, cookie, &f);
+        if (f) { strncpy(paths[n], f->path, sizeof(paths[n]) - 1); paths[n][sizeof(paths[n]) - 1] = '\0'; n++; }
+    }
+    if (n == 0) {
+        LONG active = -1;
+        VcsMergeFile *f = NULL;
+        get(g_conflict_list, MUIA_List_Active, &active);
+        if (active >= 0) DoMethod(g_conflict_list, MUIM_List_GetEntry, active, &f);
+        if (f) { strncpy(paths[0], f->path, sizeof(paths[0]) - 1); paths[0][sizeof(paths[0]) - 1] = '\0'; n = 1; }
+    }
+    if (n == 0) {
+        MUI_Request(g_app, g_main_window, 0, "Conflicts", "_OK", "Select a conflict in the list first.");
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        int ok = how == 2 ? vcsgui_add(&g_session, paths[i]) : vcsgui_resolve(&g_session, paths[i], how);
+        if (!ok) {
+            refresh_ui();   /* an earlier path may have changed the session */
+            MUI_Request(g_app, NULL, 0, "Conflicts", "_OK", "%s", (char *)vcsgui_last_message());
+            break;
+        }
+    }
+    refresh_ui();
+}
+
+/* History: the selected commit's changes below the list */
+static void history_active(void)
+{
+    LONG active = -1;
+    HistoryRow *row = NULL;
+    DiffTarget t;
+    get(g_history_list, MUIA_List_Active, &active);
+    DoMethod(g_commit_diff, MUIM_List_Clear);
+    if (active < 0) return;
+    DoMethod(g_history_list, MUIM_List_GetEntry, active, &row);
+    if (!row || !row->entry) return;
+    t.list = g_commit_diff;
+    t.rows = 0;
+    set(g_commit_diff, MUIA_List_Quiet, TRUE);
+    if (row->entry->nparents > 1)
+        DoMethod(g_commit_diff, MUIM_List_InsertSingle, "\33i(merge -- changes against the first parent)",
+                 MUIV_List_Insert_Bottom);
+    if (vcsgui_diff_commit(&g_session, &row->entry->oid, &g_diff_sink, &t) < 0)
+        DoMethod(g_commit_diff, MUIM_List_InsertSingle, "(cannot read the commit)", MUIV_List_Insert_Bottom);
+    set(g_commit_diff, MUIA_List_Quiet, FALSE);
 }
 
 /* Like git, everything except clone/push/pull works without any network:
@@ -797,7 +1047,7 @@ static void do_clone(void)
 
     ok = run_remote(OP_CLONE, url, local_dir);
     if (ok < 0) return;
-    if (!ok) MUI_Request(g_app, NULL, 0, "Clone", "_OK", (char *)vcsgui_last_message());
+    if (!ok) MUI_Request(g_app, NULL, 0, "Clone", "_OK", "%s", (char *)vcsgui_last_message());
     else set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     refresh_ui();
 }
@@ -817,7 +1067,7 @@ static void do_push(void)
     }
     ok = run_remote(OP_PUSH, use_url, NULL);
     if (ok < 0) return;
-    if (!ok) MUI_Request(g_app, NULL, 0, "Push", "_OK", (char *)vcsgui_last_message());
+    if (!ok) MUI_Request(g_app, NULL, 0, "Push", "_OK", "%s", (char *)vcsgui_last_message());
     else set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     refresh_ui();
 }
@@ -838,7 +1088,7 @@ static void do_pull(void)
     }
     ok = run_remote(OP_PULL, NULL, NULL);
     if (ok < 0) return;
-    if (!ok) MUI_Request(g_app, NULL, 0, "Pull", "_OK", (char *)vcsgui_last_message());
+    if (!ok) MUI_Request(g_app, NULL, 0, "Pull", "_OK", "%s", (char *)vcsgui_last_message());
     else set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
     refresh_ui();
 }
@@ -884,7 +1134,7 @@ static void do_about(void)
             "amivcs-gui v%s\nMinimal git-gui-style AmiVCS frontend\n\n"
             "(C) 2026 Ronny Krueger\n"
             "GNU General Public License v3 or later", AC_VERSION);
-    MUI_Request(g_app, NULL, 0, "About amivcs-gui", "_OK", msg);
+    MUI_Request(g_app, NULL, 0, "About amivcs-gui", "_OK", "%s", msg);
 }
 
 /* ------------------------------------------------------------------ */
@@ -902,6 +1152,7 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "New Branch...", "B", 0, 0, (APTR)ID_NEW_BRANCH },
     { NM_ITEM,  "Switch Branch...", "S", 0, 0, (APTR)ID_SWITCH_BRANCH },
     { NM_ITEM,  "Merge Branch...", "M", 0, 0, (APTR)ID_MERGE_BRANCH },
+    { NM_ITEM,  "Abort Merge", 0, 0, 0, (APTR)ID_ABORT_MERGE },
 
     { NM_TITLE, "Remote", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Clone...", 0, 0, 0, (APTR)ID_CLONE },
@@ -917,7 +1168,8 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     Object *window;
     Object *bt_stage, *bt_stage_all, *bt_unstage, *bt_commit;
     Object *bt_refresh, *bt_new_branch, *bt_switch, *bt_merge, *bt_clone, *bt_push, *bt_pull, *bt_quit;
-    Object *lv_unstaged, *lv_staged;
+    Object *lv_unstaged, *lv_staged, *lv_conflicts, *lv_history;
+    Object *bt_abort, *bt_ours, *bt_theirs, *bt_resolved;
     ULONG   sigs = 0;
     BOOL    running = TRUE;
 
@@ -943,6 +1195,32 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     lv_staged   = ListviewObject, MUIA_Listview_List, g_staged_list,
                       MUIA_Listview_MultiSelect, MUIV_Listview_MultiSelect_Shifted, End;
 
+    g_conflict_list = ListObject, InputListFrame, MUIA_List_DisplayHook, &conflict_display_hook, End;
+    lv_conflicts = ListviewObject, MUIA_Listview_List, g_conflict_list,
+                       MUIA_Listview_MultiSelect, MUIV_Listview_MultiSelect_Shifted, End;
+    bt_ours      = SimpleButton("Take _ours");
+    bt_theirs    = SimpleButton("Take _theirs");
+    bt_resolved  = SimpleButton("_Mark resolved");
+    g_conflict_group = VGroup,
+        MUIA_ShowMe, FALSE,
+        Child, TextObject, MUIA_Text_Contents, "\33bConflicts", End,
+        Child, lv_conflicts,
+        Child, HGroup, Child, bt_ours, Child, bt_theirs, Child, bt_resolved, End,
+    End;
+    g_merge_text = TextObject, MUIA_Text_Contents, "", MUIA_Text_SetMin, FALSE, End;
+    bt_abort     = SimpleButton("A_bort Merge");
+    g_merge_group = HGroup,
+        MUIA_ShowMe, FALSE,
+        MUIA_Frame, MUIV_Frame_Group,
+        Child, g_merge_text,
+        Child, VGroup, MUIA_HorizWeight, 0, Child, VSpace(0), Child, bt_abort, Child, VSpace(0), End,
+    End;
+    g_commit_diff = ListObject, ReadListFrame,
+                        MUIA_Font, MUIV_Font_Fixed,
+                        MUIA_List_ConstructHook, MUIV_List_ConstructHook_String,
+                        MUIA_List_DestructHook,  MUIV_List_DestructHook_String,
+                    End;
+
     bt_stage      = SimpleButton("_Stage selected");
     bt_stage_all  = SimpleButton("Stage _all");
     bt_unstage    = SimpleButton("_Unstage selected");
@@ -965,6 +1243,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         g_commit_string = StringObject, StringFrame, MUIA_String_MaxLen, 500, MUIA_CycleChain, 1, End;
     g_stage_all_check = CheckMark(FALSE);
     bt_commit         = SimpleButton("_Commit");
+    g_bt_commit       = bt_commit;
 
     g_history_list = ListObject,
                         InputListFrame,
@@ -977,6 +1256,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     bt_new_branch = SimpleButton("New Branch...");
     bt_switch     = SimpleButton("Switch...");
     bt_merge      = SimpleButton("Merge...");
+    g_bt_merge    = bt_merge;
     bt_clone      = SimpleButton("Clone...");
     bt_push       = SimpleButton("_Push");
     bt_pull       = SimpleButton("Pu_ll");
@@ -1012,6 +1292,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
             MUIA_Window_Menustrip, MUI_MakeObject(MUIO_MenustripNM, MenuData, 0),
             WindowContents, VGroup,
                 Child, g_status_text,
+                Child, g_merge_group,
                 Child, RegisterGroup(pageTitles),
                     MUIA_Register_Frame, TRUE,
 
@@ -1021,6 +1302,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
                             MUIA_VertWeight, 70,
                             Child, VGroup,
                                 MUIA_HorizWeight, 35,
+                                Child, g_conflict_group,
                                 Child, TextObject, MUIA_Text_Contents, "\33bUnstaged Changes", End,
                                 Child, lv_unstaged,
                                 Child, HGroup,
@@ -1067,7 +1349,14 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
                     /* ---- page 2: history and branches ---- */
                     Child, VGroup,
-                        Child, ListviewObject, MUIA_Listview_List, g_history_list, End,
+                        Child, lv_history = ListviewObject, MUIA_VertWeight, 55,
+                            MUIA_Listview_List, g_history_list, End,
+                        Child, BalanceObject, End,
+                        Child, ListviewObject,
+                            MUIA_VertWeight, 45,
+                            MUIA_Listview_Input, FALSE,
+                            MUIA_Listview_List, g_commit_diff,
+                        End,
                         Child, HGroup,
                             Child, bt_new_branch,
                             Child, bt_switch,
@@ -1114,6 +1403,13 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     DoMethod(bt_push, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_PUSH);
     DoMethod(bt_pull, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_PULL);
     DoMethod(g_cancel_button, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_CallHook, &cancel_hook);
+    DoMethod(bt_abort, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_ABORT_MERGE);
+    DoMethod(bt_ours, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_TAKE_OURS);
+    DoMethod(bt_theirs, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_TAKE_THEIRS);
+    DoMethod(bt_resolved, MUIM_Notify, MUIA_Pressed, FALSE, g_app, 2, MUIM_Application_ReturnID, ID_MARK_RESOLVED);
+    DoMethod(g_conflict_list, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime, g_app, 2, MUIM_Application_ReturnID, ID_CONFLICT_ACTIVE);
+    DoMethod(g_history_list, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime, g_app, 2, MUIM_Application_ReturnID, ID_HISTORY_ACTIVE);
+    (void)lv_history;
 
     open_or_offer_init(g_cwd);
     set(window, MUIA_Window_Open, TRUE);
@@ -1140,6 +1436,12 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         case ID_PULL:           do_pull(); break;
         case ID_ABOUT:          do_about(); break;
         case ID_SETTINGS:       do_settings(); break;
+        case ID_ABORT_MERGE:    do_abort_merge(); break;
+        case ID_TAKE_OURS:      do_resolve(0); break;
+        case ID_TAKE_THEIRS:    do_resolve(1); break;
+        case ID_MARK_RESOLVED:  do_resolve(2); break;
+        case ID_CONFLICT_ACTIVE: conflict_active(); break;
+        case ID_HISTORY_ACTIVE: history_active(); break;
         default: break;
         }
         /* A Ctrl-C (only possible when started from a Shell) cancels the

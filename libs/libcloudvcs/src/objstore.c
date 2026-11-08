@@ -292,3 +292,30 @@ int vcsobjstore_extract_blob_to_file(const VcsObjStore *st, const VcsOid *oid, c
     fclose(out);
     return remaining == 0;
 }
+
+int vcsobjstore_read_blob_max(const VcsObjStore *st, const VcsOid *oid, long max_len,
+                              void **data_out, long *len_out)
+{
+    char path[1024];
+    FILE *fp;
+    VcsObjType type;
+
+    *data_out = NULL;
+    *len_out = 0;
+    oid_path(st, oid, path, sizeof(path));
+    fp = fopen(path, "rb");
+    if (fp) {
+        unsigned char header[1 + 1 + 10];
+        unsigned long payload_len;
+        size_t got = fread(header, 1, sizeof(header), fp), used;
+        fclose(fp);
+        if (got < 2 || header[0] != VCS_FORMAT_VERSION || header[1] != (unsigned char)VCS_OBJ_BLOB) return 0;
+        used = vcs_varint_read(header + 2, got - 2, &payload_len);
+        if (!used) return 0;
+        if ((long)payload_len > max_len || (long)payload_len < 0) return -1;
+    }
+    if (!vcsobjstore_read(st, oid, &type, data_out, len_out)) return 0;
+    if (type != VCS_OBJ_BLOB) { free(*data_out); *data_out = NULL; return 0; }
+    if (*len_out > max_len) { free(*data_out); *data_out = NULL; return -1; }
+    return 1;
+}

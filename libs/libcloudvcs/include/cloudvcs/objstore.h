@@ -62,4 +62,13 @@ int vcsobjstore_read(const VcsObjStore *st, const VcsOid *oid, VcsObjType *type_
  * missing, not a blob, or local_path can't be created. */
 int vcsobjstore_extract_blob_to_file(const VcsObjStore *st, const VcsOid *oid, const char *local_path);
 
+/* Reads a VCS_OBJ_BLOB into RAM only if it holds at most max_len bytes
+ * (diff/merge of text files): a loose blob's size is read from its
+ * header first, so a big loose file is never loaded (a packed one is
+ * read whole first -- pack.h has no size-only lookup yet). Returns 1 with
+ * *data_out malloc'd, -1 if the blob is larger than max_len, 0 if it is
+ * missing or not a blob. */
+int vcsobjstore_read_blob_max(const VcsObjStore *st, const VcsOid *oid, long max_len,
+                              void **data_out, long *len_out);
+
 #endif /* CLOUDVCS_OBJSTORE_H */

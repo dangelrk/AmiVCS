@@ -63,10 +63,10 @@ HTTP_SRCS = http_amiga
 HTTP_OBJS = $(HTTP_SRCS:%=$(OBJDIR)/http_%.o)
 FS_SRCS   = localfs_amiga localfs_util pattern_amiga
 FS_OBJS   = $(FS_SRCS:%=$(OBJDIR)/fs_%.o)
-VCS_SRCS  = varint object objstore refs index ignore repo treeutil merge packfmt pack oidset remote vcsname vcsconfig
+VCS_SRCS  = varint object objstore refs index ignore repo treeutil merge mergestate merge3 diff repodiff packfmt pack oidset remote vcsname vcsconfig
 VCS_OBJS  = $(VCS_SRCS:%=$(OBJDIR)/vcs_%.o)
 GUILIB_SRCS = graph session
-GUILIB_OBJS = $(GUILIB_SRCS:%=$(OBJDIR)/vcsgui_%.o)
+GUILIB_OBJS = $(GUILIB_SRCS:%=$(OBJDIR)/gui_%.o)
 
 OWN_SRCS = main_mui gui historylist
 OWN_OBJS = $(OWN_SRCS:%=$(OBJDIR)/%.o) $(OBJDIR)/mui_stubs.o
@@ -86,7 +86,7 @@ $(OBJDIR)/%.o: src/%.c
 $(OBJDIR)/mui_stubs.o: $(COMMON_DIR)/src/mui_stubs.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJDIR)/vcsgui_%.o: $(GUI_DIR)/src/%.c
+$(OBJDIR)/gui_%.o: $(GUI_DIR)/src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/vcs_%.o: $(VCS_DIR)/src/%.c

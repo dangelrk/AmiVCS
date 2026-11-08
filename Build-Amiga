@@ -47,6 +47,10 @@ vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cl
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/repo.c -o obj/amiga/amivcs/v_repo.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/treeutil.c -o obj/amiga/amivcs/v_treeutil.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/merge.c -o obj/amiga/amivcs/v_merge.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/mergestate.c -o obj/amiga/amivcs/v_mergestate.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/merge3.c -o obj/amiga/amivcs/v_merge3.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/diff.c -o obj/amiga/amivcs/v_diff.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/repodiff.c -o obj/amiga/amivcs/v_repodiff.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/packfmt.c -o obj/amiga/amivcs/v_packfmt.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/pack.c -o obj/amiga/amivcs/v_pack.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c libs/libcloudvcs/src/oidset.c -o obj/amiga/amivcs/v_oidset.o
@@ -66,7 +70,7 @@ vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cl
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c core/libcloudcore/src/progress.c -o obj/amiga/amivcs/c_progress.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudfs/include/cloudfs -Icore/libcloudhttp/include/cloudhttp -I$AMISSL_INC -I$NET_INC -c core/libcloudcore/src/charset.c -o obj/amiga/amivcs/c_charset.o
 CD obj/amiga/amivcs
-vc +aos68k -o ///bin/amiga/amivcs main.o v_varint.o v_object.o v_objstore.o v_refs.o v_index.o v_ignore.o v_repo.o v_treeutil.o v_merge.o v_packfmt.o v_pack.o v_oidset.o v_remote.o v_vcsname.o v_vcsconfig.o h_http_amiga.o f_localfs_amiga.o f_localfs_util.o f_pattern_amiga.o c_config.o c_base64.o c_parson.o c_md5.o c_ui_hooks.o c_cloudtime.o c_progress.o c_charset.o -lmieee
+vc +aos68k -o ///bin/amiga/amivcs main.o v_varint.o v_object.o v_objstore.o v_refs.o v_index.o v_ignore.o v_repo.o v_treeutil.o v_merge.o v_mergestate.o v_merge3.o v_diff.o v_repodiff.o v_packfmt.o v_pack.o v_oidset.o v_remote.o v_vcsname.o v_vcsconfig.o h_http_amiga.o f_localfs_amiga.o f_localfs_util.o f_pattern_amiga.o c_config.o c_base64.o c_parson.o c_md5.o c_ui_hooks.o c_cloudtime.o c_progress.o c_charset.o -lmieee
 CD ///
 
 ; ---- AmiVCSConfig  (apps/amivcs-config)
@@ -102,8 +106,8 @@ vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Ic
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c apps/amivcs-gui-mui/src/gui.c -o obj/amiga/amivcs-gui/gui.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c apps/amivcs-gui-mui/src/historylist.c -o obj/amiga/amivcs-gui/historylist.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c core/common/src/mui_stubs.c -o obj/amiga/amivcs-gui/mui_stubs.o
-vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcsgui/src/graph.c -o obj/amiga/amivcs-gui/vcsgui_graph.o
-vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcsgui/src/session.c -o obj/amiga/amivcs-gui/vcsgui_session.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcsgui/src/graph.c -o obj/amiga/amivcs-gui/g_graph.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcsgui/src/session.c -o obj/amiga/amivcs-gui/g_session.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/varint.c -o obj/amiga/amivcs-gui/v_varint.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/object.c -o obj/amiga/amivcs-gui/v_object.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/objstore.c -o obj/amiga/amivcs-gui/v_objstore.o
@@ -113,6 +117,10 @@ vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Ic
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/repo.c -o obj/amiga/amivcs-gui/v_repo.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/treeutil.c -o obj/amiga/amivcs-gui/v_treeutil.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/merge.c -o obj/amiga/amivcs-gui/v_merge.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/mergestate.c -o obj/amiga/amivcs-gui/v_mergestate.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/merge3.c -o obj/amiga/amivcs-gui/v_merge3.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/diff.c -o obj/amiga/amivcs-gui/v_diff.o
+vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/repodiff.c -o obj/amiga/amivcs-gui/v_repodiff.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/packfmt.c -o obj/amiga/amivcs-gui/v_packfmt.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/pack.c -o obj/amiga/amivcs-gui/v_pack.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c libs/libcloudvcs/src/oidset.c -o obj/amiga/amivcs-gui/v_oidset.o
@@ -133,7 +141,46 @@ vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Ic
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c core/libcloudcore/src/wbstartup.c -o obj/amiga/amivcs-gui/c_wbstartup.o
 vc +aos68k -O2 -DAMIGA -DPLATFORM_AMIGA -cpu=68020 -Iapps/amivcs-gui-mui/src -Icore/common/include/common -Ilibs/libcloudvcsgui/include/cloudvcsgui -Ilibs/libcloudvcs/include/cloudvcs -Icore/libcloudcore/include/cloudcore -Icore/libcloudhttp/include/cloudhttp -Icore/libcloudfs/include/cloudfs -I$AMISSL_INC -I$NET_INC -I$MUI_INC -c core/libcloudcore/src/charset.c -o obj/amiga/amivcs-gui/c_charset.o
 CD obj/amiga/amivcs-gui
-vc +aos68k -o ///bin/amiga/amivcs-gui main_mui.o gui.o historylist.o mui_stubs.o vcsgui_graph.o vcsgui_session.o v_varint.o v_object.o v_objstore.o v_refs.o v_index.o v_ignore.o v_repo.o v_treeutil.o v_merge.o v_packfmt.o v_pack.o v_oidset.o v_remote.o v_vcsname.o v_vcsconfig.o h_http_amiga.o f_localfs_amiga.o f_localfs_util.o f_pattern_amiga.o c_config.o c_base64.o c_parson.o c_md5.o c_ui_hooks.o c_cloudtime.o c_progress.o c_wbstartup.o c_charset.o -lmieee -lamiga
+Echo >objects.lst "main_mui.o"
+Echo >>objects.lst "gui.o"
+Echo >>objects.lst "historylist.o"
+Echo >>objects.lst "mui_stubs.o"
+Echo >>objects.lst "g_graph.o"
+Echo >>objects.lst "g_session.o"
+Echo >>objects.lst "v_varint.o"
+Echo >>objects.lst "v_object.o"
+Echo >>objects.lst "v_objstore.o"
+Echo >>objects.lst "v_refs.o"
+Echo >>objects.lst "v_index.o"
+Echo >>objects.lst "v_ignore.o"
+Echo >>objects.lst "v_repo.o"
+Echo >>objects.lst "v_treeutil.o"
+Echo >>objects.lst "v_merge.o"
+Echo >>objects.lst "v_mergestate.o"
+Echo >>objects.lst "v_merge3.o"
+Echo >>objects.lst "v_diff.o"
+Echo >>objects.lst "v_repodiff.o"
+Echo >>objects.lst "v_packfmt.o"
+Echo >>objects.lst "v_pack.o"
+Echo >>objects.lst "v_oidset.o"
+Echo >>objects.lst "v_remote.o"
+Echo >>objects.lst "v_vcsname.o"
+Echo >>objects.lst "v_vcsconfig.o"
+Echo >>objects.lst "h_http_amiga.o"
+Echo >>objects.lst "f_localfs_amiga.o"
+Echo >>objects.lst "f_localfs_util.o"
+Echo >>objects.lst "f_pattern_amiga.o"
+Echo >>objects.lst "c_config.o"
+Echo >>objects.lst "c_base64.o"
+Echo >>objects.lst "c_parson.o"
+Echo >>objects.lst "c_md5.o"
+Echo >>objects.lst "c_ui_hooks.o"
+Echo >>objects.lst "c_cloudtime.o"
+Echo >>objects.lst "c_progress.o"
+Echo >>objects.lst "c_wbstartup.o"
+Echo >>objects.lst "c_charset.o"
+vlink -r -bamigahunk -Fobjects.lst -o linkall.o
+vc +aos68k -o ///bin/amiga/amivcs-gui linkall.o -lmieee -lamiga
 CD ///
 
 Echo "*NFertig. Die Programme liegen in bin/amiga/."

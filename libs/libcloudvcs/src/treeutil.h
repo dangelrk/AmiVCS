@@ -62,4 +62,14 @@ int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b);
  * a file in place of a needed directory); else 0 after a UI_ERROR. */
 int vcs_names_in_the_way(VcsRepo *repo, const VcsFlatList *from, const VcsFlatList *to);
 
+/* Two-way scan of two sorted flat lists: cb gets ('N'ew / 'M'odified /
+ * 'D'eleted, path) for each difference of `work` against `head`; cb may
+ * be NULL to just count. Returns the number of differences. */
+int vcs_flat_diff(const VcsFlatList *head, const VcsFlatList *work,
+                  void (*cb)(char kind, const char *path, void *ctx), void *ctx);
+
+/* The working tree as a sorted flat list (path -> content hash), with
+ * .amivcsignore applied -- what status compares against. Returns 1. */
+int vcs_flatten_workdir_list(VcsRepo *repo, VcsFlatList *out);
+
 #endif /* CLOUDVCS_TREEUTIL_H */

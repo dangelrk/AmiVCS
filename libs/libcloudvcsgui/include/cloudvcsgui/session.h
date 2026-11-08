@@ -32,6 +32,7 @@
 #include "repo.h"
 #include "index.h"
 #include "merge.h"
+#include "repodiff.h"
 #include "remote.h"
 #include "graph.h"
 #include "amicloud.h"
@@ -46,6 +47,7 @@ typedef struct {
     VcsRefList  branches;   /* every local branch */
 
     VcsChangeList  staged, unstaged;   /* vcs_repo_status_raw()'s split */
+    VcsMergeState  merge;              /* the merge in progress (merge.active), see mergestate.h */
     VcsLogList     log_all;            /* vcs_repo_log_all_raw()'s full multi-branch history */
     VcsGraphLayout graph;               /* vcsgui_compute_graph_layout() over log_all */
 
@@ -107,6 +109,28 @@ int vcsgui_branch_create(VcsGuiSession *s, const char *name);
 int vcsgui_switch(VcsGuiSession *s, const char *branch);
 int vcsgui_checkout(VcsGuiSession *s);
 int vcsgui_merge(VcsGuiSession *s, const char *branch);
+
+/* A merge that stopped on conflicts (s->merge.active): give it up
+ * (vcs_repo_merge_abort()), or settle one conflicting path with one
+ * side's whole file (take_theirs 0 = ours, 1 = theirs). Marking a path
+ * resolved after editing it by hand is vcsgui_add(). The commit that
+ * finishes the merge is vcsgui_commit(); an empty message becomes
+ * "Merge branch '...'". */
+int vcsgui_merge_abort(VcsGuiSession *s);
+int vcsgui_resolve(VcsGuiSession *s, const char *relpath, int take_theirs);
+/* Number of conflicts still open (0 without a merge). */
+int vcsgui_conflicts_open(const VcsGuiSession *s);
+
+/* Line diffs for the preview (read-only, no lock). vcsgui_diff_file():
+ * one path of the status lists -- staged 1: HEAD against the index,
+ * 0: the index against the working tree (a new file shows as all
+ * added). vcsgui_diff_commit(): a commit against its first parent (the
+ * empty tree for the first commit). Both return the number of changed
+ * files, -1 on error; the sink (repodiff.h) gets file/hunk/line. */
+int vcsgui_diff_file(VcsGuiSession *s, const char *relpath, int staged,
+                     const VcsRepoDiffSink *sink, void *ctx);
+int vcsgui_diff_commit(VcsGuiSession *s, const VcsOid *commit,
+                       const VcsRepoDiffSink *sink, void *ctx);
 
 /* Clone/push/pull -- wrappers around remote.h that resolve the remote
  * and login from the repository's .amivcs/config (vcsconfig.h), arm this

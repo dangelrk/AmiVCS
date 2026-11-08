@@ -76,6 +76,36 @@ Komplexe automatische Merge-Strategien sind ausdrücklich nicht erforderlich.
 
 Konflikte dürfen niemals stillschweigend gelöst werden.
 
+## Nachtrag 2026-11: Zeilen-Merge, Konfliktmarker, Merge-Zustand
+
+Seit AmiVCS öffentlich ist, reicht der dateiweise Merge nicht mehr: Zwei
+Änderungen an verschiedenen Stellen derselben Quelltextdatei waren ein
+Konflikt, und nach dem Auflösen von Hand entstand ein Commit mit nur einem
+Elternteil -- der nächste Merge brachte dieselben Konflikte wieder.
+Deshalb, als bewusste Erweiterung von „einfacher Drei-Wege-Merge“:
+
+- **Zeilen-Merge für Textdateien** (diff3, `merge3.c` auf der Diff-Engine
+  `diff.c`, Myers mit linearem Speicherbedarf). Text heißt: kein NUL-Byte
+  am Anfang, höchstens 512 KB je Seite. Binärdateien und größere Dateien
+  werden weiter als Ganzes gemerged (`<pfad>.theirs` daneben).
+- **Konfliktmarker wie bei git** (`<<<<<<< ours (main)` / `=======` /
+  `>>>>>>> theirs (feature)`), damit Editoren und eine spätere
+  Merge-Oberfläche sie erkennen. Gelöst wird weiterhin nur von Hand oder
+  durch die ausdrückliche Wahl einer Seite (`resolve --ours/--theirs`) --
+  der Grundsatz oben bleibt.
+- **Merge-Zustand** in `.amivcs/MERGE_HEAD` und `.amivcs/MERGE_FILES`
+  (`mergestate.c`): Der Commit nach dem Auflösen bekommt beide Eltern;
+  `commit` verweigert, solange ein Konflikt offen ist; `merge`, `pull`,
+  `switch` und `checkout` warten, bis der Merge fertig oder abgebrochen
+  ist. Der Zustand wird geschrieben, bevor die erste Datei angefasst wird.
+- **`merge --abort`** stellt genau die Pfade wieder her, die der Merge
+  geschrieben oder gelöscht hat; Dateien ohne Versionsverwaltung bleiben
+  unangetastet.
+- **`diff` und `show`** in der CLI, Diffs in den GUIs und der IDE -- dieselbe
+  Engine, nur zur Anzeige.
+
+Der Server bleibt ohne Merge-Logik.
+
 ---
 
 # Architektur

@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Ronny Krueger
 # CLI-Test ohne Server (make test): Ausgabe fuer Programme
 # (--porcelain-out), Argumente aus Dateien, commit -F, unstage, Loeschen
-# bereitstellen, unversionierte Dateien bei switch/merge, Sperrdatei.
+# bereitstellen, unversionierte Dateien bei switch/merge, Sperrdatei,
+# Zeilen-Merge mit Konfliktmarkern, merge --abort, resolve, diff/show.
 # Braucht bin/pc/amivcs (make pc).
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -89,6 +90,143 @@ v add fremd.txt
 chk "zweiter Schreiber abgewiesen" has 'msg\terror\tamivcs: another program'
 v status; chk "Lesen geht trotz Sperre" sh -c "tail -1 '$O' | grep -qx 'end	0'"
 rm .amivcs/lock
+
+echo "== Merge mit Konflikten"
+mkdir "$T/m" && cd "$T/m" || exit 1
+"$V" init >/dev/null
+printf '1\n2\n3\n4\n5\n6\n7\n8\n' > t.txt; printf 'b\000base' > b.bin; printf 'k\n' > k.txt; printf 'g\n' > gone.txt
+v add -A; v commit -m base
+v branch feat; v switch feat
+printf '1\nTHEIRS\n3\n4\n5\n6\n7\nT8\n' > t.txt; printf 'b\000theirs' > b.bin; printf 'neu\n' > neu.txt
+mkdir sub; printf 's\n' > sub/s.txt; printf 'g2\n' > gone.txt
+v add -A; v commit -m feat
+v switch main
+printf '1\nOURS\n3\n4\n5\n6\n7\n8\n' > t.txt; printf 'b\000ours' > b.bin; rm gone.txt
+v add -A; v commit -m ours
+printf 'meins\n' > meins.txt
+v merge feat
+chk "merge meldet Konflikt" sh -c "tail -1 '$O' | grep -qx 'end	1'"
+chk "Konfliktmarker in t.txt" sh -c "grep -qx '<<<<<<< ours (main)' t.txt && grep -qx '>>>>>>> theirs (feat)' t.txt && grep -qx 'T8' t.txt"
+chk "Binaerkonflikt mit .theirs" test -f b.bin.theirs
+chk "geloescht/geaendert: Datei wieder da" grep -qx g2 gone.txt
+v status
+chk "status: merging" has 'merging\tfeat\t'
+chk "status: Konflikt content" has 'conflict\tU\tcontent\tt.txt\t0'
+chk "status: Konflikt binary" has 'conflict\tU\tbinary\tb.bin\t1'
+chk "status: delete-modify" has 'conflict\tU\tdelete-modify\tgone.txt\t0'
+chk ".theirs nicht als neue Datei" sh -c "! grep -qF 'b.bin.theirs' '$O'"
+v commit -m x
+chk "commit mit offenen Konflikten verweigert" has 'unresolved conflict'
+v switch feat
+chk "switch waehrend Merge verweigert" has 'a merge is in progress'
+v merge feat
+chk "zweiter merge verweigert" has 'a merge is in progress'
+v diff t.txt
+chk "diff zeigt Marker" has 'line\t+\t<<<<<<< ours (main)\t1'
+
+echo "== merge --abort"
+v merge --abort
+chk "abort" sh -c "tail -1 '$O' | grep -qx 'end	0'"
+chk "t.txt wie vorher" sh -c "grep -qx OURS t.txt && ! grep -q '<<<<' t.txt"
+chk "neue Dateien von theirs weg" sh -c "! test -e neu.txt && ! test -e sub"
+chk ".theirs weg" sh -c "! test -e b.bin.theirs"
+chk "geloeschte Datei wieder weg" sh -c "! test -e gone.txt"
+chk "unversionierte Datei bleibt" grep -qx meins meins.txt
+v status
+chk "kein Merge mehr" sh -c "! grep -q '^merging' '$O' && ! grep -q 'change	S' '$O'"
+v merge --abort
+chk "abort ohne Merge" has 'no merge in progress'
+
+echo "== aufloesen und committen"
+v merge feat
+v resolve --theirs b.bin
+chk "resolve --theirs" sh -c "tail -1 '$O' | grep -qx 'end	0' && ! test -e b.bin.theirs"
+v resolve --ours gone.txt
+chk "resolve --ours (geloescht)" sh -c "! test -e gone.txt"
+printf '1\nBEIDE\n3\n4\n5\n6\n7\nT8\n' > t.txt
+v add t.txt
+v status
+chk "alles geloest" has 'merging\tfeat\t'
+chk "keine offenen Konflikte" sh -c "! grep -q 'conflict	U' '$O'"
+v commit
+chk "commit ohne -m im Merge" has 'committed\t'
+v log -n 1
+chk "Merge-Commit nach Aufloesung hat zwei Eltern" sh -c "grep \"Merge branch 'feat'\" '$O' | cut -f3 | grep -q ','"
+v merge feat
+chk "erneuter merge: nichts zu tun" has 'Already up to date.'
+chk "b.bin von theirs" sh -c "grep -q theirs b.bin"
+
+echo "== Zeilen-Merge ohne Konflikt"
+v switch feat; printf '1\nBEIDE\n3\n4\n5\n6\n7\nT8\nende\n' > t.txt; v commit -a -m t2
+v switch main; printf 'anfang\n1\nBEIDE\n3\n4\n5\n6\n7\nT8\n' > t.txt; v commit -a -m o2
+v merge feat
+chk "sauberer Zeilen-Merge committet" has 'Merge completed.'
+chk "beide Aenderungen drin" sh -c "head -1 t.txt | grep -qx anfang && tail -1 t.txt | grep -qx ende"
+
+echo "== diff und show"
+printf 'x\n' >> k.txt
+v diff
+chk "diff Arbeitsverzeichnis" has 'file\tM\tk.txt'
+chk "diff Zeile" has 'line\t+\tx\t1'
+v diff --staged
+chk "diff --staged leer" sh -c "! grep -q '^file' '$O'"
+v add k.txt; v diff --staged
+chk "diff --staged" has 'file\tM\tk.txt'
+v show HEAD
+chk "show: Commit" has "Merge branch 'feat'"
+chk "show: Datei" has 'file\tM\tt.txt'
+v show HEAD~1
+chk "show HEAD~1" has 'commit\t'
+"$V" diff HEAD~2 HEAD -- t.txt > "$T/d.txt" 2>&1
+chk "diff zwischen Commits (Text)" sh -c "grep -qx -- '--- a/t.txt' '$T/d.txt' && grep -qx '+anfang' '$T/d.txt'"
+v show zzzz
+chk "unbekannte Revision" has 'unknown revision'
+
+echo "== Befunde der Pruefung"
+mkdir "$T/p" && cd "$T/p" || exit 1
+"$V" init >/dev/null
+printf '1\n2\n3\n' > t.txt; printf 'b\000base' > b.bin; mkdir d; printf 'd\000base' > d/x.bin; printf 'g\n' > g.txt
+v add -A; v commit -m base
+v branch f; v switch f
+printf '1\nF\n3\n' > t.txt; printf 'b\000f' > b.bin; printf 'd\000f' > d/x.bin; printf 'g2\n' > g.txt
+v commit -a -m f
+v switch main
+printf '1\nM\n3\n' > t.txt; printf 'b\000m' > b.bin; printf 'd\000m' > d/x.bin; rm g.txt
+v commit -a -m m
+printf 'MEINE NOTIZEN\n' > b.bin.theirs
+v merge f
+chk "fremde .theirs-Datei: Merge verweigert" has 'b.bin.theirs already exists'
+chk "fremde .theirs-Datei unveraendert" grep -qx 'MEINE NOTIZEN' b.bin.theirs
+chk "nichts geschrieben" sh -c "! test -e .amivcs/MERGE_HEAD && grep -qx M t.txt"
+rm b.bin.theirs
+v merge f
+chk "Merge mit Konflikten" has 'conflict\t'
+v commit -a -m x
+chk "commit -a mit offenen Konflikten verweigert" has 'commit -a would commit the conflict'
+chk "Marker nicht committet" sh -c "test -f .amivcs/MERGE_HEAD"
+v add d
+v status
+chk "add <dir> merkt .theirs nicht vor" sh -c "! grep -q 'x.bin.theirs' '$O'"
+chk "add <dir> loest d/x.bin" has 'conflict\tR\tbinary\td/x.bin'
+v add g.txt
+chk "add auf geloeschte Konfliktdatei" sh -c "tail -1 '$O' | grep -qx 'end	0'"
+v status
+chk "geloeschte Konfliktdatei geloest" has 'conflict\tR\tdelete-modify\tg.txt'
+v merge --abort
+printf 'neu\n' > staged.txt; v add staged.txt; printf 'x\n' > untracked.txt
+v diff HEAD
+chk "diff HEAD zeigt vorgemerkte neue Datei" has 'file\tN\tstaged.txt'
+v diff .
+chk "diff . ohne unversionierte Dateien" sh -c "! grep -q 'untracked.txt' '$O'"
+v diff untracked.txt
+chk "diff <neue Datei> zeigt sie" has 'file\tN\tuntracked.txt'
+v diff ./staged.txt
+chk "diff ./pfad" sh -c "tail -1 '$O' | grep -qx 'end	0'"
+rm -f t.txt
+v diff t.txt
+chk "diff auf geloeschte Datei" has 'file\tD\tt.txt'
+v diff f -- d/x.bin
+chk "diff <branch> -- <pfad>" has 'file\tM\td/x.bin'
 
 echo "== Ergebnis: $PASSED ok, $FAILED fehlgeschlagen =="
 [ "$FAILED" -eq 0 ]

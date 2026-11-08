@@ -18,6 +18,7 @@
 #include "vcsconfig.h"
 #include "remote.h"
 #include "merge.h"
+#include "mergestate.h"
 #include "treeutil.h"
 #include "oidset.h"
 #include "localfs.h"
@@ -942,6 +943,11 @@ int vcs_remote_pull(VcsRepo *repo, const AcConfig *cfg, const char *repo_name, c
     char label[256];
 
     if (!repo_name || !repo_name[0]) { ui_notify(UI_ERROR, "amivcs: no remote repository"); return 0; }
+    if (vcs_mergestate_active(repo->amivcs_dir)) {   /* before anything is fetched */
+        ui_notify(UI_ERROR, "amivcs: a merge is in progress -- resolve the conflicts and commit, "
+                            "or run 'merge --abort'");
+        return 0;
+    }
 
     if (branch && branch[0]) {
         branch_name = branch;

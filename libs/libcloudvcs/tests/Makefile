@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Ronny Krueger
 #
-# Host unit tests for libcloudvcs (vcsname.c; no network, no libcurl).
+# Host unit tests for libcloudvcs (vcsname.c, diff.c, merge3.c; no network, no libcurl).
 #   make         build and run
 #   make clean
 
@@ -18,11 +18,19 @@ SRCS     = test_vcsname.c ../src/vcsname.c $(CORE)/libcloudcore/src/charset.c \
            $(CORE)/libcloudcore/src/progress.c
 OBJDIR   = obj
 BIN      = $(OBJDIR)/test_vcsname
+DIFFBIN  = $(OBJDIR)/test_diff
+MERGEBIN = $(OBJDIR)/test_merge3
 
 .PHONY: all run clean
 all: run
-run: $(BIN)
+run: $(BIN) $(DIFFBIN) $(MERGEBIN)
 	$(BIN)
+	$(DIFFBIN)
+	$(MERGEBIN)
+$(DIFFBIN): test_diff.c ../src/diff.c ../include/cloudvcs/diff.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -o $@ test_diff.c ../src/diff.c
+$(MERGEBIN): test_merge3.c ../src/merge3.c ../src/diff.c ../include/cloudvcs/merge3.h ../include/cloudvcs/diff.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -o $@ test_merge3.c ../src/merge3.c ../src/diff.c
 $(BIN): $(SRCS) ../include/cloudvcs/vcsname.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ $(SRCS)
 $(OBJDIR):

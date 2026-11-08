@@ -17,6 +17,7 @@
  */
 #include "repo.h"
 #include "index.h"
+#include "mergestate.h"
 #include "ignore.h"
 #include "treeutil.h"
 #include "oidset.h"
@@ -270,6 +271,18 @@ static int flatten_workdir(const char *abs_root, const char *abs_dir, const char
     return 1;
 }
 
+/* see treeutil.h */
+int vcs_flatten_workdir_list(VcsRepo *repo, VcsFlatList *out)
+{
+    VcsIgnore ig;
+    int ok;
+    vcs_ignore_load(repo->root, &ig);
+    ok = flatten_workdir(repo->root, repo->root, "", &ig, out);
+    vcs_ignore_free(&ig);
+    if (ok) vcs_flat_sort(out);
+    return ok;
+}
+
 static int resolve_head_tree(VcsRepo *repo, VcsOid *out_tree)
 {
     VcsOid head_commit;
@@ -283,8 +296,8 @@ static int resolve_head_tree(VcsRepo *repo, VcsOid *out_tree)
  * receives ('N'ew / 'M'odified / 'D'eleted, path) for each difference;
  * cb may be NULL to just count (is_dirty()). Returns the number of
  * differences found. */
-static int diff_flat(const VcsFlatList *head, const VcsFlatList *work,
-                     void (*cb)(char kind, const char *path, void *ctx), void *ctx)
+int vcs_flat_diff(const VcsFlatList *head, const VcsFlatList *work,
+                  void (*cb)(char kind, const char *path, void *ctx), void *ctx)
 {
     int hi = 0, wi = 0, changes = 0;
 
@@ -333,6 +346,7 @@ static void collect_change_cb(char kind, const char *path, void *ctx)
 
 void vcs_status_free(VcsStatus *out)
 {
+    vcs_mergestate_free(&out->merge);
     free(out->staged.items);
     free(out->unstaged.items);
     out->staged.items = out->unstaged.items = NULL;
@@ -347,6 +361,7 @@ int vcs_repo_status_raw(VcsRepo *repo, VcsStatus *out)
 
     out->staged.items = out->unstaged.items = NULL;
     out->staged.n = out->staged.cap = out->unstaged.n = out->unstaged.cap = 0;
+    vcs_mergestate_init(&out->merge);
 
     if (!resolve_head_tree(repo, &head_tree)) return 0;
     if (!vcs_index_load(repo->amivcs_dir, &index_tree)) return 0;
@@ -375,8 +390,28 @@ int vcs_repo_status_raw(VcsRepo *repo, VcsStatus *out)
     vcs_ignore_free(&ig);
     vcs_flat_sort(&work_flat);
 
-    diff_flat(&head_flat, &index_flat, collect_change_cb, &out->staged);
-    diff_flat(&index_flat, &work_flat, collect_change_cb, &out->unstaged);
+    vcs_flat_diff(&head_flat, &index_flat, collect_change_cb, &out->staged);
+    vcs_flat_diff(&index_flat, &work_flat, collect_change_cb, &out->unstaged);
+
+    /* the .theirs copies a merge wrote are not new files of the user */
+    if (!vcs_mergestate_load(repo->amivcs_dir, &out->merge)) vcs_mergestate_init(&out->merge);
+    if (out->merge.active) {
+        int i, k = 0;
+        for (i = 0; i < out->unstaged.n; i++) {
+            const VcsChange *c = &out->unstaged.items[i];
+            int skip = 0, j;
+            if (c->kind == 'N') {
+                for (j = 0; j < out->merge.n && !skip; j++) {
+                    const VcsMergeFile *f = &out->merge.items[j];
+                    size_t n = strlen(f->path);
+                    skip = f->theirs_file && strncmp(c->path, f->path, n) == 0
+                           && strcmp(c->path + n, ".theirs") == 0;
+                }
+            }
+            if (!skip) out->unstaged.items[k++] = *c;
+        }
+        out->unstaged.n = k;
+    }
 
     vcs_flat_free(&head_flat);
     vcs_flat_free(&index_flat);
@@ -402,6 +437,24 @@ int vcs_repo_status(VcsRepo *repo)
 
     if (!vcs_repo_status_raw(repo, &st)) return 0;
 
+    if (st.merge.active) {
+        int i, open = vcs_mergestate_unresolved(&st.merge);
+        printf("Merging '%s' -- %s\n", vcs_shown(st.merge.label),
+               open ? "resolve the conflicts, 'add' them, then commit (or 'merge --abort')"
+                    : "all conflicts resolved, commit to finish the merge (or 'merge --abort')");
+        if (open) {
+            printf("Unmerged paths:\n");
+            for (i = 0; i < st.merge.n; i++) {
+                const VcsMergeFile *f = &st.merge.items[i];
+                char *shown;
+                if (f->status != 'U') continue;
+                shown = vcs_text_to_local(f->path);
+                printf("  %-13s %s%s\n", f->kind, shown ? shown : f->path,
+                       f->theirs_file ? "  (theirs: .theirs)" : "");
+                free(shown);
+            }
+        }
+    }
     if (st.staged.n > 0) {
         printf("Changes to be committed:\n");
         print_change_list(&st.staged);
@@ -410,7 +463,8 @@ int vcs_repo_status(VcsRepo *repo)
         printf("Changes not staged for commit:\n");
         print_change_list(&st.unstaged);
     }
-    if (st.staged.n == 0 && st.unstaged.n == 0) printf("nothing to commit, working tree clean\n");
+    if (st.staged.n == 0 && st.unstaged.n == 0 && !st.merge.active)
+        printf("nothing to commit, working tree clean\n");
 
     vcs_status_free(&st);
     return 1;
@@ -635,6 +689,8 @@ static int path_in_flat(const char *repo_path, void *ctx)
 
 int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int stage_all, VcsOid *out_oid)
 {
+    VcsMergeState merge;
+    char merge_msg[220];
     VcsHead head;
     VcsOid parent_oid, tree_oid;
     VcsCommit commit;
@@ -647,10 +703,61 @@ int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int 
 
     if (!vcs_head_resolve(repo->amivcs_dir, &parent_oid)) return 0;
 
-    if (stage_all && !vcs_index_add_all(repo)) return 0;
-    if (!vcs_index_load(repo->amivcs_dir, &tree_oid)) return 0;
+    if (!vcs_mergestate_load(repo->amivcs_dir, &merge)) {
+        ui_notify(UI_ERROR, "amivcs: the merge state (.amivcs/MERGE_HEAD) is damaged -- "
+                            "remove .amivcs/MERGE_HEAD and .amivcs/MERGE_FILES to give the merge up");
+        return 0;
+    }
+    /* -a would stage the conflict files with their markers and so mark
+     * them resolved: open conflicts first, like git */
+    if (merge.active && stage_all && vcs_mergestate_unresolved(&merge) > 0) {
+        ui_notify(UI_ERROR, "amivcs: %d unresolved conflict(s) -- commit -a would commit the conflict "
+                            "markers; resolve and 'add' them first", vcs_mergestate_unresolved(&merge));
+        vcs_mergestate_free(&merge);
+        return 0;
+    }
+    if (stage_all && !vcs_index_add_all(repo)) { vcs_mergestate_free(&merge); return 0; }
+    if (!vcs_index_load(repo->amivcs_dir, &tree_oid)) { vcs_mergestate_free(&merge); return 0; }
+    if (stage_all && merge.active) {   /* add_all may have changed it */
+        vcs_mergestate_free(&merge);
+        if (!vcs_mergestate_load(repo->amivcs_dir, &merge)) return 0;
+    }
 
-    if (!vcs_oid_is_zero(&parent_oid)) {
+    if (merge.active) {
+        int i, open = vcs_mergestate_unresolved(&merge);
+        if (open) {
+            /* one message (a GUI shows only the last one) */
+            char list[600];
+            size_t used = 0;
+            list[0] = '\0';
+            for (i = 0; i < merge.n; i++)
+                if (merge.items[i].status == 'U') {
+                    char *shown = vcs_text_to_local(merge.items[i].path);
+                    const char *p = shown ? shown : merge.items[i].path;
+                    size_t n = strlen(p);
+                    if (used + n + 8 >= sizeof(list)) { strcpy(list + used, ", ..."); free(shown); break; }
+                    if (used) { strcpy(list + used, ", "); used += 2; }
+                    strcpy(list + used, p);
+                    used += n;
+                    free(shown);
+                }
+            ui_notify(UI_ERROR, "amivcs: %d unresolved conflict(s) -- resolve and 'add' them first: %s",
+                      open, list);
+            vcs_mergestate_free(&merge);
+            return 0;
+        }
+        if (!vcs_oid_equal(&merge.ours, &parent_oid)) {
+            ui_notify(UI_ERROR, "amivcs: HEAD moved since the merge started -- run 'merge --abort'");
+            vcs_mergestate_free(&merge);
+            return 0;
+        }
+        if (!message || !message[0]) {
+            snprintf(merge_msg, sizeof(merge_msg), "Merge branch '%s'", merge.label);
+            message = merge_msg;
+        }
+    }
+
+    if (!vcs_oid_is_zero(&parent_oid) && !merge.active) {
         VcsOid parent_tree;
         if (!resolve_head_tree(repo, &parent_tree)) return 0;
         if (vcs_oid_equal(&parent_tree, &tree_oid)) {
@@ -665,27 +772,48 @@ int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int 
         commit.parents[0] = parent_oid;
         commit.nparents = 1;
     }
+    if (merge.active) {
+        commit.parents[commit.nparents++] = merge.theirs;
+    }
     commit.mtime = (long)time(NULL);
     vcs_utf8_copy(commit.author, sizeof(commit.author), (author && author[0]) ? author : "unknown");
     commit.message = (char *)malloc(strlen(message ? message : "") + 1);
-    if (!commit.message) { vcs_commit_free(&commit); return 0; }
+    if (!commit.message) { vcs_commit_free(&commit); vcs_mergestate_free(&merge); return 0; }
     strcpy(commit.message, message ? message : "");
 
-    if (!vcs_commit_encode(&commit, &data, &len)) { vcs_commit_free(&commit); return 0; }
+    if (!vcs_commit_encode(&commit, &data, &len)) { vcs_commit_free(&commit); vcs_mergestate_free(&merge); return 0; }
     vcs_commit_free(&commit);
 
-    if (!vcsobjstore_write(&repo->store, VCS_OBJ_COMMIT, data, len, &commit_oid)) { free(data); return 0; }
+    if (!vcsobjstore_write(&repo->store, VCS_OBJ_COMMIT, data, len, &commit_oid)) {
+        free(data);
+        vcs_mergestate_free(&merge);
+        return 0;
+    }
     free(data);
 
     {
         VcsRefList refs;
         char fullname[128];
-        if (!vcs_refs_load(repo->amivcs_dir, &refs)) return 0;
+        if (!vcs_refs_load(repo->amivcs_dir, &refs)) { vcs_mergestate_free(&merge); return 0; }
         snprintf(fullname, sizeof(fullname), "%s%s", VCS_REF_PREFIX, head.branch);
         vcs_refs_upsert(&refs, fullname, &commit_oid);
-        if (!vcs_refs_save(repo->amivcs_dir, &refs)) { vcs_refs_free(&refs); return 0; }
+        if (!vcs_refs_save(repo->amivcs_dir, &refs)) { vcs_refs_free(&refs); vcs_mergestate_free(&merge); return 0; }
         vcs_refs_free(&refs);
     }
+
+    /* the merge is done: its state and its .theirs copies go */
+    if (merge.active) {
+        int i;
+        for (i = 0; i < merge.n; i++) {
+            char abs_path[1024], theirs_path[1040];
+            if (!merge.items[i].theirs_file) continue;
+            if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, merge.items[i].path)) continue;
+            snprintf(theirs_path, sizeof(theirs_path), "%s.theirs", abs_path);
+            localfs_remove(theirs_path);
+        }
+        vcs_mergestate_clear(repo->amivcs_dir);
+    }
+    vcs_mergestate_free(&merge);
 
     /* pairs kept since a merge: the ones the new HEAD carries are done,
      * a file not staged yet keeps its pair (vcsname.h) */
@@ -1032,12 +1160,21 @@ int vcs_repo_branch(VcsRepo *repo, const char *name)
     return 1;
 }
 
+static int refuse_during_merge(VcsRepo *repo)
+{
+    if (!vcs_mergestate_active(repo->amivcs_dir)) return 0;
+    ui_notify(UI_ERROR, "amivcs: a merge is in progress -- finish it with commit, or run 'merge --abort'");
+    return 1;
+}
+
 int vcs_repo_switch(VcsRepo *repo, const char *branch)
 {
     VcsRefList refs;
     VcsRef *r;
     char fullname[128];
     int dirty;
+
+    if (refuse_during_merge(repo)) return 0;
 
     dirty = vcs_repo_is_dirty(repo);
     if (dirty != 0) {
@@ -1070,8 +1207,10 @@ int vcs_repo_switch(VcsRepo *repo, const char *branch)
 int vcs_repo_checkout(VcsRepo *repo)
 {
     VcsOid head_tree;
-    int dirty = vcs_repo_is_dirty(repo);
+    int dirty;
 
+    if (refuse_during_merge(repo)) return 0;
+    dirty = vcs_repo_is_dirty(repo);
     if (dirty != 0) {
         ui_notify(UI_ERROR, dirty < 0
             ? "amivcs: could not check working tree state"

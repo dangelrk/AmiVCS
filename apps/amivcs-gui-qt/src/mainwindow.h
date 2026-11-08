@@ -19,6 +19,7 @@ class QPushButton;
 class QTableView;
 class QLabel;
 class QListWidgetItem;
+class QFrame;
 class LogTableModel;
 class GraphDelegate;
 
@@ -51,12 +52,19 @@ private slots:
     void onPull();
     void onAbout();
     void onSettings();
+    void onAbortMerge();
+    void onTakeOurs();
+    void onTakeTheirs();
+    void onMarkResolved();
+    void onHistorySelected();
 
 private:
     void openOrOfferInit(const QString &dir);
     void refreshUI();
     void updateActionsEnabled();
     void showPreview(QListWidgetItem *item);
+    void showConflictPreview(QListWidgetItem *item);
+    void resolveSelected(int how);   // 0 ours, 1 theirs, 2 marked by hand
     QString pickBranch(const QString &title, const QString &label);
     void startRemoteJob(RemoteJob::Kind kind, const QString &url, const QString &extra, int attempt);
 
@@ -78,9 +86,16 @@ private:
     QLabel *m_branchLabel;
     QLabel *m_previewTitle;
     QPlainTextEdit *m_preview;
+    QFrame *m_mergeBanner;
+    QLabel *m_mergeLabel;
+    QWidget *m_conflictBox;
+    QListWidget *m_conflictList;
+    QPlainTextEdit *m_commitDiff;
+    QString m_mergeMsgShown;   // the "Merge branch ..." text put into the message box
     QPushButton *m_rescanBtn;
     QPushButton *m_pushBtn;
     QPushButton *m_pullBtn;
+    QPushButton *m_mergeBtn;
 
     QAction *m_actInit;
     QAction *m_actClone;
@@ -89,6 +104,7 @@ private:
     QAction *m_actNewBranch;
     QAction *m_actSwitch;
     QAction *m_actMerge;
+    QAction *m_actAbortMerge;
     QAction *m_actRefresh;
     QAction *m_actSettings;
     QString m_lastUser;   // the user typed in last, offered again

@@ -7,15 +7,23 @@
 /*
  * merge.h -- client-side-only merging (docs/adr/09_ADR_VCS_Design.md:
  * "Merge findet ausschliesslich auf dem Client statt. Der Server besitzt
- * keinerlei Merge-Logik."). v1 scope, deliberately: fast-forward, a
- * simple file-level 3-way merge, and conflict detection -- no line-level
- * diff/merge (AMIVCS whole-file-hashes content; a binary Amiga file has
- * no meaningful "line"), no automatic conflict resolution of any kind.
+ * keinerlei Merge-Logik."): fast-forward, or a 3-way merge against the
+ * nearest common ancestor. Per path the decision matrix (base/ours/
+ * theirs presence + content) is the same shape as libcloudsync's sync
+ * matrix -- act unambiguously or flag a conflict, never guess.
  *
- * The 3-way decision matrix (base/ours/theirs presence + content) is the
- * same shape as libcloudsync's local/remote/baseline sync matrix --
- * deliberately: both are "compare three states of the same path, act
- * unambiguously or flag a conflict, never guess" problems.
+ * A text file both sides changed is merged line by line (merge3.h,
+ * addendum 2026-11 to ADR 09); what still collides gets git's conflict
+ * markers in the file. Binary or very large files are merged as a whole:
+ * the file keeps ours and theirs is written beside it as <path>.theirs.
+ * Modified on one side and deleted on the other: the modified version
+ * stays in the working tree.
+ *
+ * A merge that stops on conflicts leaves a merge state (mergestate.h).
+ * While it exists, commit refuses until every conflict is resolved
+ * (`add` the file, or vcs_repo_merge_resolve()) and then records both
+ * parents; merge/pull/switch/checkout refuse; vcs_repo_merge_abort()
+ * puts everything back.
  */
 
 #include "repo.h"
@@ -27,14 +35,14 @@
  *     commit is already an ancestor of HEAD;
  *   - fast-forwards (moves the current branch's ref, materializes the
  *     new tree, returns 1) if HEAD is an ancestor of branch's commit;
- *   - otherwise performs a file-level 3-way merge against the nearest
+ *   - otherwise performs a 3-way merge against the nearest
  *     common ancestor. If every path resolves unambiguously, writes a
  *     merge commit (two parents) and advances the current branch,
  *     returning 1. If any path conflicts (changed differently on both
- *     sides), the merge does NOT complete: no commit is created, the
- *     conflicting file keeps "ours" content, a sibling "<path>.theirs"
- *     is written for manual inspection, and this returns 0 -- resolve by
- *     hand, then commit normally.
+ *     sides) and the line merge can't settle it, the merge does NOT
+ *     complete: no commit is created, the merge state is saved, the
+ *     conflicts are written as described above, and this returns 0 --
+ *     resolve, `add`, then commit (it becomes the merge commit).
  */
 int vcs_repo_merge(VcsRepo *repo, const char *branch);
 
@@ -46,5 +54,18 @@ int vcs_repo_merge(VcsRepo *repo, const char *branch);
  * merge commit's message) -- pass whatever name makes sense to the user
  * (e.g. "origin/main"). */
 int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit, const char *theirs_label);
+
+/* Ends a merge in progress without committing: every path the merge
+ * wrote or deleted gets ours' version back (or is removed if ours didn't
+ * have it), the .theirs files go, the index returns to ours' tree and
+ * the merge state is removed. Files not under version control are left
+ * alone. Returns 1, 0 if no merge is in progress or on I/O error. */
+int vcs_repo_merge_abort(VcsRepo *repo);
+
+/* Resolves one conflicting path of the merge in progress by taking one
+ * side's version as a whole (take_theirs 0: ours, 1: theirs; a side that
+ * doesn't have the file deletes it), staging it and marking the path
+ * resolved. path is a repository path. Returns 1 on success. */
+int vcs_repo_merge_resolve(VcsRepo *repo, const char *path, int take_theirs);
 
 #endif /* CLOUDVCS_MERGE_H */

@@ -33,8 +33,10 @@ int vcsgui_refresh(VcsGuiSession *s)
     if (!vcs_repo_status_raw(&s->repo, &st)) return 0;
     free(s->staged.items);
     free(s->unstaged.items);
+    vcs_mergestate_free(&s->merge);
     s->staged = st.staged;
     s->unstaged = st.unstaged;
+    s->merge = st.merge;   /* moved: st is not freed */
 
     vcs_loglist_free(&s->log_all);
     if (!vcs_repo_log_all_raw(&s->repo, &s->log_all)) return 0;
@@ -70,6 +72,7 @@ void vcsgui_close(VcsGuiSession *s)
 {
     free(s->staged.items);
     free(s->unstaged.items);
+    vcs_mergestate_free(&s->merge);
     vcs_loglist_free(&s->log_all);
     vcsgui_graph_layout_free(&s->graph);
     vcs_refs_free(&s->branches);
@@ -156,6 +159,66 @@ int vcsgui_merge(VcsGuiSession *s, const char *branch)
 {
     LOCKED(vcs_repo_merge(&s->repo, branch));
     return vcsgui_refresh(s);
+}
+
+int vcsgui_merge_abort(VcsGuiSession *s)
+{
+    LOCKED(vcs_repo_merge_abort(&s->repo));
+    return vcsgui_refresh(s);
+}
+
+int vcsgui_resolve(VcsGuiSession *s, const char *relpath, int take_theirs)
+{
+    LOCKED(vcs_repo_merge_resolve(&s->repo, relpath, take_theirs));
+    return vcsgui_refresh(s);
+}
+
+int vcsgui_conflicts_open(const VcsGuiSession *s)
+{
+    return s->merge.active ? vcs_mergestate_unresolved(&s->merge) : 0;
+}
+
+int vcsgui_diff_file(VcsGuiSession *s, const char *relpath, int staged,
+                     const VcsRepoDiffSink *sink, void *ctx)
+{
+    VcsDiffSide from, to;
+    const char *paths[1];
+    if (!s->is_open) return -1;
+    memset(&from, 0, sizeof(from));
+    memset(&to, 0, sizeof(to));
+    if (staged) {
+        from.kind = VCS_SIDE_COMMIT;
+        if (!vcs_head_resolve(s->repo.amivcs_dir, &from.oid)) from.oid = VCS_OID_ZERO;
+        to.kind = VCS_SIDE_INDEX;
+    } else {
+        from.kind = VCS_SIDE_INDEX;
+        to.kind = VCS_SIDE_WORKDIR;
+    }
+    paths[0] = relpath;
+    return vcs_repo_diff(&s->repo, &from, &to, paths, 1, sink, ctx);
+}
+
+int vcsgui_diff_commit(VcsGuiSession *s, const VcsOid *commit,
+                       const VcsRepoDiffSink *sink, void *ctx)
+{
+    VcsDiffSide from, to;
+    VcsObjType type;
+    void *data;
+    long len;
+    VcsCommit c;
+    if (!s->is_open) return -1;
+    memset(&from, 0, sizeof(from));
+    memset(&to, 0, sizeof(to));
+    from.kind = to.kind = VCS_SIDE_COMMIT;
+    from.oid = VCS_OID_ZERO;
+    to.oid = *commit;
+    if (!vcsobjstore_read(&s->repo.store, commit, &type, &data, &len)) return -1;
+    vcs_commit_init(&c);
+    if (type == VCS_OBJ_COMMIT && vcs_commit_decode(data, len, &c) && c.nparents > 0)
+        from.oid = c.parents[0];
+    free(data);
+    vcs_commit_free(&c);
+    return vcs_repo_diff(&s->repo, &from, &to, NULL, 0, sink, ctx);
 }
 
 /* ------------------------------------------------------------------ */

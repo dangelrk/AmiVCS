@@ -11,6 +11,7 @@
  * itself (same shape as HEAD's detached form, refs.c).
  */
 #include "index.h"
+#include "mergestate.h"
 #include "ignore.h"
 #include "treeutil.h"
 #include "localfs.h"
@@ -168,10 +169,28 @@ static int rebuild_tree(VcsRepo *repo, const VcsOid *cur_tree_oid, const char *r
 }
 
 /* relpath: repository path (UTF-8, vcsname.h) */
+/* 1 if relpath is a <path>.theirs copy the merge in progress wrote --
+ * not a file of the user, never staged */
+static int merge_theirs_copy(const VcsRepo *repo, const char *relpath)
+{
+    size_t n = strlen(relpath);
+    VcsMergeState st;
+    int hit = 0, i;
+    if (n <= 7 || strcmp(relpath + n - 7, ".theirs") != 0) return 0;
+    if (!vcs_mergestate_active(repo->amivcs_dir) || !vcs_mergestate_load(repo->amivcs_dir, &st)) return 0;
+    for (i = 0; i < st.n && !hit; i++)
+        hit = st.items[i].theirs_file && strlen(st.items[i].path) == n - 7
+              && strncmp(st.items[i].path, relpath, n - 7) == 0;
+    vcs_mergestate_free(&st);
+    return hit;
+}
+
 static int add_file(VcsRepo *repo, const char *relpath)
 {
     char abs_path[1024];
     VcsOid blob_oid, cur_tree, new_tree;
+
+    if (merge_theirs_copy(repo, relpath)) return 1;
 
     if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, relpath)) return 0;
     if (!vcsobjstore_write_blob_file(&repo->store, abs_path, &blob_oid)) return 0;
@@ -247,7 +266,16 @@ static int stage_missing_below(VcsRepo *repo, const char *relpath)
     return ok;
 }
 
+static int index_add(VcsRepo *repo, const char *relpath);
+
+/* during a merge, adding a conflicting path marks it resolved (git) */
 int vcs_index_add(VcsRepo *repo, const char *relpath)
+{
+    if (!index_add(repo, relpath)) return 0;
+    return vcs_mergestate_mark_resolved(repo->amivcs_dir, relpath);
+}
+
+static int index_add(VcsRepo *repo, const char *relpath)
 {
     char abs_path[1024];
 
@@ -275,6 +303,16 @@ int vcs_index_add(VcsRepo *repo, const char *relpath)
         for (i = 0; i < xf.n && ok; i++)
             if (under(xf.items[i].path, relpath)) { found = 1; ok = vcs_index_remove(repo, xf.items[i].path); }
         vcs_flat_free(&xf);
+        if (!found && ok) {
+            /* a conflict settled by keeping the file deleted: nothing to
+             * stage, but it is resolved (vcs_index_add() marks it) */
+            VcsMergeState st;
+            if (vcs_mergestate_active(repo->amivcs_dir) && vcs_mergestate_load(repo->amivcs_dir, &st)) {
+                VcsMergeFile *f = vcs_mergestate_find(&st, relpath);
+                found = f && vcs_mergestate_is_conflict(f);
+                vcs_mergestate_free(&st);
+            }
+        }
         return found && ok;
     }
     return add_file(repo, relpath);
@@ -343,7 +381,8 @@ int vcs_index_add_all(VcsRepo *repo)
 
     for (i = 0; i < st.unstaged.n && ok; i++) {
         const VcsChange *c = &st.unstaged.items[i];
-        ok = (c->kind == 'D') ? vcs_index_remove(repo, c->path) : vcs_index_add(repo, c->path);
+        ok = (c->kind == 'D') ? vcs_index_remove(repo, c->path) && vcs_mergestate_mark_resolved(repo->amivcs_dir, c->path)
+                              : vcs_index_add(repo, c->path);
     }
 
     vcs_status_free(&st);

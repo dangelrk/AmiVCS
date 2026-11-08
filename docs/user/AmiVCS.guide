@@ -83,7 +83,8 @@ Bestandteile:
                 Branch-Zeiger. Dazu eine nur lesende Web-Oberfläche.
 
 Rein lokal (ohne Server) funktionieren: init, status, add, unstage,
-commit, log, branch, switch, checkout, merge, gc, cat-file.
+commit, log, branch, switch, checkout, merge, resolve, diff, show,
+gc, cat-file.
 Nur clone, push und pull sprechen mit einem AmiVCS-Server.
 
 Jedes Repository ist ein ganz normales Verzeichnis. AmiVCS legt darin
@@ -423,7 +424,7 @@ Datei nach einem Absturz liegen, kann man sie löschen.
 Befehle im Überblick:
 
   init, status, add, unstage, commit, log, branch, switch, checkout,
-  merge, gc, cat-file, version
+  merge, resolve, diff, show, gc, cat-file, version
       -> @{" lokale Befehle " link Lokal}
   clone, push, pull, remote, config
       -> @{" Server-Befehle " link Remote}
@@ -459,7 +460,8 @@ init
 status
     Zeigt "Changes to be committed" (vorgemerkt) und "Changes not
     staged for commit" (geändert, aber nicht vorgemerkt), jeweils mit
-    new/modified/deleted.
+    new/modified/deleted. Während eines Merges mit Konflikten steht
+    davor "Merging '<branch>'" und die Liste "Unmerged paths".
 
 add <pfad> ...
     Merkt Dateien oder ganze Verzeichnisse (rekursiv) für den
@@ -483,7 +485,9 @@ commit -F <datei> [-a]
 commit -m <text> [-a]
     Speichert das Vorgemerkte als neuen Commit. Mit -a (oder --all)
     wird vorher alles vorgemerkt. Ohne vorheriges add und ohne -a
-    gibt es nichts zu committen.
+    gibt es nichts zu committen. Schließt ein commit einen Merge mit
+    Konflikten ab, bekommt er beide Eltern; -m darf dann fehlen
+    ("Merge branch '<name>'").
 
 log
     Historie des aktuellen Branches (Commit-ID, Autor, Datum in UTC,
@@ -517,7 +521,42 @@ checkout
 merge <branch>
     Führt <branch> in den aktuellen Branch zusammen: "Already up to
     date", "Fast-forward" oder ein echter 3-Wege-Merge mit
-    Merge-Commit. Bei Konflikten: @{" Konflikte " link Konflikte}.
+    Merge-Commit. Textdateien werden zeilenweise zusammengeführt:
+    Änderungen an verschiedenen Stellen derselben Datei sind kein
+    Konflikt. Bei Konflikten: @{" Konflikte " link Konflikte}.
+
+merge --abort
+    Bricht einen Merge mit Konflikten ab: Alles, was der Merge
+    geschrieben oder gelöscht hat, kehrt zum Stand davor zurück
+    (auch Ihre Änderungen an Konfliktdateien). Dateien ohne
+    Versionsverwaltung bleiben unangetastet.
+
+resolve --ours <pfad> ...
+resolve --theirs <pfad> ...
+    Löst einen Konflikt, indem die ganze Datei der eigenen (--ours)
+    bzw. der anderen Seite (--theirs) übernommen und vorgemerkt wird.
+
+diff [<pfad> ...]
+    Zeigt zeilenweise, was sich im Arbeitsverzeichnis gegenüber dem
+    Vorgemerkten geändert hat (Unified-Format: "-" entfernt, "+"
+    hinzugefügt, "@@" Zeilennummern). Noch nie vorgemerkte Dateien
+    erscheinen nur, wenn sie genannt werden. Binärdateien und
+    Dateien über 512 KB werden nur genannt.
+
+diff --staged [<rev>] [<pfad> ...]
+    Was der nächste Commit gegenüber HEAD (oder <rev>) ändert.
+
+diff <rev> [<rev>] [-- <pfad> ...]
+    Unterschied eines Commits zum Arbeitsverzeichnis bzw. zwischen
+    zwei Commits. Steht dort "--", ist alles danach ein Pfad.
+
+show [<rev>]
+    Zeigt einen Commit (ohne Angabe HEAD): Kopf, Nachricht und die
+    Änderungen gegenüber dem ersten Elternteil.
+
+    <rev> ist "HEAD", ein Branch-Name, eine Commit-ID oder deren
+    eindeutiger Anfang (ab 4 Zeichen), jeweils auch mit "^" (der
+    Elternteil davor) oder "~N" (N Elternteile zurück), etwa HEAD~2.
 
 gc
     Packt alle losen Objekte in eine Pack-Datei (spart
@@ -574,7 +613,8 @@ push [<url>]
 pull [<url>] [<branch>]
     Holt <branch> (ohne Angabe: gleichnamig zum aktuellen Branch) vom
     Server und führt ihn genauso zusammen wie "merge": Fast-forward,
-    3-Wege-Merge oder Abbruch bei Konflikt.
+    3-Wege-Merge oder Halt bei Konflikten
+    (@{" Konflikte " link Konflikte}).
 
 remote [<url>]
     Zeigt bzw. setzt die Remote-URL dieses Repositorys.
@@ -654,8 +694,9 @@ Das Fenster ist wie "git gui" aufgebaut:
                   "Stage all"
       links unten "Staged Changes (Will Commit)": was der nächste
                   Commit enthält; darunter "Unstage selected"
-      rechts      Inhalt der angeklickten Datei (Vorschau, erste
-                  32 KB; noch kein Diff)
+      rechts      was sich an der angeklickten Datei geändert hat,
+                  Zeile für Zeile (Diff: "+" hinzugefügt, fett "-"
+                  entfernt, "@@" Zeilennummern)
     Doppelklick auf eine Datei merkt sie vor bzw. nimmt die
     Vormerkung zurück. Mehrfachauswahl mit gedrückter Umschalttaste.
   - unten links die Knöpfe "Rescan", "Commit", "Push", "Pull"
@@ -668,14 +709,21 @@ Das Fenster ist wie "git gui" aufgebaut:
     Spalten Graph, OID, Author, Date, Message. Der Graph ist als
     Zeichen ("| * ", "|/ ") dargestellt; Branch-Namen stehen in
     eckigen Klammern vor der Nachricht. Darunter die Knöpfe
-    "New Branch...", "Switch...", "Merge...", "Clone...".
+    "New Branch...", "Switch...", "Merge...", "Clone...". Unter der
+    Historie stehen die Änderungen des angeklickten Commits.
+  - Während eines Merges mit Konflikten: oben ein Hinweis mit dem
+    Knopf "Abort Merge", links über den Änderungen die Liste
+    "Conflicts" mit "Take ours", "Take theirs" und "Mark resolved".
+    Ein Klick auf einen Konflikt zeigt die Datei mit ihren
+    Konfliktmarkern. "Commit" bleibt gesperrt, bis alle Konflikte
+    gelöst sind; die Nachricht darf dann leer bleiben.
 
 Menüs:
 
   Project      About... (Amiga-?), Quit (Amiga-Q)
   Repository   Init Repository Here, Refresh (R), Settings... (,),
                New Branch... (B), Switch Branch... (S),
-               Merge Branch... (M)
+               Merge Branch... (M), Abort Merge
   Remote       Clone..., Push (P), Pull (L)
 
 Switch und Merge zeigen zuerst die vorhandenen Branches an; danach
@@ -724,6 +772,8 @@ Unterschiede zur MUI-Fassung:
   - Der Commit-Graph wird grafisch gezeichnet.
   - Menüs: Repository, Remote, Help; Refresh zusätzlich in der
     Werkzeugleiste.
+  - Diffs sind farbig hinterlegt; während eines Merges trägt das
+    Nachrichtenfeld schon "Merge branch '<name>'".
   - Repository > Settings... öffnet einen eigenen Dialog "AMIVCS
     Settings": Remote-URL, Benutzer, Passwort vergessen, Name und
     E-Mail für dieses Repository und die globalen Vorgaben.
@@ -779,44 +829,61 @@ Aufräumen ab und zu:
 Konflikte auflösen
 ------------------
 
-merge und pull arbeiten dateiweise. Haben beide Seiten dieselbe Datei
-unterschiedlich geändert (oder eine Seite geändert, die andere
-gelöscht), ist das ein Konflikt. AmiVCS löst Konflikte NIE
-automatisch:
+merge und pull führen Textdateien zeilenweise zusammen. Ein Konflikt
+entsteht nur, wo beide Seiten dieselben Zeilen unterschiedlich
+geändert haben, wo eine Binärdatei (oder eine Datei über 512 KB) auf
+beiden Seiten geändert wurde oder wo eine Seite eine Datei geändert
+und die andere sie gelöscht hat. AmiVCS löst Konflikte NIE
+automatisch. Stattdessen:
 
-  - Für jeden Konflikt erscheint "conflict: <pfad>".
-  - Die Datei behält Ihren eigenen Inhalt.
-  - Die Fassung der anderen Seite liegt daneben als <pfad>.theirs.
-  - Konfliktfreie Änderungen der anderen Seite stehen bereits im
-    Arbeitsverzeichnis.
-  - Es entsteht KEIN Commit; die Meldung lautet
-    "N conflict(s) -- resolve by hand (see the .theirs files), then
-    commit; the merge was NOT completed".
+  - Es entsteht noch KEIN Commit. Der Merge bleibt offen, bis Sie ihn
+    mit commit abschließen oder mit "merge --abort" abbrechen.
+  - In Textdateien stehen Konfliktmarker wie bei git:
 
-Wichtig zu wissen: Nur ein konfliktfreier merge/pull erzeugt einen
-Merge-Commit mit zwei Eltern. Ein von Hand "gelöster" Commit hat nur
-einen Elternteil - ein erneutes merge/pull meldet denselben Konflikt
-dann wieder, und push wird weiter abgelehnt. Bewährter Weg:
+      <<<<<<< ours (main)
+      Ihre Zeilen
+      =======
+      die Zeilen der anderen Seite
+      >>>>>>> theirs (feature)
 
-  1. Eigene Fassung sichern und die andere übernehmen:
-       Copy datei datei.mine
-       Copy datei.theirs datei
-       Delete datei.theirs
-  2. Committen und erneut zusammenführen - jetzt ohne Konflikt:
-       amivcs commit -a -m "Stand der Gegenseite übernommen"
-       amivcs merge <branch>        (bzw. amivcs pull)
-     Meldung: "Merge completed."
-  3. Die eigenen Änderungen aus datei.mine von Hand in datei
-     einarbeiten, datei.mine löschen, committen:
-       amivcs commit -a -m "Konflikt aufgelöst"
+  - Bei Binärdateien behält die Datei Ihren Inhalt; die Fassung der
+    anderen Seite liegt daneben als <pfad>.theirs.
+  - Geändert gegen gelöscht: die geänderte Fassung bleibt stehen.
+  - Konfliktfreie Änderungen der anderen Seite sind schon
+    vorgemerkt.
+  - "amivcs status" listet die offenen Konflikte unter "Unmerged
+    paths".
+
+So geht es weiter:
+
+  1. Jede Konfliktdatei bearbeiten: die Blöcke zwischen <<<<<<< und
+     >>>>>>> so umschreiben, wie es sein soll, Marker entfernen.
+     Oder eine Seite ganz übernehmen:
+       amivcs resolve --ours datei      (eigene Fassung)
+       amivcs resolve --theirs datei    (die der anderen Seite)
+  2. Bearbeitete Dateien vormerken - das markiert sie als gelöst:
+       amivcs add datei
+  3. Abschließen - der Commit bekommt beide Eltern:
+       amivcs commit
   4. Gegebenenfalls amivcs push.
 
-Merge-Commits tragen den Autor "amivcs" und die Nachricht
+Ein späteres merge/pull desselben Branches kennt diesen Stand und
+bringt die Konflikte nicht noch einmal.
+
+Abbrechen: "amivcs merge --abort" stellt den Stand vor dem Merge
+wieder her (auch Ihre Änderungen an den Konfliktdateien gehen dabei
+verloren).
+
+Solange ein Merge offen ist, verweigern merge, pull, switch und
+checkout die Arbeit; commit verweigert, solange ein Konflikt nicht
+gelöst ist ("unresolved conflict(s)").
+
+Merge-Commits tragen Ihren Namen (amivcs config) und die Nachricht
 "Merge branch '<name>'".
 
-merge, pull, switch und checkout verweigern die Arbeit, solange das
-Arbeitsverzeichnis ungesicherte Änderungen enthält ("working tree has
-uncommitted changes -- commit first").
+merge, pull, switch und checkout verweigern die Arbeit auch, solange
+das Arbeitsverzeichnis ungesicherte Änderungen enthält ("working tree
+has uncommitted changes -- commit first").
 
 @{" Zurück " link Workflow}  @{" Index " link Main}
 @{" Weiter " link Ignore}
@@ -899,7 +966,8 @@ Lesen funktioniert gleich, egal ob ein Objekt lose oder gepackt ist.
 Bewusste Grenzen der Version 1:
 
   - Vormerken nur für ganze Dateien (kein "git add -p").
-  - Merge nur dateiweise, keine zeilenweise Zusammenführung.
+  - Zeilenweises Zusammenführen nur für Textdateien bis 512 KB;
+    Binärdateien werden als Ganzes zusammengeführt.
   - "amivcs log" zeigt nur die erste Elternlinie.
   - Kein Aufstieg in übergeordnete Verzeichnisse: immer im
     Wurzelverzeichnis arbeiten.
