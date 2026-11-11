@@ -39,6 +39,9 @@
 #ifdef PLATFORM_AMIGA
 #include <dos/dos.h>
 #include <proto/dos.h>
+#elif defined(_WIN32)
+#include <conio.h>
+#include <io.h>
 #else
 #include <unistd.h>
 #include <termios.h>
@@ -552,6 +555,8 @@ static int interactive(void)
     if (g_pc) return 0;           /* a program is driving amivcs */
 #ifdef PLATFORM_AMIGA
     return IsInteractive(Input()) != 0;
+#elif defined(_WIN32)
+    return _isatty(0);
 #else
     return isatty(0);
 #endif
@@ -575,6 +580,20 @@ static int read_line(const char *prompt, char *out, size_t sz, int secret)
             if (n + 1 < sz && (unsigned char)c >= 32) out[n++] = c;
         }
         SetMode(in, 0);
+        out[n] = '\0';
+        fputs("\n", stdout);
+        return 1;
+    }
+#elif defined(_WIN32)
+    if (secret && _isatty(0)) {
+        int c;                    /* _getch() reads without echo */
+        while ((c = _getch()) != EOF) {
+            if (c == '\r' || c == '\n') break;
+            if (c == 3) { n = 0; break; }                 /* Ctrl-C */
+            if (c == 0 || c == 0xE0) { _getch(); continue; } /* arrow keys etc. */
+            if (c == 8 || c == 127) { if (n) n--; continue; }
+            if (n + 1 < sz && c >= 32) out[n++] = (char)c;
+        }
         out[n] = '\0';
         fputs("\n", stdout);
         return 1;
