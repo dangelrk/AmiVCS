@@ -11,5 +11,9 @@ Das Archiv auf den Server kopieren und dort auspacken:
 
   tar xzf AmiVCS-Server-@VERSION@.tar.gz
 
-Darin liegt die Installationsanleitung INSTALL.md: Neuinstallation,
-Aktualisieren einer älteren Fassung und die nötigen Migrationen.
+Darin liegen zwei Anleitungen:
+
+  INSTALL.md  einen neuen Server einrichten
+  UPDATE.md   einen laufenden Server aktualisieren - mit einer Tabelle,
+              welche Datenbank-Migrationen von welcher Fassung aus nötig
+              sind. Vor dem Kopieren der neuen Dateien lesen!

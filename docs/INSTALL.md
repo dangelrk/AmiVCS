@@ -353,6 +353,9 @@ sperrt der Server 15 Minuten (HTTP 429).
 MariaDB-root einspielen (der Datenbankbenutzer `amivcs` darf kein
 `ALTER`), danach einen vorhandenen Benutzer zum Administrator machen:
 `sudo -u apache php bin/amivcs-admin.php user:admin bob on`.
+Die vollständige Anleitung zum Aktualisieren (welche Migrationen von
+welcher Fassung aus nötig sind, Sicherung, Prüfen, Zurück) liegt jedem
+Server-Paket als **`UPDATE.md`** bei.
 
 Datensicherung: Datenbank (`mysqldump amivcs`) **und**
 `AMIVCS_STORAGE_PATH` gemeinsam sichern – die Datenbank enthält nur
