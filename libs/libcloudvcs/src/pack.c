@@ -10,12 +10,29 @@
 #include "varint.h"
 #include "localfs.h"
 #include "md5.h"
+#include "ui_hooks.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define COPY_CHUNK 8192
+
+/* hex characters of the pack's MD5 in its file name: "<24>.pack" is 29
+ * characters and fits a classic FFS name (30) */
+#define VCS_PACK_HEX_CHARS 24
+
+/* size of a file in bytes, -1 if it cannot be opened */
+static long file_size(const char *path)
+{
+    FILE *fp = fopen(path, "rb");
+    long sz;
+    if (!fp) return -1;
+    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return -1; }
+    sz = ftell(fp);
+    fclose(fp);
+    return sz;
+}
 
 static void loose_path_for(const char *objects_dir, const VcsOid *oid, char *out, size_t sz)
 {
@@ -113,6 +130,7 @@ int vcs_pack_gc(VcsObjStore *store, int *out_count)
 
     {
         char tmp_pack[1024];
+        long pack_size = -1;
         FILE *out;
         unsigned char hdr[1 + 10];
         size_t hdr_len;
@@ -176,7 +194,8 @@ int vcs_pack_gc(VcsObjStore *store, int *out_count)
             packed_lens[packed_n] = lpaylen;
             packed_n++;
         }
-        fclose(out);
+        pack_size = ftell(out);
+        if (fclose(out) != 0) pack_size = -1;
 
         if (packed_n == 0) {
             remove(tmp_pack);
@@ -192,7 +211,13 @@ int vcs_pack_gc(VcsObjStore *store, int *out_count)
                 free(loose); free(packed_oids); free(packed_offsets); free(packed_lens);
                 return 0;
             }
-            snprintf(packname, sizeof(packname), "pack-%s.pack", pack_hex);
+            /* "<24 hex>.pack"/".idx" (29/28 chars): classic FFS keeps only
+             * 30 and truncates silently -- the old "pack-<32 hex>.pack" and
+             * ".idx" both became the same 30-char name there, so the idx
+             * replaced the pack and the loose objects were pruned after it.
+             * Readers find packs through any "*.idx" (packfmt.c), so old
+             * "pack-..." packs stay readable and old versions read these. */
+            snprintf(packname, sizeof(packname), "%.*s.pack", VCS_PACK_HEX_CHARS, pack_hex);
             localfs_join(final_pack, sizeof(final_pack), pack_dir, packname);
             /* AmigaDOS Rename() fails outright if the destination
              * already exists (see dos.doc's Rename() autodoc) -- unlike
@@ -240,13 +265,24 @@ int vcs_pack_gc(VcsObjStore *store, int *out_count)
                     return 0;
                 }
 
-                snprintf(packname, sizeof(packname), "pack-%s.idx", pack_hex);
+                snprintf(packname, sizeof(packname), "%.*s.idx", VCS_PACK_HEX_CHARS, pack_hex);
                 localfs_join(final_idx, sizeof(final_idx), pack_dir, packname);
                 /* Same AmigaDOS Rename()-onto-existing-target caveat as
                  * final_pack above. */
                 remove(final_idx);
                 if (rename(tmp_idx, final_idx) != 0) {
                     remove(tmp_idx);
+                    free(loose); free(packed_oids); free(packed_offsets); free(packed_lens);
+                    return 0;
+                }
+                /* Both must be on disk as two files of the sizes just
+                 * written before a single loose object goes: a file system
+                 * that mangles names (truncation, a reserved name) shows
+                 * here, and then everything stays loose. */
+                if (pack_size < 0 || file_size(final_pack) != pack_size
+                    || file_size(final_idx) <= 0 || strcmp(final_pack, final_idx) == 0) {
+                    ui_notify(UI_ERROR, "amivcs: gc: pack %s is not on disk as written -- "
+                              "loose objects kept", final_pack);
                     free(loose); free(packed_oids); free(packed_offsets); free(packed_lens);
                     return 0;
                 }

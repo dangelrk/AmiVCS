@@ -29,20 +29,23 @@ private:
 };
 
 /* Repository > Settings...: the repository's remote URL, user and
- * identity, and the global name/email defaults. */
+ * identity, the project's long-name switch (.amivcsproject, versioned)
+ * and the global name/email defaults. */
 class SettingsDialog : public QDialog
 {
     Q_OBJECT
 public:
-    SettingsDialog(const QString &amivcsDir, QWidget *parent = nullptr);
+    SettingsDialog(const QString &amivcsDir, const VcsRepo *repo, QWidget *parent = nullptr);
 
 private slots:
     void save();
 
 private:
     QString m_amivcsDir;
+    const VcsRepo *m_repo;
     QLineEdit *m_remote, *m_user, *m_name, *m_email, *m_globalName, *m_globalEmail;
     QCheckBox *m_forget;
+    QCheckBox *m_longNames;
 };
 
 #endif // REMOTEDIALOG_H

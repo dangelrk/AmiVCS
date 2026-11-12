@@ -334,6 +334,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
          * before anything is written */
         vcs_names_begin_flat(repo, &ours_flat, &theirs_flat);
         if (!vcs_names_unique_flat(&ours_flat, &theirs_flat)
+            || !vcs_names_fit_flat(repo->root, &theirs_flat)
             || !vcs_names_in_the_way(repo, &ours_flat, &theirs_flat)) {
             vcs_flat_free(&base_flat); vcs_flat_free(&ours_flat); vcs_flat_free(&theirs_flat);
             return 0;
@@ -428,7 +429,7 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
             const MergeStep *m = &steps.items[i];
             char rel[1040], abs_path[1040];
             if (m->step != STEP_THEIRS_FILE) continue;
-            snprintf(rel, sizeof(rel), "%s.theirs", m->path);
+            if (!vcs_theirs_rel(m->path, vcs_name_max(repo->root), rel, sizeof(rel))) continue;
             if (vcs_flat_find(&ours_flat, rel) || vcs_flat_find(&theirs_flat, rel)
                 || (vcs_local_join(abs_path, sizeof(abs_path), repo->root, rel) && localfs_exists(abs_path))) {
                 char *shown = vcs_text_to_local(rel);
@@ -485,8 +486,9 @@ int vcs_repo_merge_commit(VcsRepo *repo, const VcsOid *theirs_commit_in, const c
                 if (!vcsobjstore_extract_blob_to_file(&repo->store, &m->oid, abs_path)) ok = 0;
                 break;
             case STEP_THEIRS_FILE: {
-                char theirs_path[1040];
-                snprintf(theirs_path, sizeof(theirs_path), "%s.theirs", abs_path);
+                char theirs_rel[1040], theirs_path[1040];
+                if (!vcs_theirs_rel(m->path, vcs_name_max(repo->root), theirs_rel, sizeof(theirs_rel))
+                    || !vcs_local_join(theirs_path, sizeof(theirs_path), repo->root, theirs_rel)) { ok = 0; break; }
                 ensure_parent_dir(repo->root, m->path);
                 if (!vcsobjstore_extract_blob_to_file(&repo->store, &m->oid, theirs_path)) ok = 0;
                 break;
@@ -580,11 +582,7 @@ int vcs_repo_merge_abort(VcsRepo *repo)
             localfs_remove(abs_path);
             prune_parents(repo->root, f->path);
         }
-        if (f->theirs_file) {
-            char theirs_path[1040];
-            snprintf(theirs_path, sizeof(theirs_path), "%s.theirs", abs_path);
-            localfs_remove(theirs_path);
-        }
+        if (f->theirs_file) vcs_remove_theirs(repo, f->path);
     }
     vcs_flat_free(&ours_flat);
     vcs_mergestate_free(&st);
@@ -651,9 +649,7 @@ int vcs_repo_merge_resolve(VcsRepo *repo, const char *path, int take_theirs)
         ok = vcs_index_remove(repo, path);
     }
     if (ok && f->theirs_file) {
-        char theirs_path[1040];
-        snprintf(theirs_path, sizeof(theirs_path), "%s.theirs", abs_path);
-        localfs_remove(theirs_path);
+        vcs_remove_theirs(repo, path);
         f->theirs_file = 0;
     }
     if (ok) {

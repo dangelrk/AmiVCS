@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "vcsconfig.h"
+#include "repo.h"
 }
 
 #include <QFormLayout>
@@ -72,8 +73,8 @@ static QString globalValue(const char *key)
     return vcs_global_get(key, v, sizeof(v)) ? QString::fromUtf8(v) : QString();
 }
 
-SettingsDialog::SettingsDialog(const QString &amivcsDir, QWidget *parent)
-    : QDialog(parent), m_amivcsDir(amivcsDir)
+SettingsDialog::SettingsDialog(const QString &amivcsDir, const VcsRepo *repo, QWidget *parent)
+    : QDialog(parent), m_amivcsDir(amivcsDir), m_repo(repo)
 {
     setWindowTitle(tr("AMIVCS Settings"));
 
@@ -93,6 +94,13 @@ SettingsDialog::SettingsDialog(const QString &amivcsDir, QWidget *parent)
     repoForm->addRow(QString(), m_forget);
     repoForm->addRow(tr("Name:"), m_name);
     repoForm->addRow(tr("E-mail:"), m_email);
+    m_longNames = new QCheckBox(tr("Allow long file names"), this);
+    m_longNames->setChecked(vcs_repo_long_names(repo));
+    m_longNames->setToolTip(tr("Classic Amiga FFS/OFS keeps 30 characters per name and silently cuts "
+                               "longer ones. Without this box a commit refuses new names longer than "
+                               "30 characters, with ':' or differing only in case. Stored in "
+                               ".amivcsproject -- commit it to share it with every copy."));
+    repoForm->addRow(QString(), m_longNames);
 
     auto *globalBox = new QGroupBox(tr("Defaults for all repositories"), this);
     auto *globalForm = new QFormLayout(globalBox);
@@ -134,5 +142,13 @@ void SettingsDialog::save()
     if (m_forget->isChecked()) vcs_repo_config_set(dir.constData(), "pass", nullptr);
     vcs_global_set("name", m_globalName->text().trimmed().toUtf8().constData());
     vcs_global_set("email", m_globalEmail->text().trimmed().toUtf8().constData());
+    if (m_longNames->isChecked() != (vcs_repo_long_names(m_repo) != 0)) {
+        if (!vcs_repo_set_long_names(m_repo, m_longNames->isChecked() ? 1 : 0)) {
+            QMessageBox::warning(this, windowTitle(), tr("Could not write .amivcsproject."));
+            return;
+        }
+        QMessageBox::information(this, windowTitle(),
+                                 tr("Changed in .amivcsproject -- commit it to share it with every copy."));
+    }
     accept();
 }

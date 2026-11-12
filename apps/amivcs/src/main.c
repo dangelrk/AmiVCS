@@ -789,6 +789,9 @@ static void usage(const char *prog)
         "  config [--global] [--unset] [<key> [<value>]]\n"
         "                       Show or set name, email (global or here),\n"
         "                       remote, user, pass (here); --unset pass forgets it\n"
+        "  config longnames [on|off]  Allow names an Amiga with FFS cannot keep\n"
+        "                       (> 30 characters, ':', case-only differences);\n"
+        "                       stored in .amivcsproject, commit it to share it\n"
         "  version              Print the version\n"
         "\n"
         "Must be run from the repository root (no parent-directory search).\n"
@@ -1132,6 +1135,26 @@ static int run(int argc, char **argv, AcConfig *cfg)
             vcs_repo_config_load(repo.amivcs_dir, &rcfg);
             if (rcfg.remote[0]) printf("%s\n", rcfg.remote);
             else { ui_notify(UI_INFO, "no remote set (amivcs remote <url>)"); rc = 1; }
+        }
+
+    } else if (strcmp(cmd, "config") == 0 && i < argc && strcmp(argv[i], "longnames") == 0) {
+        /* a project setting, versioned in VCS_PROJECT_FILE -- not .amivcs/config */
+        if (i + 1 >= argc) {
+            printf("%s\n", vcs_repo_long_names(&repo) ? "on" : "off");
+        } else {
+            const char *v = argv[i + 1];
+            int on = strcmp(v, "on") == 0 || strcmp(v, "1") == 0 || strcmp(v, "yes") == 0 || strcmp(v, "true") == 0;
+            int off = strcmp(v, "off") == 0 || strcmp(v, "0") == 0 || strcmp(v, "no") == 0 || strcmp(v, "false") == 0;
+            if (!on && !off) {
+                ui_notify(UI_ERROR, "amivcs: longnames takes on or off");
+                rc = 1;
+            } else if (!vcs_repo_set_long_names(&repo, on)) {
+                ui_notify(UI_ERROR, "amivcs: cannot write %s", VCS_PROJECT_FILE);
+                rc = 1;
+            } else {
+                ui_notify(UI_INFO, "longnames %s -- commit %s to share it with every copy",
+                          on ? "on" : "off", VCS_PROJECT_FILE);
+            }
         }
 
     } else if (strcmp(cmd, "config") == 0) {

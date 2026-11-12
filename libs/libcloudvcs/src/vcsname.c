@@ -533,6 +533,86 @@ done:
 }
 
 /* ------------------------------------------------------------------ */
+/* name length (header: classic FFS keeps 30 characters)               */
+
+int vcs_name_max(const char *root)
+{
+    static char last_root[NAMEBUF];
+    static int  last_max = 0;
+    if (last_max > 0 && strcmp(last_root, root) == 0) return last_max;
+    last_max = localfs_name_max(root);
+    vcs_utf8_copy(last_root, sizeof(last_root), root);
+    return last_max;
+}
+
+int vcs_local_name_len(const char *repo_name)
+{
+    static char local[NAMEBUF];
+    if (!plain_to_local(repo_name, local, sizeof(local))) return -1;
+    return (int)strlen(local);
+}
+
+int vcs_names_fit(const char *const *paths, int n, int name_max, char *bad, size_t sz)
+{
+    static char comp[NAMEBUF];
+    int i;
+    if (bad && sz) bad[0] = '\0';
+    for (i = 0; i < n; i++) {
+        const char *p = paths[i];
+        while (next_comp(&p, comp)) {
+            int len = vcs_local_name_len(comp);
+            if (len < 0 || len > name_max) {
+                if (bad && sz) {
+                    size_t upto = (size_t)(p - paths[i]);
+                    if (upto && paths[i][upto - 1] == '/') upto--;
+                    if (upto >= sz) upto = sz - 1;
+                    memcpy(bad, paths[i], upto);
+                    bad[upto] = '\0';
+                }
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+/* length in bytes of the last UTF-8 character of s (len > 0) */
+static size_t last_char_len(const char *s, size_t len)
+{
+    size_t k = len;
+    while (k > 0) {
+        k--;
+        if (((unsigned char)s[k] & 0xC0) != 0x80) break;
+    }
+    return len - k;
+}
+
+int vcs_theirs_rel(const char *repo_path, int name_max, char *out, size_t sz)
+{
+    static const char suffix[] = ".theirs";
+    static char base[NAMEBUF];
+    const char *slash = strrchr(repo_path, '/');
+    size_t dirlen = slash ? (size_t)(slash - repo_path) + 1 : 0;
+    size_t blen;
+    int need = (int)sizeof(suffix) - 1;
+
+    vcs_utf8_copy(base, sizeof(base), repo_path + dirlen);
+    blen = strlen(base);
+    /* cut whole characters off the end until "<base>.theirs" fits */
+    while (blen > 1) {
+        int len = vcs_local_name_len(base);
+        if (len >= 0 && len + need <= name_max) break;
+        blen -= last_char_len(base, blen);
+        base[blen] = '\0';
+    }
+    if (dirlen + blen + (size_t)need + 1 > sz) { if (sz) out[0] = '\0'; return 0; }
+    memcpy(out, repo_path, dirlen);
+    memcpy(out + dirlen, base, blen);
+    memcpy(out + dirlen + blen, suffix, (size_t)need + 1);
+    return 1;
+}
+
+/* ------------------------------------------------------------------ */
 /* texts                                                               */
 
 /* where to cut s (at most max bytes): before an ASCII byte if possible

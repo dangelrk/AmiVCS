@@ -23,6 +23,7 @@
 #include "oidset.h"
 #include "localfs.h"
 #include "vcsname.h"
+#include "vcsconfig.h"
 #include "charset.h"
 #include "md5.h"
 #include "ui_hooks.h"
@@ -203,6 +204,26 @@ int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b)
                   "rename one of them on a system that can tell them apart",
                   xs, vcs_shown(y), local);
     }
+    return ok;
+}
+
+int vcs_names_fit_flat(const char *root, const VcsFlatList *f)
+{
+    const char **paths;
+    char bad[512];
+    int i, ok, name_max;
+    if (f->n == 0) return 1;
+    paths = (const char **)malloc(sizeof(char *) * (size_t)f->n);
+    if (!paths) return 0;
+    for (i = 0; i < f->n; i++) paths[i] = f->items[i].path;
+    name_max = vcs_name_max(root);
+    ok = vcs_names_fit(paths, f->n, name_max, bad, sizeof(bad));
+    free(paths);
+    if (!ok)
+        ui_notify(UI_ERROR, "amivcs: \"%s\" is longer than this file system keeps (%d characters) "
+                  "-- nothing was changed; check the project out on a volume with long names "
+                  "(FFS with DOS\\7, SFS, PFS3) or rename it on another system",
+                  vcs_shown(bad), name_max);
     return ok;
 }
 
@@ -515,6 +536,18 @@ int vcs_repo_is_dirty(VcsRepo *repo)
     return changes;
 }
 
+/* see treeutil.h */
+void vcs_remove_theirs(VcsRepo *repo, const char *repo_path)
+{
+    char rel[1040], abs_path[1040];
+    /* Only the name this file system keeps. Never also try the classic
+     * "<path>.theirs" when it does not fit: classic FFS would truncate it
+     * -- for a 30-character file name onto the file itself. */
+    if (vcs_theirs_rel(repo_path, vcs_name_max(repo->root), rel, sizeof(rel))
+        && vcs_local_join(abs_path, sizeof(abs_path), repo->root, rel))
+        localfs_remove(abs_path);
+}
+
 /* ------------------------------------------------------------------ */
 /* Materialize a committed tree into the working directory (checkout/    */
 /* switch, and later merge's fast-forward path).                        */
@@ -626,7 +659,8 @@ int vcs_repo_materialize_tree(VcsRepo *repo, const VcsOid *tree_oid)
     vcs_names_reset();
     names_learn_flat(&from);
     names_learn_flat(&to);
-    if (!vcs_names_unique_flat(&to, NULL) || !vcs_names_in_the_way(repo, &from, &to)) {
+    if (!vcs_names_unique_flat(&to, NULL) || !vcs_names_fit_flat(repo->root, &to)
+        || !vcs_names_in_the_way(repo, &from, &to)) {
         vcs_flat_free(&from);
         vcs_flat_free(&to);
         return 0;
@@ -685,6 +719,186 @@ static int path_in_flat(const char *repo_path, void *ctx)
     for (i = 0; i < f->n; i++)
         if (strncmp(f->items[i].path, repo_path, n) == 0 && f->items[i].path[n] == '/') return 1;
     return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Amiga name rule for commits (repo.h VCS_PROJECT_FILE)                 */
+
+int vcs_repo_long_names(const VcsRepo *repo)
+{
+    char path[1024], val[16];
+    localfs_join(path, sizeof(path), repo->root, VCS_PROJECT_FILE);
+    if (!vcs_config_file_get(path, "longnames", val, sizeof(val))) return 0;
+    return strcmp(val, "1") == 0 || strcmp(val, "on") == 0
+        || strcmp(val, "yes") == 0 || strcmp(val, "true") == 0;
+}
+
+int vcs_repo_set_long_names(const VcsRepo *repo, int on)
+{
+    char path[1024];
+    localfs_join(path, sizeof(path), repo->root, VCS_PROJECT_FILE);
+    return vcs_config_file_set(path, "longnames", on ? "1" : "0");
+}
+
+/* 1 if some path of sorted f starts with "<prefix>/" (prefix: plen bytes) */
+static int flat_has_dir(const VcsFlatList *f, const char *prefix, size_t plen)
+{
+    int lo = 0, hi = f->n;
+    while (lo < hi) {               /* first path >= prefix + "/" */
+        int mid = (lo + hi) / 2;
+        const char *p = f->items[mid].path;
+        int cmp = strncmp(p, prefix, plen);
+        if (cmp == 0) cmp = (unsigned char)p[plen] - (unsigned char)'/';
+        if (cmp < 0) lo = mid + 1; else hi = mid;
+    }
+    return lo < f->n && strncmp(f->items[lo].path, prefix, plen) == 0
+        && f->items[lo].path[plen] == '/';
+}
+
+/* characters (not bytes) of a UTF-8 piece; an older non-UTF-8 name counts
+ * its bytes, which is what the Amiga keeps of it */
+static int name_chars(const char *s, size_t n)
+{
+    size_t i;
+    int c = 0;
+    for (i = 0; i < n; i++)
+        if (((unsigned char)s[i] & 0xC0) != 0x80) c++;
+    return c;
+}
+
+/* ASCII and Latin-1 (U+00C0..U+00DE as UTF-8) to lower case, in place */
+static void fold_amiga(char *s)
+{
+    unsigned char *p = (unsigned char *)s;
+    for (; *p; p++) {
+        if (*p >= 'A' && *p <= 'Z') *p = (unsigned char)(*p + 32);
+        else if (*p == 0xC3 && p[1] >= 0x80 && p[1] <= 0x9E && p[1] != 0x97) { p[1] = (unsigned char)(p[1] + 32); p++; }
+    }
+}
+
+typedef struct { char *folded; const char *path; size_t len; int is_new; } FoldItem;
+
+static int fold_cmp(const void *a, const void *b)
+{
+    return strcmp(((const FoldItem *)a)->folded, ((const FoldItem *)b)->folded);
+}
+
+static void amiga_rule_hint(void)
+{
+    ui_notify(UI_ERROR, "amivcs: an Amiga with FFS keeps %d characters, no ':' and does not tell "
+              "upper from lower case. Rename it -- or, if this project is never checked out on "
+              "such a volume: 'amivcs config longnames on' and commit %s",
+              VCS_AMIGA_NAME_MAX, VCS_PROJECT_FILE);
+}
+
+/* The rule for every name `now` has and `old` has not (a new file, or a
+ * new directory above one). Both sorted. Returns 1 if they all pass. */
+static int amiga_names_ok(const VcsFlatList *old, const VcsFlatList *now)
+{
+    FoldItem *items = NULL;
+    int n = 0, cap = 0, i, ok = 1;
+
+    for (i = 0; ok && i < now->n; i++) {
+        const char *p = now->items[i].path;
+        const char *s = p;
+        int file_new = vcs_flat_find(old, p) == NULL;
+        for (;;) {
+            const char *slash = strchr(s, '/');
+            size_t end = slash ? (size_t)(slash - p) : strlen(p);
+            size_t clen = (size_t)(p + end - s);
+            /* a component is new if the file is, and (for a directory)
+             * no old path lies under it */
+            int comp_new = file_new && (!slash || !flat_has_dir(old, p, end));
+            if (comp_new) {
+                if (name_chars(s, clen) > VCS_AMIGA_NAME_MAX) {
+                    char shown[512];
+                    vcs_text_to_local_buf(p, shown, sizeof(shown));
+                    ui_notify(UI_ERROR, "amivcs: \"%s\": a name has more than %d characters -- "
+                              "nothing was committed", shown, VCS_AMIGA_NAME_MAX);
+                    ok = 0;
+                    break;
+                }
+                if (memchr(s, ':', clen)) {
+                    char shown[512];
+                    vcs_text_to_local_buf(p, shown, sizeof(shown));
+                    ui_notify(UI_ERROR, "amivcs: \"%s\": ':' is not allowed in an Amiga name -- "
+                              "nothing was committed", shown);
+                    ok = 0;
+                    break;
+                }
+            }
+            /* every file and directory once, for the case check */
+            if (!slash || !(i > 0 && strncmp(now->items[i - 1].path, p, end + 1) == 0)) {
+                if (n == cap) {
+                    FoldItem *ni;
+                    cap = cap ? cap * 2 : 64;
+                    ni = (FoldItem *)realloc(items, sizeof(FoldItem) * (size_t)cap);
+                    if (!ni) { ok = 0; break; }
+                    items = ni;
+                }
+                items[n].folded = (char *)malloc(end + 1);
+                if (!items[n].folded) { ok = 0; break; }
+                memcpy(items[n].folded, p, end);
+                items[n].folded[end] = '\0';
+                fold_amiga(items[n].folded);
+                items[n].path = p;
+                items[n].len = end;
+                items[n].is_new = comp_new;
+                n++;
+            }
+            if (!slash) break;
+            s = slash + 1;
+        }
+    }
+    if (ok && n > 1) {
+        qsort(items, (size_t)n, sizeof(FoldItem), fold_cmp);
+        for (i = 1; i < n; i++) {
+            if (strcmp(items[i].folded, items[i - 1].folded) == 0
+                && (items[i].len != items[i - 1].len
+                    || strncmp(items[i].path, items[i - 1].path, items[i].len) != 0)
+                && (items[i].is_new || items[i - 1].is_new)) {
+                char a[256], b[256], sa[512], sb[512];
+                size_t la = items[i - 1].len < sizeof(a) ? items[i - 1].len : sizeof(a) - 1;
+                size_t lb = items[i].len < sizeof(b) ? items[i].len : sizeof(b) - 1;
+                memcpy(a, items[i - 1].path, la); a[la] = '\0';
+                memcpy(b, items[i].path, lb); b[lb] = '\0';
+                vcs_text_to_local_buf(a, sa, sizeof(sa));
+                vcs_text_to_local_buf(b, sb, sizeof(sb));
+                ui_notify(UI_ERROR, "amivcs: \"%s\" and \"%s\" differ only in case -- "
+                          "nothing was committed", sa, sb);
+                ok = 0;
+                break;
+            }
+        }
+    }
+    for (i = 0; i < n; i++) free(items[i].folded);
+    free(items);
+    if (!ok) amiga_rule_hint();
+    return ok;
+}
+
+/* the rule for a commit of tree_oid on parent_oid (see repo.h) */
+static int commit_names_ok(VcsRepo *repo, const VcsOid *parent_oid, const VcsOid *tree_oid)
+{
+    VcsOid parent_tree = VCS_OID_ZERO;
+    VcsFlatList old, now;
+    int ok;
+    if (vcs_repo_long_names(repo)) return 1;
+    vcs_flat_init(&old);
+    vcs_flat_init(&now);
+    if ((!vcs_oid_is_zero(parent_oid) && !vcs_commit_tree(&repo->store, parent_oid, &parent_tree))
+        || !vcs_flatten_committed_tree(&repo->store, &parent_tree, "", &old)
+        || !vcs_flatten_committed_tree(&repo->store, tree_oid, "", &now)) {
+        vcs_flat_free(&old);
+        vcs_flat_free(&now);
+        return 0;
+    }
+    vcs_flat_sort(&old);
+    vcs_flat_sort(&now);
+    ok = amiga_names_ok(&old, &now);
+    vcs_flat_free(&old);
+    vcs_flat_free(&now);
+    return ok;
 }
 
 int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int stage_all, VcsOid *out_oid)
@@ -757,6 +971,8 @@ int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int 
         }
     }
 
+    if (!commit_names_ok(repo, &parent_oid, &tree_oid)) { vcs_mergestate_free(&merge); return 0; }
+
     if (!vcs_oid_is_zero(&parent_oid) && !merge.active) {
         VcsOid parent_tree;
         if (!resolve_head_tree(repo, &parent_tree)) return 0;
@@ -805,11 +1021,8 @@ int vcs_repo_commit(VcsRepo *repo, const char *author, const char *message, int 
     if (merge.active) {
         int i;
         for (i = 0; i < merge.n; i++) {
-            char abs_path[1024], theirs_path[1040];
             if (!merge.items[i].theirs_file) continue;
-            if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, merge.items[i].path)) continue;
-            snprintf(theirs_path, sizeof(theirs_path), "%s.theirs", abs_path);
-            localfs_remove(theirs_path);
+            vcs_remove_theirs(repo, merge.items[i].path);
         }
         vcs_mergestate_clear(repo->amivcs_dir);
     }

@@ -46,6 +46,7 @@ zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.
     @{" Konflikte auflösen         " link Konflikte}
     @{" .amivcsignore              " link Ignore}
     @{" Objektmodell und Grenzen   " link Modell}
+    @{" Lange Dateinamen           " link Dateinamen}
 
   Server
     @{" Server einrichten          " link ServerSetup}
@@ -934,6 +935,7 @@ Arbeitsverzeichnis stehen (z.B. Kompilate in obj/).
 @endnode
 
 @node Modell "Objektmodell und Grenzen"
+@next Dateinamen
 
 Objektmodell und Grenzen
 ------------------------
@@ -982,7 +984,56 @@ Bewusste Grenzen der Version 1:
 @{" Weiter " link ServerSetup}
 @endnode
 
+@node Dateinamen "Lange Dateinamen (FFS: 30 Zeichen)"
+@toc Main
+@prev Modell
+@next ServerSetup
+
+LANGE DATEINAMEN
+
+Das klassische Amiga-Dateisystem (FFS und OFS) speichert höchstens
+30 Zeichen pro Datei- oder Ordnername. Längere Namen kürzt es ohne
+Warnung - beim Anlegen und beim Öffnen. Zwei Dateien mit gleichem
+Anfang landen so in derselben Datei, und die Endung geht verloren.
+Ein Icon braucht fünf Zeichen dazu (".info"): eine Datei mit Icon
+sollte auf FFS höchstens 25 Zeichen haben.
+
+@{b}Amiga-Modus beim Commit@{ub}
+Ohne weitere Einstellung nimmt commit keine neuen Namen an, die ein
+Amiga mit FFS nicht speichern kann: mehr als 30 Zeichen, ein ':' oder
+zwei Namen, die sich nur in Groß-/Kleinschreibung unterscheiden. Das
+gilt auch am PC. Schon committete Namen bleiben unangetastet.
+
+Wird ein Projekt nie auf FFS ausgecheckt, lässt sich das aufheben:
+    amivcs config longnames on
+    amivcs add .amivcsproject
+    amivcs commit -m "Lange Dateinamen erlaubt"
+Die Einstellung steht in der Datei .amivcsproject im Repository und
+gilt damit für jede Kopie. In AmiVCSConfig und im Qt-Programm gibt
+es dafür das Häkchen "Lange Dateinamen". Die AmigaIDE nutzt dieselbe
+Datei.
+
+@{b}Auschecken auf FFS@{ub}
+clone, switch, pull und merge prüfen vorher, ob jeder Name auf das
+Laufwerk passt. Passt einer nicht, bricht der Befehl ab und ändert
+nichts; die Meldung nennt die Datei. Ein solches Projekt lässt sich
+auf FFS nicht auschecken - nur auf einem Laufwerk mit langen Namen
+oder nach dem Umbenennen an einem anderen Rechner.
+
+Bei einem Konflikt heißt die Kopie der anderen Seite normalerweise
+<Name>.theirs. Wäre das zu lang, wird der Name davor gekürzt; die
+Endung .theirs bleibt.
+
+@{b}Lange Namen auf dem Amiga@{ub}
+Ab AmigaOS 3.2 kann FFS lange Namen (bis 107 Zeichen), wenn die
+Partition mit dem Dateisystemtyp DOS\7 (oder DOS\6) formatiert ist.
+SFS und PFS3 können ebenfalls lange Namen. Die Programme erkennen das
+selbst und nutzen dann die volle Länge.
+
+@endnode
+
 @node ServerSetup "Server einrichten"
+@prev Dateinamen
 
 Server einrichten
 -----------------

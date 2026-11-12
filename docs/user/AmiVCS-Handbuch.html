@@ -752,6 +752,16 @@ ansehen.</li>
 100&nbsp;MB).</li>
 </ul>
 
+<h3 id="dateinamen">Lange Dateinamen (FFS: 30 Zeichen)</h3>
+<p>Das klassische Amiga-Dateisystem (FFS und OFS) speichert höchstens <strong>30&nbsp;Zeichen</strong> pro Datei- oder Ordnername. Längere Namen kürzt es ohne Warnung – beim Anlegen und beim Öffnen. Zwei Dateien mit gleichem Anfang landen so in derselben Datei, und die Endung geht verloren. Ein Icon braucht fünf Zeichen dazu (<code>.info</code>): eine Datei mit Icon sollte auf FFS höchstens 25&nbsp;Zeichen haben.</p>
+<p><strong>Amiga-Modus beim Commit:</strong> Ohne weitere Einstellung nimmt <code>commit</code> keine neuen Namen an, die ein Amiga mit FFS nicht speichern kann: mehr als 30&nbsp;Zeichen, ein <code>:</code> oder zwei Namen, die sich nur in Groß-/Kleinschreibung unterscheiden. Das gilt auch am PC. Schon committete Namen bleiben unangetastet. Wird ein Projekt nie auf FFS ausgecheckt, lässt sich das aufheben:</p>
+<pre>amivcs config longnames on
+amivcs add .amivcsproject
+amivcs commit -m "Lange Dateinamen erlaubt"</pre>
+<p>Die Einstellung steht in der Datei <code>.amivcsproject</code> im Repository und gilt damit für jede Kopie. AmiVCSConfig und das Qt-Programm (<em>Repository → Settings</em>) haben dafür ein Häkchen; die AmigaIDE nutzt dieselbe Datei.</p>
+<p><strong>Auschecken auf FFS:</strong> <code>clone</code>, <code>switch</code>, <code>pull</code> und <code>merge</code> prüfen vorher, ob jeder Name auf das Laufwerk passt. Passt einer nicht, bricht der Befehl ab und ändert nichts; die Meldung nennt die Datei. Bei einem Konflikt heißt die Kopie der anderen Seite normalerweise <code>&lt;Name&gt;.theirs</code>; wäre das zu lang, wird der Name davor gekürzt, die Endung <code>.theirs</code> bleibt.</p>
+<p><strong>Lange Namen auf dem Amiga:</strong> Ab AmigaOS&nbsp;3.2 kann FFS lange Namen (bis 107&nbsp;Zeichen), wenn die Partition mit dem Dateisystemtyp <code>DOS\7</code> (oder <code>DOS\6</code>) formatiert ist. SFS und PFS3 können ebenfalls lange Namen. Die Programme erkennen das selbst und nutzen dann die volle Länge.</p>
+
 <h2 id="server">15. Server einrichten</h2>
 
 <p>Der Server liegt dem Archiv als Schublade <code>Server</code> bei und läuft auf einem gewöhnlichen

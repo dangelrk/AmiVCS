@@ -21,6 +21,7 @@
 #include "prefsgui.h"
 #include "winpos.h"
 #include "vcsconfig.h"
+#include "repo.h"      /* VCS_PROJECT_FILE */
 #include "wbstartup.h"
 
 #include <exec/types.h>
@@ -53,6 +54,7 @@ const char amiga_ver[] = "$VER: AmiVCSConfig " AC_VERSION " (" AC_DATE ")";
 #define GID_CANCEL  10
 #define GID_HEAD1   11
 #define GID_HEAD2   12
+#define GID_LONGNAMES 13
 
 #define WINPOS_VAR "AmiVCS/Windows/AmiVCSConfig"
 
@@ -143,6 +145,9 @@ int main(int argc, char *argv[])
     PrefsLayout lay;
     WORD winw, winh, topborder, rows, left = 60, top = 40;
     int running, forget = 0, have_repo;
+    struct Gadget *g_longnames = NULL;
+    char projfile[600], lnval[16];
+    int longnames = 0, longnames_before = 0;
 
     find_repository(argc, argv, root, sizeof(root), amivcs_dir, sizeof(amivcs_dir));
     have_repo = amivcs_dir[0] != '\0';
@@ -150,13 +155,21 @@ int main(int argc, char *argv[])
     vcs_global_get("email", gemail, sizeof(gemail));
     memset(&rc, 0, sizeof(rc));
     if (have_repo) vcs_repo_config_load(amivcs_dir, &rc);
+    /* the project's long-name switch: versioned, in the working tree */
+    strncpy(projfile, root, sizeof(projfile) - 1);
+    projfile[sizeof(projfile) - 1] = '\0';
+    AddPart((STRPTR)projfile, (STRPTR)VCS_PROJECT_FILE, (ULONG)sizeof(projfile));
+    if (have_repo && vcs_config_file_get(projfile, "longnames", lnval, sizeof(lnval)))
+        longnames = strcmp(lnval, "1") == 0 || strcmp(lnval, "on") == 0
+                 || strcmp(lnval, "yes") == 0 || strcmp(lnval, "true") == 0;
+    longnames_before = longnames;
 
     if (!prefsgui_screen_open()) return 1;
 
     topborder = prefsgui_topborder();
     winw = 520;
     /* heading, 2 fields, heading, repository rows, status, buttons */
-    rows = 1 + 2 + 1 + (have_repo ? (rc.pass[0] ? 5 : 4) : 0) + 1 + 1;
+    rows = 1 + 2 + 1 + (have_repo ? (rc.pass[0] ? 6 : 5) : 0) + 1 + 1;
     winh = topborder + 8 + rows * 26 + 8;
 
     glist = NULL;
@@ -188,6 +201,10 @@ int main(int argc, char *argv[])
             g_forget = prefsgui_field_checkbox(&lay, "Passwort vergessen", GID_FORGET, 0);
             if (!g_forget) goto fail;
         }
+        /* FFS keeps 30 characters -- without this a commit refuses longer
+         * new names (repo.h VCS_PROJECT_FILE) */
+        g_longnames = prefsgui_field_checkbox(&lay, "Lange Dateinamen", GID_LONGNAMES, longnames);
+        if (!g_longnames) goto fail;
     }
 
     g_status = prefsgui_status_line(&lay, 8, winw - 16, GID_STATUS,
@@ -220,6 +237,12 @@ int main(int argc, char *argv[])
             /* tracked here, see prefsgui_set_checkbox() */
             forget = !forget;
             prefsgui_set_checkbox(win, g_forget, forget);
+        } else if (act == GID_LONGNAMES) {
+            longnames = !longnames;
+            prefsgui_set_checkbox(win, g_longnames, longnames);
+            GT_SetGadgetAttrs(g_status, win, NULL, GTTX_Text,
+                              (ULONG)(longnames ? "Lange Namen: nur f\374r Volumes mit langen Namen (nicht FFS)."
+                                                : "Amiga-Modus: neue Namen h\366chstens 30 Zeichen."), TAG_DONE);
         } else if (act == GID_SAVE) {
             char remote[AC_MAX_URL];
             get_field(g_gname, gname, sizeof(gname));
@@ -242,6 +265,8 @@ int main(int argc, char *argv[])
                 vcs_repo_config_set(amivcs_dir, "name", rc.name);
                 vcs_repo_config_set(amivcs_dir, "email", rc.email);
                 if (forget) vcs_repo_config_set(amivcs_dir, "pass", NULL);
+                if (longnames != longnames_before)   /* then commit .amivcsproject */
+                    vcs_config_file_set(projfile, "longnames", longnames ? "1" : "0");
             }
             vcs_global_set("name", gname);
             vcs_global_set("email", gemail);

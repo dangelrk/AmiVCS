@@ -57,10 +57,20 @@ void vcs_names_begin_flat(VcsRepo *repo, const VcsFlatList *a, const VcsFlatList
  * file; else 0 after a UI_ERROR naming both. Learn them first. */
 int vcs_names_unique_flat(const VcsFlatList *a, const VcsFlatList *b);
 
+/* 1 if every name of f fits the file system under root in its local
+ * form (vcs_names_fit()); else 0 after naming the first long one. Called
+ * before anything is written: classic FFS keeps 30 characters and would
+ * silently merge two long names into one file. */
+int vcs_names_fit_flat(const char *root, const VcsFlatList *f);
+
 /* 1 if no file outside `from` (not under version control) sits where a
  * path of `to` that `from` lacks would be written (a different file, or
  * a file in place of a needed directory); else 0 after a UI_ERROR. */
 int vcs_names_in_the_way(VcsRepo *repo, const VcsFlatList *from, const VcsFlatList *to);
+
+/* Removes the "theirs" copy a conflicted merge wrote for repo_path
+ * (vcs_theirs_rel() with the working tree's name length). */
+void vcs_remove_theirs(VcsRepo *repo, const char *repo_path);
 
 /* Two-way scan of two sorted flat lists: cb gets ('N'ew / 'M'odified /
  * 'D'eleted, path) for each difference of `work` against `head`; cb may

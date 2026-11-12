@@ -34,6 +34,15 @@
 
 #define VCS_IGNORE_FILE ".amivcsignore"
 
+/* Project settings that travel with the repository (versioned, in the
+ * working tree's root, key=value like vcsconfig.h). longnames=1 lifts the
+ * Amiga name rule for commits; without it (the default) a commit refuses
+ * NEW names an Amiga with classic FFS/OFS cannot keep: more than
+ * VCS_AMIGA_NAME_MAX characters, a ':' or two names that differ only in
+ * case. Names already committed are never questioned. */
+#define VCS_PROJECT_FILE   ".amivcsproject"
+#define VCS_AMIGA_NAME_MAX 30
+
 typedef struct {
     char root[1024];        /* working-tree root (repo top level) */
     char amivcs_dir[1024];  /* root/.amivcs */
@@ -198,5 +207,11 @@ int vcs_repo_switch(VcsRepo *repo, const char *branch);
  * 12); commit first, or remove the offending files by hand, before
  * retrying. */
 int vcs_repo_checkout(VcsRepo *repo);
+
+/* 1 if the project allows long names (VCS_PROJECT_FILE longnames=1). */
+int vcs_repo_long_names(const VcsRepo *repo);
+/* Writes longnames=1/0 into VCS_PROJECT_FILE (commit it to share it).
+ * Returns 1 on success. */
+int vcs_repo_set_long_names(const VcsRepo *repo, int on);
 
 #endif /* CLOUDVCS_REPO_H */

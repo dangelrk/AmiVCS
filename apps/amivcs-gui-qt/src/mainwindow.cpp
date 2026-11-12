@@ -783,7 +783,7 @@ void MainWindow::onMerge()
 void MainWindow::onSettings()
 {
     if (!m_session.is_open) return;
-    SettingsDialog dlg(QString::fromUtf8(m_session.repo.amivcs_dir), this);
+    SettingsDialog dlg(QString::fromUtf8(m_session.repo.amivcs_dir), &m_session.repo, this);
     if (dlg.exec() == QDialog::Accepted) refreshUI();
 }
 

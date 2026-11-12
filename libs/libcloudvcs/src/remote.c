@@ -595,7 +595,7 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
              * Undo the clone instead of leaving a repository without
              * files behind. */
             VcsFlatList flat;
-            int unique;
+            int unique, fits;
             vcs_flat_init(&flat);
             if (!vcs_flatten_committed_tree(&repo.store, &tree_oid, "", &flat)) {
                 vcs_flat_free(&flat);
@@ -604,13 +604,17 @@ int vcs_remote_clone(const AcConfig *cfg, const char *repo_name, const char *loc
             }
             vcs_names_begin_flat(&repo, &flat, NULL);
             unique = vcs_names_unique_flat(&flat, NULL);
+            fits = unique && vcs_names_fit_flat(repo.root, &flat);
             vcs_flat_free(&flat);
-            if (!unique) {
+            if (!unique || !fits) {
                 remove_tree(repo.amivcs_dir);
                 if (!existed) localfs_remove(local_dir);
-                ui_notify(UI_ERROR, "amivcs: clone of '%s' undone -- rename one of the two "
-                          "on a system that can tell them apart, push, and clone again",
-                          vcs_shown(repo_name));
+                if (!unique)
+                    ui_notify(UI_ERROR, "amivcs: clone of '%s' undone -- rename one of the two "
+                              "on a system that can tell them apart, push, and clone again",
+                              vcs_shown(repo_name));
+                else
+                    ui_notify(UI_ERROR, "amivcs: clone of '%s' undone", vcs_shown(repo_name));
                 vcs_refs_free(&remote_refs);
                 return 0;
             }

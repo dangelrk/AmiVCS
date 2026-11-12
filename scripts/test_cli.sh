@@ -228,5 +228,105 @@ chk "diff auf geloeschte Datei" has 'file\tD\tt.txt'
 v diff f -- d/x.bin
 chk "diff <branch> -- <pfad>" has 'file\tM\td/x.bin'
 
+echo "== gc: Pack-Namen passen in 30 Zeichen, alte pack-<32hex> bleiben lesbar"
+mkdir "$T/g" && cd "$T/g" || exit 1
+"$V" init >/dev/null
+printf 'eins\n' > eins.txt; "$V" add eins.txt >/dev/null; "$V" commit -m eins >/dev/null
+"$V" gc >/dev/null 2>&1
+P=$(ls .amivcs/objects/pack/*.pack 2>/dev/null | head -1)
+chk "gc: Pack-Name <= 30 Zeichen" sh -c "[ -n '$P' ] && [ \$(basename '$P' | wc -c) -le 31 ]"
+chk "gc: idx neben pack" sh -c "[ -f '${P%.pack}.idx' ]"
+# altes Format nachstellen: pack-<32hex>.pack/.idx
+B=$(basename "$P" .pack)
+mv "$P" ".amivcs/objects/pack/pack-${B}deadbeef.pack"
+mv ".amivcs/objects/pack/$B.idx" ".amivcs/objects/pack/pack-${B}deadbeef.idx"
+printf 'zwei\n' > zwei.txt; "$V" add zwei.txt >/dev/null; "$V" commit -m zwei >/dev/null
+"$V" gc >/dev/null 2>&1
+chk "gc: zweites Pack im neuen Format" sh -c "ls .amivcs/objects/pack | grep -qv '^pack-'"
+chk "gc: keine Loose-Objekte mehr" sh -c "[ -z \"\$(find .amivcs/objects -path '*/pack' -prune -o -type f -print)\" ]"
+"$V" branch behalten >/dev/null 2>&1
+rm -f eins.txt zwei.txt; "$V" add eins.txt zwei.txt >/dev/null 2>&1; "$V" commit -m weg >/dev/null 2>&1
+chk "Dateien entfernt" sh -c "[ ! -f eins.txt ] && [ ! -f zwei.txt ]"
+"$V" switch behalten >/dev/null 2>&1
+chk "switch holt Dateien aus altem und neuem Pack" sh -c "grep -qx eins eins.txt && grep -qx zwei zwei.txt"
+v log -n 5
+chk "log liest beide Packs" sh -c "grep -q 'eins' '$O' && grep -q 'zwei' '$O'"
+
+echo "== Namenslaenge: nichts schreiben, was das Dateisystem kuerzen wuerde"
+mkdir "$T/n" && cd "$T/n" || exit 1
+"$V" init >/dev/null
+"$V" config longnames on >/dev/null 2>&1   # Projekt vom PC mit langen Namen
+LANG30=abcdefghijklmnopqrstuvwxyz_1.c     # genau 30 Zeichen
+LANG31=abcdefghijklmnopqrstuvwxyz_12.c    # 31 Zeichen
+BIN30=binaerdatei_genau_dreissig.bin   # 30 Zeichen, binaer -> .theirs statt Marker
+printf 'basis\n' > "$LANG30"; printf 'x\000basis' > "$BIN30"
+"$V" add "$LANG30" "$BIN30" >/dev/null; "$V" commit -m basis >/dev/null
+"$V" branch lang >/dev/null 2>&1; "$V" switch lang >/dev/null 2>&1
+printf 'lang\n' > "$LANG31"; "$V" add "$LANG31" >/dev/null 2>&1
+printf 'theirs\n' > "$LANG30"; printf 'x\000theirs' > "$BIN30"; "$V" add "$LANG30" "$BIN30" >/dev/null 2>&1
+"$V" commit -m lang >/dev/null 2>&1
+"$V" switch main >/dev/null 2>&1
+chk "switch auf main ohne lange Datei" sh -c "[ ! -f '$LANG31' ]"
+AMICLOUD_NAME_MAX=30 "$V" switch lang >/dev/null 2>"$T/err"
+chk "switch mit 31-Zeichen-Namen auf FFS abgelehnt" sh -c "grep -q 'longer than this file system keeps' '$T/err'"
+chk "  ... und nichts geaendert" sh -c "[ ! -f '$LANG31' ] && grep -qx basis '$LANG30'"
+printf 'ours\n' > "$LANG30"; "$V" add "$LANG30" >/dev/null; "$V" commit -m ours >/dev/null
+AMICLOUD_NAME_MAX=30 "$V" merge lang >/dev/null 2>"$T/err"
+chk "merge mit 31-Zeichen-Namen auf FFS abgelehnt" sh -c "grep -q 'longer than this file system keeps' '$T/err' && grep -qx ours '$LANG30'"
+# nur der 30-Zeichen-Konflikt: .theirs muss gekuerzt werden
+"$V" switch lang >/dev/null 2>&1; rm -f "$LANG31"; "$V" add "$LANG31" >/dev/null 2>&1; "$V" commit -m kurz >/dev/null 2>&1
+"$V" switch main >/dev/null 2>&1
+printf 'x\000ours' > "$BIN30"; "$V" add "$BIN30" >/dev/null; "$V" commit -m binours >/dev/null
+AMICLOUD_NAME_MAX=30 "$V" merge lang >/dev/null 2>&1
+chk "Konflikt: Arbeitsdatei behaelt ours" sh -c "grep -qa 'ours' '$BIN30' && ! grep -qa theirs '$BIN30'"
+TH=$(ls | grep '\.theirs$' | head -1)
+chk "Konflikt: .theirs-Name passt in 30 Zeichen" sh -c "[ -n '$TH' ] && [ \$(printf %s '$TH' | wc -c) -le 30 ] && grep -qa theirs '$TH'"
+AMICLOUD_NAME_MAX=30 "$V" merge --abort >/dev/null 2>&1
+chk "merge --abort raeumt gekuerzte .theirs weg" sh -c "! ls | grep -q '\.theirs$'"
+AMICLOUD_NAME_MAX=30 "$V" merge lang >/dev/null 2>&1
+AMICLOUD_NAME_MAX=30 "$V" resolve --theirs "$BIN30" >/dev/null 2>&1
+chk "resolve raeumt gekuerzte .theirs weg" sh -c "! ls | grep -q '\.theirs$' && grep -qa theirs '$BIN30'"
+"$V" add "$LANG30" >/dev/null 2>&1; AMICLOUD_NAME_MAX=30 "$V" commit -m merged >/dev/null 2>&1
+chk "commit nach gekuerztem Konflikt" sh -c "[ ! -f .amivcs/MERGE_HEAD ]"
+
+echo "== Amiga-Modus (Standard): neue Namen muessen auf FFS passen"
+mkdir "$T/a" && cd "$T/a" || exit 1
+"$V" init >/dev/null
+printf 'x\n' > abcdefghijklmnopqrstuvwxyz_12.c
+"$V" add abcdefghijklmnopqrstuvwxyz_12.c >/dev/null 2>&1
+"$V" commit -m lang >/dev/null 2>"$T/err"
+chk "31 Zeichen abgelehnt" sh -c "grep -q 'more than 30 characters' '$T/err' && grep -q 'longnames on' '$T/err'"
+"$V" unstage abcdefghijklmnopqrstuvwxyz_12.c >/dev/null 2>&1; rm -f abcdefghijklmnopqrstuvwxyz_12.c
+printf 'x\n' > abcdefghijklmnopqrstuvwxyz_1.c; "$V" add abcdefghijklmnopqrstuvwxyz_1.c >/dev/null 2>&1
+"$V" commit -m genau30 >/dev/null 2>&1
+chk "30 Zeichen erlaubt" sh -c "\"$V\" log -n 1 | grep -q genau30"
+printf 'x\n' > 'a:b.txt'; "$V" add 'a:b.txt' >/dev/null 2>&1
+"$V" commit -m doppelpunkt >/dev/null 2>"$T/err"
+chk "Doppelpunkt abgelehnt" grep -q "':' is not allowed" "$T/err"
+"$V" unstage 'a:b.txt' >/dev/null 2>&1; rm -f 'a:b.txt'
+printf 'x\n' > Readme.txt; "$V" add Readme.txt >/dev/null 2>&1; "$V" commit -m readme >/dev/null 2>&1
+if [ "$(uname)" = Linux ]; then
+  printf 'y\n' > README.txt; "$V" add README.txt >/dev/null 2>&1
+  "$V" commit -m gross >/dev/null 2>"$T/err"
+  chk "nur Gross/Klein verschieden abgelehnt" grep -q 'differ only in case' "$T/err"
+  "$V" unstage README.txt >/dev/null 2>&1; rm -f README.txt
+fi
+mkdir -p ganz_langer_ordnername_mit_32_zeichen
+printf 'x\n' > ganz_langer_ordnername_mit_32_zeichen/a.txt
+"$V" add ganz_langer_ordnername_mit_32_zeichen >/dev/null 2>&1
+"$V" commit -m ordner >/dev/null 2>"$T/err"
+chk "langer neuer Ordner abgelehnt" grep -q 'more than 30 characters' "$T/err"
+"$V" config longnames on >/dev/null 2>&1
+"$V" commit -m ordner >/dev/null 2>&1
+chk "mit longnames on erlaubt" sh -c "\"$V\" log -n 1 | grep -q ordner"
+"$V" config longnames off >/dev/null 2>&1
+printf 'y\n' > ganz_langer_ordnername_mit_32_zeichen/b.txt
+printf 'z\n' > ganz_langer_ordnername_mit_32_zeichen/a.txt
+"$V" add ganz_langer_ordnername_mit_32_zeichen >/dev/null 2>&1
+"$V" commit -m bestand >/dev/null 2>"$T/err"
+chk "Bestand: neue Datei im vorhandenen langen Ordner erlaubt" sh -c "\"$V\" log -n 1 | grep -q bestand"
+chk "config longnames zeigt off" sh -c "[ \"\$(\"$V\" config longnames)\" = off ]"
+chk ".amivcsproject angelegt" grep -qx 'longnames=0' .amivcsproject
+
 echo "== Ergebnis: $PASSED ok, $FAILED fehlgeschlagen =="
 [ "$FAILED" -eq 0 ]

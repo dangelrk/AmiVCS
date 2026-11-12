@@ -106,4 +106,31 @@ int   vcs_utf8_valid(const char *s);
 #define VCS_BRANCH_MAX 100
 int   vcs_branch_name_ok(const char *name);
 
+/* --- name length ---
+ * Classic FFS/OFS keep 30 characters per name and truncate a longer one
+ * silently, when creating AND when opening -- two long names with the
+ * same first 30 characters become one file. Nothing is written under a
+ * name the working tree's file system would not keep. */
+
+/* Longest name (bytes, local form) the file system under root keeps:
+ * localfs_name_max(), probed once per root and remembered. */
+int vcs_name_max(const char *root);
+
+/* Bytes of one repository name component in its local form, -1 if it
+ * cannot be converted. */
+int vcs_local_name_len(const char *repo_name);
+
+/* 1 if every component of all n repository paths fits name_max in its
+ * local form; else 0 and the first path that does not (up to and
+ * including the long component) in bad. */
+int vcs_names_fit(const char *const *paths, int n, int name_max, char *bad, size_t sz);
+
+/* Repository-relative name of the "theirs" copy a conflicted merge
+ * writes next to repo_path: "<path>.theirs", or -- when that is longer
+ * than name_max locally -- with the file name cut so that "<cut>.theirs"
+ * fits (".theirs" stays, tools recognise the copy by it). Deterministic:
+ * the same path and name_max always give the same name. Returns 0 if out
+ * cannot hold it. */
+int vcs_theirs_rel(const char *repo_path, int name_max, char *out, size_t sz);
+
 #endif /* CLOUDVCS_VCSNAME_H */
