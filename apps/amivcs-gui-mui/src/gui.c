@@ -77,7 +77,11 @@
 #define ID_CANCEL_XFER   902
 
 static Object *g_app;
-static Object *g_status_text;
+/* header: two one-line Text objects, not one with "\n" -- MUI measures a
+ * Text object's height from what it holds when the window is laid out
+ * (empty = one line), so a second line set later slid under the register
+ * tabs, the more so the bigger the screen font */
+static Object *g_status_text, *g_remote_text;
 static Object *g_main_status;
 static Object *g_unstaged_list, *g_staged_list, *g_history_list;
 static Object *g_commit_string;     /* TextEditor or String, see g_msg_is_editor */
@@ -505,12 +509,15 @@ static void refresh_ui(void)
         vcsgui_remote_info(&g_session, remote, sizeof(remote), ruser, sizeof(ruser), NULL);
         /* the URL on a line of its own: on a 640 pixel screen the three
          * did not fit side by side */
-        snprintf(buf, sizeof(buf), "Current branch: \33b%s\33n      Repository: %s\nRemote: %s",
-                 shown, g_session.root, remote[0] ? remote : "(none)");
+        snprintf(buf, sizeof(buf), "Current branch: \33b%s\33n      Repository: %s",
+                 shown, g_session.root);
+        set(g_status_text, MUIA_Text_Contents, buf);
+        snprintf(buf, sizeof(buf), "Remote: %s", remote[0] ? remote : "(none)");
+        set(g_remote_text, MUIA_Text_Contents, buf);
     } else {
-        strcpy(buf, "(not a repository -- Project/Init Repository Here)");
+        set(g_status_text, MUIA_Text_Contents, "(not a repository -- Project/Init Repository Here)");
+        set(g_remote_text, MUIA_Text_Contents, "");
     }
-    set(g_status_text, MUIA_Text_Contents, buf);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1248,6 +1255,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
 
     /* SetMin FALSE: a long remote URL must not widen the window */
     g_status_text = TextObject, MUIA_Text_Contents, "", MUIA_Text_SetMin, FALSE, End;
+    g_remote_text = TextObject, MUIA_Text_Contents, "", MUIA_Text_SetMin, FALSE, End;
     g_main_status = TextObject, MUIA_Text_Contents, "", End;
 
     g_unstaged_list = ListObject, InputListFrame, MUIA_List_DisplayHook, &change_display_hook, End;
@@ -1269,7 +1277,8 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
         Child, lv_conflicts,
         Child, HGroup, Child, bt_ours, Child, bt_theirs, Child, bt_resolved, End,
     End;
-    g_merge_text = TextObject, MUIA_Text_Contents, "", MUIA_Text_SetMin, FALSE, End;
+    /* always two lines: reserve both now (height is measured at layout) */
+    g_merge_text = TextObject, MUIA_Text_Contents, " \n ", MUIA_Text_SetMin, FALSE, End;
     bt_abort     = SimpleButton("A_bort Merge");
     g_merge_group = HGroup,
         MUIA_ShowMe, FALSE,
@@ -1354,6 +1363,7 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
             MUIA_Window_Menustrip, MUI_MakeObject(MUIO_MenustripNM, MenuData, 0),
             WindowContents, VGroup,
                 Child, g_status_text,
+                Child, g_remote_text,
                 Child, g_merge_group,
                 Child, RegisterGroup(pageTitles),
                     MUIA_Register_Frame, TRUE,
