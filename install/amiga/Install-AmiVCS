@@ -119,11 +119,11 @@
 (if (= 0 (exists "LIBS:muimaster.library" (noreq)))
   (set #fehlt (cat #fehlt "MUI (für amivcs-gui)\n")))
 (if (= 0 (exists "LIBS:amisslmaster.library" (noreq)))
-  (set #fehlt (cat #fehlt "AmiSSL 5 (für clone, push, pull)\n")))
+  (set #fehlt (cat #fehlt "AmiSSL 5.27 (für clone, push, pull)\n")))
 
 (message "\nAmiVCS @VERSION@ - Versionsverwaltung\n\n"
          "Commits, Branches und Merge laufen lokal.\n"
-         "clone/push/pull brauchen TCP/IP, AmiSSL 5\n"
+         "clone/push/pull brauchen TCP/IP, AmiSSL 5.27\n"
          "und einen AmiVCS-Server, amivcs-gui MUI."
          (if (> (strlen #fehlt) 0)
            (cat "\n\nNicht gefunden (Installation geht trotzdem):\n" #fehlt)

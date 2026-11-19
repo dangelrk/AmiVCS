@@ -1038,7 +1038,7 @@ static int run(int argc, char **argv, AcConfig *cfg)
             if (strcmp(argv[i], "--all") == 0) all = 1;
             else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) limit = atol(argv[++i]);
         }
-        rc = g_pc ? !pc_log(&repo, all, limit) : !vcs_repo_log(&repo);
+        rc = g_pc ? !pc_log(&repo, all, limit) : !vcs_repo_log(&repo, all, limit);
 
     } else if (strcmp(cmd, "branch") == 0) {
         if (i < argc) {

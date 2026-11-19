@@ -150,6 +150,9 @@ chk "alles geloest" has 'merging\tfeat\t'
 chk "keine offenen Konflikte" sh -c "! grep -q 'conflict	U' '$O'"
 v commit
 chk "commit ohne -m im Merge" has 'committed\t'
+chk "log -n 1 (Konsole): genau ein Commit" sh -c "[ \$('$V' log -n 1 | grep -c '^commit ') -eq 1 ]"
+chk "log -n 1 --all (Konsole): genau ein Commit" sh -c "[ \$('$V' log --all -n 1 | grep -c '^commit ') -eq 1 ]"
+chk "log (Konsole) ohne -n: mehrere Commits" sh -c "[ \$('$V' log | grep -c '^commit ') -gt 1 ]"
 v log -n 1
 chk "Merge-Commit nach Aufloesung hat zwei Eltern" sh -c "grep \"Merge branch 'feat'\" '$O' | cut -f3 | grep -q ','"
 v merge feat

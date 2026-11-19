@@ -1244,15 +1244,15 @@ int vcs_repo_log_all_raw(VcsRepo *repo, VcsLogList *out)
     return 1;
 }
 
-int vcs_repo_log(VcsRepo *repo)
+int vcs_repo_log(VcsRepo *repo, int all, long limit)
 {
     VcsLogList log;
     int i;
 
-    if (!vcs_repo_log_raw(repo, &log)) return 0;
+    if (!(all ? vcs_repo_log_all_raw(repo, &log) : vcs_repo_log_raw(repo, &log))) return 0;
     if (log.n == 0) { printf("(no commits yet)\n"); vcs_loglist_free(&log); return 1; }
 
-    for (i = 0; i < log.n; i++) {
+    for (i = 0; i < log.n && (limit <= 0 || i < limit); i++) {
         char hex[VCS_OID_HEX];
         time_t t;
         char timebuf[32];

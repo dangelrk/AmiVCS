@@ -185,10 +185,11 @@ int vcs_repo_log_raw(VcsRepo *repo, VcsLogList *out);
  * success. */
 int vcs_repo_log_all_raw(VcsRepo *repo, VcsLogList *out);
 
-/* Walks HEAD's parent chain (newest first) printing each commit's OID,
- * date, author and message to stdout (vcs_repo_log_raw()'s console
- * rendering). Returns 1 on success. */
-int vcs_repo_log(VcsRepo *repo);
+/* Prints each commit's OID, date, author and message to stdout, newest
+ * first: HEAD's parent chain (vcs_repo_log_raw()), or with all != 0 the
+ * history of every branch (vcs_repo_log_all_raw()). limit > 0 stops after
+ * that many commits (log -n). Returns 1 on success. */
+int vcs_repo_log(VcsRepo *repo, int all, long limit);
 
 /* name == NULL: lists all branches to stdout, marking the current one.
  * name set: creates a new branch pointing at HEAD's current commit.

@@ -125,7 +125,7 @@
 <div class="wrap">
 
 <h1>AmiVCS</h1>
-<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 08.11.2026 (Programmversion 0.10)</p>
+<p class="subtitle">Handbuch – Versionsverwaltung für den Amiga und den PC · Stand 19.11.2026 (Programmversion 0.11)</p>
 
 <div class="callout"><strong>Hinweis:</strong> Experimentelle Software, entwickelt mit Hilfe von Claude (KI-Assistent von Anthropic) und in erster Linie für den Eigengebrauch des Autors geschrieben. Bitte zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.</div>
 
@@ -914,6 +914,7 @@ Schwesterprojekte: AmiCloudCore, AmiCloud, AmiOwnCloud.</p>
 
 <table>
 <tr><th>Datum</th><th>Änderung</th></tr>
+<tr><td>19.11.2026</td><td>Programmversion 0.11: Diff und Merge – Textdateien werden zeilenweise zusammengeführt, Konflikte bekommen Marker wie bei git; neu sind <code>merge --abort</code>, <code>resolve --ours/--theirs</code>, <code>diff</code> und <code>show</code>, amivcs-gui zeigt Diffs und offene Konflikte. Klassisches FFS (30 Zeichen): <code>gc</code> konnte dort ein Repository zerstören, weil Pack und Index denselben Namen bekamen – behoben, alte Packs bleiben lesbar; <code>clone</code>, <code>switch</code>, <code>checkout</code>, <code>pull</code> und <code>merge</code> prüfen vor dem ersten Schreiben, ob alle Namen auf das Laufwerk passen; <code>commit</code> nimmt standardmäßig keine neuen Namen über 30 Zeichen an (Amiga-Modus, pro Projekt abschaltbar mit <code>amivcs config longnames on</code>, in AmiVCSConfig oder amivcs-gui); <code>log -n &lt;Zahl&gt;</code> und <code>log --all</code> wirken jetzt auch in der normalen Ausgabe. Benötigt jetzt AmiSSL 5.27 oder neuer (nur für clone/push/pull).</td></tr>
 <tr><td>08.11.2026</td><td>Programmversion 0.10: Remote-URL pro Repository wie bei git (<code>clone</code>/<code>push</code>/<code>pull &lt;url&gt;</code>, <code>remote</code>), Benutzer und Passwort werden bei Bedarf gefragt und auf Wunsch im Repository gemerkt, Name und E-Mail des Autors wie bei git (<code>config</code>, global oder pro Repository, auch für Merge-Commits), <code>commit</code> ohne Namen lehnt ab; AmiVCSConfig ersetzt AMIVCSPrefs, <code>amivcs.cfg</code> wird nicht mehr gelesen; <code>push</code> legt ein fehlendes Repository auch bei vorher gesetzter URL an; amivcs-gui: Login-Fenster, Repository &gt; Settings, Remote-URL in der Kopfzeile, Rescan liest den Arbeitsbaum wirklich neu ein, Fenster merken ihre Position</td></tr>
 <tr><td>07.11.2026</td><td>Programmversion 0.9: <code>push</code> lädt Branches mit Umlauten oder Zeichen wie <code>&amp; + #</code> hoch (braucht den Server ab 0.9; vorher lehnte er sie ab, mit der irreführenden Meldung „pull and merge first“); <code>branch</code> lehnt Namen ab, die der Server nicht annimmt; Server: gleichzeitiges Hochladen desselben Objekts scheitert nicht mehr mit Fehler 500; Hinweis auf den experimentellen Status</td></tr>
 <tr><td>07.11.2026</td><td>Programmversion 0.8: Handbuch überarbeitet; der Installer meldet es jetzt, wenn er nicht aus seiner Schublade gestartet wird, statt mit „object in use“ abzubrechen</td></tr>

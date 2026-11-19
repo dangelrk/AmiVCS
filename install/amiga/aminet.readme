@@ -31,7 +31,7 @@ Requirements
 - AmigaOS 3.x, 68020 or better (since 0.2), no FPU needed
 - MUI 3.8 or newer for amivcs-gui (Aminet util/libs/mui38usr.lha)
 - for clone/push/pull only: TCP/IP stack with bsdsocket.library,
-  AmiSSL 5 (util/libs/AmiSSL-v5-OS3.lha) and an AmiVCS server
+  AmiSSL 5.27 or newer (util/libs/AmiSSL-v5-OS3.lha) and an AmiVCS server
   (included, see the drawer Server)
 - optional: codesets.library 6 or newer for umlauts in other charsets
   than ISO-8859-1 (util/libs/codesets-6.22.lha)

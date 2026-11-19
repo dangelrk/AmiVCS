@@ -1314,6 +1314,23 @@ Schwesterprojekte:
 Versionsgeschichte
 ------------------
 
+Programmversion 0.11 (19.11.2026)
+  - Diff und Merge: Textdateien werden zeilenweise zusammengeführt,
+    Konflikte bekommen Marker wie bei git. Neu sind merge --abort,
+    resolve --ours/--theirs, diff und show. amivcs-gui zeigt Diffs
+    und offene Konflikte.
+  - Klassisches FFS (30 Zeichen): gc konnte dort ein Repository
+    zerstören, weil Pack und Index denselben Namen bekamen. Behoben;
+    alte Packs bleiben lesbar.
+  - clone, switch, checkout, pull und merge prüfen vor dem ersten
+    Schreiben, ob alle Namen auf das Laufwerk passen.
+  - commit nimmt standardmäßig keine neuen Namen über 30 Zeichen an
+    (Amiga-Modus); pro Projekt abschaltbar mit amivcs config
+    longnames on, in AmiVCSConfig oder in amivcs-gui.
+  - log -n <Zahl> und log --all wirken jetzt auch in der normalen
+    Ausgabe (vorher zeigte log immer den ganzen Verlauf).
+  - Benötigt jetzt AmiSSL 5.27 oder neuer (nur für clone/push/pull).
+
 Programmversion 0.10 (08.11.2026)
   - Remote-URL pro Repository wie bei git: clone/push/pull <url>,
     remote. Benutzer und Passwort werden bei Bedarf gefragt und auf
