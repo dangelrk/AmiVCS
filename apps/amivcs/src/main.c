@@ -102,8 +102,19 @@ static void pc_rec(const char *tag, int n, ...)
 }
 
 /* notify hook: every message as a "msg" record too, then as on the console */
+/* "./x" -> "x" (PC shells complete paths that way); repository paths
+ * never start with "./" */
+static const char *skip_dot_slash(const char *a)
+{
+    while (a[0] == '.' && a[1] == '/') { a += 2; while (*a == '/') a++; }
+    return a;
+}
+
+static int g_error_shown;   /* an error reached the user: run() needs no generic one */
+
 static void cli_notify(int level, const char *msg)
 {
+    if (level == UI_ERROR) g_error_shown = 1;
     if (g_pc) pc_rec("msg", 2, level == UI_ERROR ? "error" : level == UI_WARN ? "warn" : "info", msg);
     if (level == UI_ERROR || level == UI_WARN) fprintf(stderr, "%s\n", msg);
     else printf("%s\n", msg);
@@ -955,6 +966,8 @@ static int run(int argc, char **argv, AcConfig *cfg)
 
     if (strcmp(cmd, "status") == 0) {
         rc = g_pc ? !pc_status(&repo) : !vcs_repo_status(&repo);
+        /* never fail without a word (it once stopped silently in RAM:) */
+        if (rc && !g_error_shown) ui_notify(UI_ERROR, "amivcs: status failed");
 
     } else if (strcmp(cmd, "commit") == 0) {
         const char *message = NULL, *msgfile = NULL;
@@ -1007,7 +1020,14 @@ static int run(int argc, char **argv, AcConfig *cfg)
             vcs_repo_learn_names(&repo);
             for (; i < argc; i++) {
                 char rp[1024];
-                vcs_path_from_local(argv[i], rp, sizeof(rp));
+                const char *a = skip_dot_slash(argv[i]);
+                if (a[0] == '\0' || strcmp(a, ".") == 0) {
+                    /* "add ." (git habit): everything, like -A -- the
+                     * directory walk would store "./name" paths */
+                    if (!vcs_index_add_all(&repo)) rc = 1;
+                    continue;
+                }
+                vcs_path_from_local(a, rp, sizeof(rp));
                 if (!vcs_index_add(&repo, rp)) {
                     ui_notify(UI_ERROR, "amivcs: could not add '%s'", argv[i]);
                     rc = 1;
@@ -1023,7 +1043,7 @@ static int run(int argc, char **argv, AcConfig *cfg)
             vcs_repo_learn_names(&repo);
             for (; i < argc; i++) {
                 char rp[1024];
-                vcs_path_from_local(argv[i], rp, sizeof(rp));
+                vcs_path_from_local(skip_dot_slash(argv[i]), rp, sizeof(rp));
                 if (!vcs_index_unstage(&repo, rp)) {
                     ui_notify(UI_ERROR, "amivcs: could not unstage '%s'", argv[i]);
                     rc = 1;

@@ -331,5 +331,31 @@ chk "Bestand: neue Datei im vorhandenen langen Ordner erlaubt" sh -c "\"$V\" log
 chk "config longnames zeigt off" sh -c "[ \"\$(\"$V\" config longnames)\" = off ]"
 chk ".amivcsproject angelegt" grep -qx 'longnames=0' .amivcsproject
 
+echo "== unlesbare Dateien (Amiga: von anderem Programm gesperrt)"
+mkdir "$T/u" && cd "$T/u" || exit 1
+"$V" init >/dev/null
+printf 'a\n' > a.txt; printf 'l\n' > log.txt
+"$V" add . >/dev/null 2>&1; "$V" commit -m eins >/dev/null 2>&1
+chk "add . ohne ./-Pfade" sh -c "\"$V\" status | grep -q 'nothing to commit'"
+printf 'n\n' > neu.log; chmod 000 log.txt neu.log
+if [ -r log.txt ]; then
+  echo "ok    (als root nicht pruefbar, uebersprungen)"
+else
+  v status
+  chk "status bricht nicht ab" has 'end\t0'
+  chk "gesperrte bekannte Datei unveraendert" sh -c "! grep -q 'change.*log.txt' '$O'"
+  chk "gesperrte neue Datei gemeldet" has 'msg\twarn\tamivcs: cannot read neu.log'
+  "$V" add . >/dev/null 2>&1
+  v status
+  chk "add . stellt keine Loeschung bereit" sh -c "! grep -q 'change.*log.txt' '$O'"
+  "$V" add log.txt >/dev/null 2>"$T/err"
+  chk "add einer gesperrten Datei meldet Fehler" grep -q 'cannot read' "$T/err"
+  "$V" branch b2 >/dev/null 2>&1
+  "$V" switch b2 >/dev/null 2>&1
+  v status
+  chk "switch mit gesperrter Datei verweigert" has 'branch\tmain'
+  chmod 644 log.txt neu.log
+fi
+
 echo "== Ergebnis: $PASSED ok, $FAILED fehlgeschlagen =="
 [ "$FAILED" -eq 0 ]

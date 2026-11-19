@@ -260,15 +260,25 @@ int vcs_repo_snapshot_workdir(VcsRepo *repo, VcsOid *out_tree_oid)
  * committed-tree side (VcsFlatList, vcs_flatten_committed_tree()) is
  * shared with merge.c via treeutil.h. */
 
+/* A file that cannot be read (AmigaOS: another program holds it
+ * exclusively, e.g. a log file open for writing in RAM:) does not stop the
+ * scan: it is reported once per scan and taken from `known` (the index /
+ * HEAD list, sorted) if that tracks it -- so it shows as unchanged, never
+ * as deleted -- otherwise left out like an ignored file. known == NULL
+ * leaves a tracked one out too: callers that must not overlook a change
+ * (vcs_repo_is_dirty()) then see it as changed and refuse. */
 static int flatten_workdir(const char *abs_root, const char *abs_dir, const char *rel_prefix,
-                           VcsIgnore *ig, VcsFlatList *out)
+                           VcsIgnore *ig, const VcsFlatList *known, VcsFlatList *out)
 {
     LocalDir *dir;
     LocalDirEntry de;
 
     (void)abs_root;
     dir = localfs_opendir(abs_dir);
-    if (!dir) return 0;
+    if (!dir) {
+        ui_notify(UI_ERROR, "amivcs: cannot read directory %s", abs_dir);
+        return 0;
+    }
 
     while (localfs_readdir(dir, &de)) {
         char abs_path[1024], rel_path[1024], rel_repo[1024];
@@ -279,11 +289,21 @@ static int flatten_workdir(const char *abs_root, const char *abs_dir, const char
         localfs_join(abs_path, sizeof(abs_path), abs_dir, de.name);
 
         if (de.is_dir) {
-            if (!flatten_workdir(abs_root, abs_path, rel_path, ig, out)) { localfs_closedir(dir); return 0; }
+            if (!flatten_workdir(abs_root, abs_path, rel_path, ig, known, out)) { localfs_closedir(dir); return 0; }
         } else {
-            char hex[VCS_OID_HEX];
+            char hex[VCS_OID_HEX], label[300];
             VcsOid oid;
-            if (!md5_file_hex(abs_path, hex)) { localfs_closedir(dir); return 0; }
+            /* reading every file takes a while on a big tree: a GUI shows
+             * which (no cancel here -- the caller needs the whole list) */
+            snprintf(label, sizeof(label), "Reading %s", rel_path);
+            ui_progress(0, -1, label);
+            if (!md5_file_hex(abs_path, hex)) {
+                const VcsFlatEntry *k = known ? vcs_flat_find(known, rel_repo) : NULL;
+                ui_notify(UI_WARN, "amivcs: cannot read %s (in use?) -- %s", rel_path,
+                          k ? "taken as unchanged" : "skipped");
+                if (k) vcs_flat_append(out, rel_repo, &k->oid);
+                continue;
+            }
             if (!vcs_oid_from_hex(hex, &oid)) { localfs_closedir(dir); return 0; }
             vcs_flat_append(out, rel_repo, &oid);
         }
@@ -296,10 +316,18 @@ static int flatten_workdir(const char *abs_root, const char *abs_dir, const char
 int vcs_flatten_workdir_list(VcsRepo *repo, VcsFlatList *out)
 {
     VcsIgnore ig;
+    VcsOid index_tree;
+    VcsFlatList known;
     int ok;
+    /* an unreadable file counts as what the index holds (flatten_workdir()) */
+    vcs_flat_init(&known);
+    if (vcs_index_load(repo->amivcs_dir, &index_tree)
+        && vcs_flatten_committed_tree(&repo->store, &index_tree, "", &known))
+        vcs_flat_sort(&known);
     vcs_ignore_load(repo->root, &ig);
-    ok = flatten_workdir(repo->root, repo->root, "", &ig, out);
+    ok = flatten_workdir(repo->root, repo->root, "", &ig, &known, out);
     vcs_ignore_free(&ig);
+    vcs_flat_free(&known);
     if (ok) vcs_flat_sort(out);
     return ok;
 }
@@ -401,7 +429,7 @@ int vcs_repo_status_raw(VcsRepo *repo, VcsStatus *out)
 
     vcs_ignore_load(repo->root, &ig);
     vcs_flat_init(&work_flat);
-    if (!flatten_workdir(repo->root, repo->root, "", &ig, &work_flat)) {
+    if (!flatten_workdir(repo->root, repo->root, "", &ig, &index_flat, &work_flat)) {
         vcs_ignore_free(&ig);
         vcs_flat_free(&head_flat);
         vcs_flat_free(&index_flat);
@@ -513,7 +541,7 @@ int vcs_repo_is_dirty(VcsRepo *repo)
 
     vcs_ignore_load(repo->root, &ig);
     vcs_flat_init(&work_flat);
-    if (!flatten_workdir(repo->root, repo->root, "", &ig, &work_flat)) {
+    if (!flatten_workdir(repo->root, repo->root, "", &ig, NULL, &work_flat)) {
         vcs_ignore_free(&ig);
         vcs_flat_free(&head_flat);
         vcs_flat_free(&work_flat);

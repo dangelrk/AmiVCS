@@ -376,7 +376,7 @@ static int mui_remote_progress_cb(void *userdata, long done, long total, const c
     ULONG sigs = 0;
     (void)userdata;
 
-    if (total > 0) snprintf(buf, sizeof(buf), "%s (%ld%%)", label ? label : "", (done * 100) / total);
+    if (total > 0) snprintf(buf, sizeof(buf), "%s (%ld of %ld)", label ? label : "", done + 1 > total ? total : done + 1, total);
     else           snprintf(buf, sizeof(buf), "%s", label ? label : "...");
     if (g_progress_text) set(g_progress_text, MUIA_Text_Contents, buf);
 
@@ -408,6 +408,25 @@ static void end_remote_op(void)
     if (g_main_window) set(g_main_window, MUIA_Window_Sleep, FALSE);
     set(g_progress_window, MUIA_Window_Open, FALSE);
     g_session.progress_cb = NULL;
+}
+
+/* Local work that reads every file (staging, rescanning) shows the same
+ * "Working..." window: which file, how many, and Cancel where the
+ * operation allows it (staging stops after the current file). */
+static void begin_work(const char *what)
+{
+    vcsgui_clear_message();
+    set(g_main_status, MUIA_Text_Contents, "");
+    begin_remote_op();
+    set(g_progress_text, MUIA_Text_Contents, what);
+}
+
+/* end_work() after an operation: a warning or cancel note (vcsgui_last_
+ * message()) goes to the status line, cleared first by begin_work() */
+static void end_work(void)
+{
+    end_remote_op();
+    if (vcsgui_last_message()[0]) set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
 }
 
 /* ------------------------------------------------------------------ */
@@ -622,8 +641,12 @@ static void move_active(Object *list_obj, const VcsChangeList *changes, int stag
     if (active < 0 || active >= changes->n) return;
     strncpy(path, changes->items[active].path, sizeof(path) - 1);
     path[sizeof(path) - 1] = '\0';
-    if (stage) vcsgui_add(&g_session, path);
-    else       vcsgui_remove(&g_session, path);
+    {
+        const char *one = path;
+        begin_work(stage ? "Staging..." : "Unstaging...");
+        vcsgui_stage_paths(&g_session, &one, 1, stage);
+        end_work();
+    }
     refresh_ui();
 }
 
@@ -632,13 +655,35 @@ static void move_active(Object *list_obj, const VcsChangeList *changes, int stag
  * redraw -- refresh_ui() alone only redraws what the session holds */
 static void do_refresh(void)
 {
-    if (g_session.is_open) vcsgui_refresh(&g_session);
+    if (g_session.is_open) {
+        begin_work("Reading files...");
+        vcsgui_refresh(&g_session);
+        end_work();
+    }
     refresh_ui();
 }
 
 static void open_or_offer_init(const char *cwd)
 {
-    if (vcsgui_open(&g_session, cwd)) { refresh_ui(); return; }
+    int opened;
+    begin_work("Reading files...");
+    opened = vcsgui_open(&g_session, cwd);
+    end_remote_op();
+    if (opened) {
+        refresh_ui();
+        /* e.g. "cannot read <file> (in use?) -- skipped" */
+        if (vcsgui_last_message()[0]) set(g_main_status, MUIA_Text_Contents, vcsgui_last_message());
+        return;
+    }
+    if (g_session.is_open) {
+        /* .amivcs is there, reading it or the working tree failed: say
+         * why -- offering an init would only fail ("already a repo") */
+        MUI_Request(g_app, NULL, 0, "Cannot read repository", "_OK",
+                    "This directory is an AMIVCS repository,\nbut it could not be read:\n\n%s",
+                    (char *)vcsgui_last_message());
+        refresh_ui();
+        return;
+    }
 
     if (MUI_Request(g_app, NULL, 0, "Not a repository", "_Yes|_No",
                     "This directory is not an AMIVCS repository yet.\nInitialize one here?") == 1) {
@@ -698,24 +743,38 @@ static int collect_selected_paths(Object *list_obj, const VcsChangeList *changes
 static void do_stage_selected(void)
 {
     static char paths[MAX_BATCH][1024];   /* 64 KB: never on the stack */
+    static const char *ptrs[MAX_BATCH];
     int n = collect_selected_paths(g_unstaged_list, &g_session.unstaged, paths);
     int i;
-    for (i = 0; i < n; i++) vcsgui_add(&g_session, paths[i]);
+    for (i = 0; i < n; i++) ptrs[i] = paths[i];
+    if (n > 0) {
+        begin_work("Staging...");
+        vcsgui_stage_paths(&g_session, ptrs, n, 1);   /* one rescan, not n */
+        end_work();
+    }
     refresh_ui();
 }
 
 static void do_unstage_selected(void)
 {
     static char paths[MAX_BATCH][1024];   /* 64 KB: never on the stack */
+    static const char *ptrs[MAX_BATCH];
     int n = collect_selected_paths(g_staged_list, &g_session.staged, paths);
     int i;
-    for (i = 0; i < n; i++) vcsgui_remove(&g_session, paths[i]);
+    for (i = 0; i < n; i++) ptrs[i] = paths[i];
+    if (n > 0) {
+        begin_work("Unstaging...");
+        vcsgui_stage_paths(&g_session, ptrs, n, 0);
+        end_work();
+    }
     refresh_ui();
 }
 
 static void do_stage_all(void)
 {
+    begin_work("Staging...");
     vcsgui_add_all(&g_session);
+    end_work();
     refresh_ui();
 }
 
@@ -790,7 +849,10 @@ static void do_commit(void)
     }
     {
         char *msg = vcs_text_from_local(text);   /* repository text is UTF-8 */
-        int ok = msg && vcsgui_commit(&g_session, msg, stage_all ? 1 : 0, &oid);
+        int ok;
+        begin_work(stage_all ? "Staging..." : "Committing...");
+        ok = msg && vcsgui_commit(&g_session, msg, stage_all ? 1 : 0, &oid);
+        end_remote_op();
         free(msg);
         free(text);
         if (!ok) {
@@ -1411,8 +1473,9 @@ int gui_run(const AcConfig *cfg, const char *repo_path)
     DoMethod(g_history_list, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime, g_app, 2, MUIM_Application_ReturnID, ID_HISTORY_ACTIVE);
     (void)lv_history;
 
-    open_or_offer_init(g_cwd);
+    /* window first: reading a big tree shows "Working..." above it */
     set(window, MUIA_Window_Open, TRUE);
+    open_or_offer_init(g_cwd);
 
     while (running) {
         LONG id = DoMethod(g_app, MUIM_Application_Input, &sigs);

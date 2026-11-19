@@ -24,7 +24,23 @@ void vcsgui_session_init(VcsGuiSession *s)
     memset(s, 0, sizeof(*s));
 }
 
+/* The session whose progress_cb gets ui_progress() (remote ops, staging,
+ * reading the working tree); NULL = none. */
+static VcsGuiSession *g_active_session = NULL;
+
+static int refresh(VcsGuiSession *s);
+
 int vcsgui_refresh(VcsGuiSession *s)
+{
+    VcsGuiSession *prev = g_active_session;
+    int ok;
+    g_active_session = s;   /* "Reading <file>" while the tree is scanned */
+    ok = refresh(s);
+    g_active_session = prev;
+    return ok;
+}
+
+static int refresh(VcsGuiSession *s)
 {
     VcsStatus st;
 
@@ -88,7 +104,9 @@ void vcsgui_set_author(VcsGuiSession *s, const char *author)
  * never change the repository at the same time */
 #define LOCKED(call) do { int ok_; \
         if (!vcs_repo_lock(s->repo.amivcs_dir)) return 0; \
+        g_active_session = s; s->cancel_requested = 0; /* progress_cb sees it */ \
         ok_ = (call); \
+        g_active_session = NULL; \
         vcs_repo_unlock(s->repo.amivcs_dir); \
         if (!ok_) return 0; } while (0)
 
@@ -106,8 +124,39 @@ int vcsgui_remove(VcsGuiSession *s, const char *relpath)
 
 int vcsgui_add_all(VcsGuiSession *s)
 {
-    LOCKED(vcs_index_add_all(&s->repo));
-    return vcsgui_refresh(s);
+    int ok;
+    if (!vcs_repo_lock(s->repo.amivcs_dir)) return 0;
+    g_active_session = s;
+    s->cancel_requested = 0;
+    ok = vcs_index_add_all(&s->repo);
+    g_active_session = NULL;
+    vcs_repo_unlock(s->repo.amivcs_dir);
+    /* cancelled or failed half-way: show what is staged now */
+    if (!vcsgui_refresh(s)) ok = 0;
+    return ok;
+}
+
+int vcsgui_stage_paths(VcsGuiSession *s, const char *const *paths, int n, int stage)
+{
+    int i, ok = 1;
+    if (!vcs_repo_lock(s->repo.amivcs_dir)) return 0;
+    g_active_session = s;
+    s->cancel_requested = 0;
+    for (i = 0; i < n && ok; i++) {
+        char label[300];
+        snprintf(label, sizeof(label), "%s ", stage ? "Staging" : "Unstaging");
+        vcs_text_to_local_buf(paths[i], label + strlen(label), sizeof(label) - strlen(label));
+        if (!ui_progress(i, n, label)) {
+            ui_notify(UI_WARN, "amivcs: cancelled -- %d of %d done", i, n);
+            ok = 0;
+            break;
+        }
+        ok = stage ? vcs_index_add(&s->repo, paths[i]) : vcs_index_unstage(&s->repo, paths[i]);
+    }
+    g_active_session = NULL;
+    vcs_repo_unlock(s->repo.amivcs_dir);
+    if (!vcsgui_refresh(s)) ok = 0;   /* once for all of them */
+    return ok;
 }
 
 int vcsgui_identity(VcsGuiSession *s, char *out, size_t sz)
@@ -222,9 +271,7 @@ int vcsgui_diff_commit(VcsGuiSession *s, const VcsOid *commit,
 }
 
 /* ------------------------------------------------------------------ */
-/* Remote ops + progress/cancel bridge. */
-
-static VcsGuiSession *g_active_session = NULL;
+/* Remote ops + progress/cancel bridge (g_active_session: top of file). */
 
 static int session_progress_bridge(long done, long total, const char *name)
 {
@@ -255,6 +302,8 @@ void vcsgui_install_hooks(void)
     hooks.notify = session_notify_bridge;
     ui_set_hooks(&hooks);
 }
+
+void vcsgui_clear_message(void) { g_last_message[0] = '\0'; }
 
 const char *vcsgui_last_message(void)
 {

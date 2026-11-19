@@ -28,6 +28,7 @@ extern "C" {
 #include <QInputDialog>
 #include <QFileDialog>
 #include <QProgressDialog>
+#include <vector>
 #include <QHeaderView>
 #include <QListWidgetItem>
 #include <QToolBar>
@@ -374,7 +375,21 @@ MainWindow::~MainWindow()
 
 void MainWindow::openOrOfferInit(const QString &dir)
 {
-    if (vcsgui_open(&m_session, dir.toUtf8().constData())) { refreshUI(); return; }
+    if (vcsgui_open(&m_session, dir.toUtf8().constData())) {
+        refreshUI();
+        /* e.g. "cannot read <file> (in use?) -- skipped" */
+        if (vcsgui_last_message()[0]) statusBar()->showMessage(QString::fromUtf8(vcsgui_last_message()), 10000);
+        return;
+    }
+    if (m_session.is_open) {
+        /* .amivcs is there, reading it or the working tree failed: say
+         * why -- offering an init would only fail ("already a repo") */
+        QMessageBox::critical(this, tr("Cannot read repository"),
+            tr("'%1' is an AMIVCS repository, but it could not be read:\n\n%2")
+                .arg(dir, QString::fromUtf8(vcsgui_last_message())));
+        refreshUI();
+        return;
+    }
 
     QMessageBox::StandardButton reply = QMessageBox::question(this, tr("Not a repository"),
         tr("'%1' is not an AMIVCS repository yet.\n\nInitialize one here?").arg(dir),
@@ -656,10 +671,12 @@ void MainWindow::onStageSelected()
 {
     QList<QListWidgetItem *> items = m_unstagedList->selectedItems();
     if (items.isEmpty() && m_unstagedList->currentItem()) items << m_unstagedList->currentItem();
-    for (QListWidgetItem *item : items) {
-        QByteArray path = item->data(Qt::UserRole).toByteArray();
-        vcsgui_add(&m_session, path.constData());
-    }
+    QList<QByteArray> paths;
+    std::vector<const char *> ptrs;
+    for (QListWidgetItem *item : items) paths << item->data(Qt::UserRole).toByteArray();
+    for (const QByteArray &p : paths) ptrs.push_back(p.constData());
+    if (!ptrs.empty())   // one rescan for all of them
+        vcsgui_stage_paths(&m_session, ptrs.data(), int(ptrs.size()), 1);
     refreshUI();
 }
 
@@ -667,10 +684,12 @@ void MainWindow::onUnstageSelected()
 {
     QList<QListWidgetItem *> items = m_stagedList->selectedItems();
     if (items.isEmpty() && m_stagedList->currentItem()) items << m_stagedList->currentItem();
-    for (QListWidgetItem *item : items) {
-        QByteArray path = item->data(Qt::UserRole).toByteArray();
-        vcsgui_remove(&m_session, path.constData());
-    }
+    QList<QByteArray> paths;
+    std::vector<const char *> ptrs;
+    for (QListWidgetItem *item : items) paths << item->data(Qt::UserRole).toByteArray();
+    for (const QByteArray &p : paths) ptrs.push_back(p.constData());
+    if (!ptrs.empty())   // one rescan for all of them
+        vcsgui_stage_paths(&m_session, ptrs.data(), int(ptrs.size()), 0);
     refreshUI();
 }
 

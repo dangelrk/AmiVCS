@@ -103,6 +103,11 @@ void vcsgui_set_author(VcsGuiSession *s, const char *author);
 int vcsgui_add(VcsGuiSession *s, const char *relpath);
 int vcsgui_remove(VcsGuiSession *s, const char *relpath);
 int vcsgui_add_all(VcsGuiSession *s);
+/* Stages (stage = 1) or unstages (0) n repository paths under one lock
+ * and reads the working tree once afterwards -- not once per file like n
+ * vcsgui_add() calls. Reports "Staging <path>" through progress_cb; a
+ * cancel stops after the current file (what is done stays). */
+int vcsgui_stage_paths(VcsGuiSession *s, const char *const *paths, int n, int stage);
 int vcsgui_commit(VcsGuiSession *s, const char *message, int stage_all, VcsOid *out_oid);
 
 int vcsgui_branch_create(VcsGuiSession *s, const char *name);
@@ -193,5 +198,7 @@ void vcsgui_install_hooks(void);
  * vcsgui_*() operation -- read it immediately after the call whose
  * message you want, not later. Never NULL. */
 const char *vcsgui_last_message(void);
+/* Forgets the last message, so the next one read belongs to what ran since. */
+void vcsgui_clear_message(void);
 
 #endif /* CLOUDVCSGUI_SESSION_H */

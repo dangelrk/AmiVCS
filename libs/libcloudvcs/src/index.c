@@ -16,6 +16,7 @@
 #include "treeutil.h"
 #include "localfs.h"
 #include "vcsname.h"
+#include "ui_hooks.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -185,6 +186,16 @@ static int merge_theirs_copy(const VcsRepo *repo, const char *relpath)
     return hit;
 }
 
+/* 1 if the file can be opened for reading. AmigaOS: a file another
+ * program holds exclusively (a log open for writing) exists but cannot. */
+static int file_readable(const char *abs_path)
+{
+    FILE *fp = fopen(abs_path, "rb");
+    if (!fp) return 0;
+    fclose(fp);
+    return 1;
+}
+
 static int add_file(VcsRepo *repo, const char *relpath)
 {
     char abs_path[1024];
@@ -193,6 +204,10 @@ static int add_file(VcsRepo *repo, const char *relpath)
     if (merge_theirs_copy(repo, relpath)) return 1;
 
     if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, relpath)) return 0;
+    if (!file_readable(abs_path)) {
+        ui_notify(UI_ERROR, "amivcs: cannot read %s (in use?)", abs_path);
+        return 0;
+    }
     if (!vcsobjstore_write_blob_file(&repo->store, abs_path, &blob_oid)) return 0;
 
     if (!vcs_index_load(repo->amivcs_dir, &cur_tree)) return 0;
@@ -232,6 +247,16 @@ static int add_dir_recursive(VcsRepo *repo, const char *relpath, const VcsIgnore
         }
         if (vcs_ignore_match(ig, child_local, de.is_dir)) continue;   /* patterns are local text */
         if (!vcs_path_from_local(child_local, child_rel, sizeof(child_rel))) { ok = 0; break; }
+        if (!de.is_dir) {
+            /* one unreadable file does not stop "add ." -- it stays as the
+             * index has it (status shows it the same way, repo.c) */
+            char abs_path[1024];
+            localfs_join(abs_path, sizeof(abs_path), repo->root, child_local);
+            if (!file_readable(abs_path)) {
+                ui_notify(UI_WARN, "amivcs: cannot read %s (in use?) -- not staged", child_local);
+                continue;
+            }
+        }
         ok = de.is_dir ? add_dir_recursive(repo, child_rel, ig) : add_file(repo, child_rel);
     }
     localfs_closedir(dir);
@@ -372,19 +397,141 @@ int vcs_index_remove(VcsRepo *repo, const char *relpath)
     return vcs_index_save(repo->amivcs_dir, &new_tree);
 }
 
+/* ------------------------------------------------------------------ */
+/* add -A in one go: the index as a flat list, every change applied to
+ * it, the tree built and the index saved ONCE -- not one index load +
+ * path rebuild + save per file (that grew with the number of files and
+ * made "Stage all" slow on a 68030). */
+
+/* binary search in items[0..n) (sorted); NULL if absent */
+static VcsFlatEntry *flat_lookup(VcsFlatList *f, int n, const char *path)
+{
+    int lo = 0, hi = n - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        int c = strcmp(f->items[mid].path, path);
+        if (c == 0) return &f->items[mid];
+        if (c < 0) lo = mid + 1; else hi = mid - 1;
+    }
+    return NULL;
+}
+
+/* Writes the tree of items[lo..hi) (sorted, all below the same prefix of
+ * length plen; a zero oid marks a removed file) bottom-up. *empty: no
+ * entry left -- the caller drops the directory, like rebuild_tree(). */
+static int tree_from_flat(VcsRepo *repo, const VcsFlatEntry *it, int lo, int hi, size_t plen,
+                          VcsOid *out_oid, int *empty)
+{
+    VcsTree tree;
+    void *data;
+    long len;
+    int i = lo, ok = 1;
+
+    vcs_tree_init(&tree);
+    while (i < hi && ok) {
+        const char *rest = it[i].path + plen;
+        const char *slash = strchr(rest, '/');
+        if (!slash) {
+            if (!vcs_oid_is_zero(&it[i].oid)) vcs_tree_upsert(&tree, rest, 0, &it[i].oid);
+            i++;
+        } else {
+            char seg[256];
+            size_t seglen = (size_t)(slash - rest);
+            int j = i + 1, child_empty;
+            VcsOid child;
+            if (seglen >= sizeof(seg)) { ok = 0; break; }
+            memcpy(seg, rest, seglen);
+            seg[seglen] = '\0';
+            /* sorted: everything below seg/ follows in one run */
+            while (j < hi && strncmp(it[j].path + plen, rest, seglen + 1) == 0) j++;
+            ok = tree_from_flat(repo, it, i, j, plen + seglen + 1, &child, &child_empty);
+            if (ok && !child_empty) vcs_tree_upsert(&tree, seg, 1, &child);
+            i = j;
+        }
+    }
+    *empty = tree.n == 0;
+    if (ok) ok = vcs_tree_encode(&tree, &data, &len);
+    vcs_tree_free(&tree);
+    if (!ok) return 0;
+    ok = vcsobjstore_write(&repo->store, VCS_OBJ_TREE, data, len, out_oid);
+    free(data);
+    return ok;
+}
+
 int vcs_index_add_all(VcsRepo *repo)
 {
     VcsStatus st;
-    int i, ok = 1;
+    VcsFlatList f;
+    VcsOid cur_tree, new_tree;
+    int i, n_old, ok = 1, staged = 0, cancelled = 0, empty, merging;
 
     if (!vcs_repo_status_raw(repo, &st)) return 0;
+    if (st.unstaged.n == 0) { vcs_status_free(&st); return 1; }
+
+    vcs_flat_init(&f);
+    if (!vcs_index_load(repo->amivcs_dir, &cur_tree)
+        || !vcs_flatten_committed_tree(&repo->store, &cur_tree, "", &f)) {
+        vcs_flat_free(&f);
+        vcs_status_free(&st);
+        return 0;
+    }
+    vcs_flat_sort(&f);
+    n_old = f.n;   /* new paths are appended behind: search only the sorted part */
+    merging = vcs_mergestate_active(repo->amivcs_dir);
 
     for (i = 0; i < st.unstaged.n && ok; i++) {
         const VcsChange *c = &st.unstaged.items[i];
-        ok = (c->kind == 'D') ? vcs_index_remove(repo, c->path) && vcs_mergestate_mark_resolved(repo->amivcs_dir, c->path)
-                              : vcs_index_add(repo, c->path);
+        char label[300];
+        snprintf(label, sizeof(label), "Staging ");
+        vcs_text_to_local_buf(c->path, label + 8, sizeof(label) - 8);
+        /* a GUI shows it (and may cancel: what is staged so far stays) */
+        if (!ui_progress(i, st.unstaged.n, label)) { cancelled = 1; break; }
+
+        if (c->kind == 'D') {
+            VcsFlatEntry *e = flat_lookup(&f, n_old, c->path);
+            if (e) memset(&e->oid, 0, sizeof(e->oid));   /* removed */
+        } else {
+            char abs_path[1024];
+            VcsOid blob;
+            VcsFlatEntry *e;
+            if (merge_theirs_copy(repo, c->path)) continue;
+            if (!vcs_local_join(abs_path, sizeof(abs_path), repo->root, c->path)) { ok = 0; break; }
+            if (!file_readable(abs_path)) {
+                ui_notify(UI_WARN, "amivcs: cannot read %s (in use?) -- not staged", abs_path);
+                continue;
+            }
+            if (!vcsobjstore_write_blob_file(&repo->store, abs_path, &blob)) {
+                ui_notify(UI_ERROR, "amivcs: cannot store %s", abs_path);
+                ok = 0;
+                break;
+            }
+            e = flat_lookup(&f, n_old, c->path);
+            if (e) e->oid = blob;
+            else   vcs_flat_append(&f, c->path, &blob);
+        }
+        staged++;
     }
 
+    /* also after a cancel or an error: what is done is kept (one save) */
+    if (staged > 0) {
+        int saved;
+        vcs_flat_sort(&f);
+        saved = tree_from_flat(repo, f.items, 0, f.n, 0, &new_tree, &empty)
+                && vcs_index_save(repo->amivcs_dir, &new_tree);
+        if (!saved) ok = 0;
+        if (saved && merging) {
+            /* during a merge, staging a conflicting path marks it resolved */
+            int k;
+            for (k = 0; k < i && k < st.unstaged.n; k++)
+                vcs_mergestate_mark_resolved(repo->amivcs_dir, st.unstaged.items[k].path);
+        }
+    }
+    if (cancelled) {
+        ui_notify(UI_WARN, "amivcs: staging cancelled -- %d of %d staged", staged, st.unstaged.n);
+        ok = 0;
+    }
+
+    vcs_flat_free(&f);
     vcs_status_free(&st);
     return ok;
 }
