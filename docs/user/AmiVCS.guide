@@ -472,7 +472,8 @@ add <pfad> ...
     merkt das Löschen vor.
 
 add -A
-    Merkt alle Änderungen vor (neu, geändert, gelöscht).
+    Merkt alle Änderungen vor (neu, geändert, gelöscht). "add ."
+    bedeutet dasselbe.
 
 unstage <pfad> ...
     Nimmt Vormerkungen zurück: der Eintrag kehrt zum Stand des
@@ -700,6 +701,10 @@ Das Fenster ist wie "git gui" aufgebaut:
                   entfernt, "@@" Zeilennummern)
     Doppelklick auf eine Datei merkt sie vor bzw. nimmt die
     Vormerkung zurück. Mehrfachauswahl mit gedrückter Umschalttaste.
+    Beim Vormerken, Zurücknehmen, Rescan und Commit mit "-a" zeigt
+    ein Fenster "Working..." die gerade bearbeitete Datei und den
+    Fortschritt ("Staging C/Type (101 of 471)"). "Cancel" hält nach
+    der aktuellen Datei an; was schon vorgemerkt ist, bleibt es.
   - unten links die Knöpfe "Rescan", "Commit", "Push", "Pull"
   - unten rechts das Feld "Commit message:" (mehrzeilig, wenn
     TextEditor.mcc installiert ist, sonst einzeilig) und das
@@ -1140,6 +1145,20 @@ Fehlersuche
 "init failed (already a repository here?)"
     Im Verzeichnis gibt es schon ein .amivcs.
 
+"cannot read <datei> (in use?)"
+    Ein anderes Programm hält die Datei gerade exklusiv offen (z.B.
+    ein Protokoll in RAM:). AmiVCS liest weiter: eine schon
+    versionierte Datei gilt als unverändert ("taken as unchanged"),
+    eine neue wird übersprungen ("skipped", "not staged"). Wird sie
+    ausdrücklich mit add genannt, ist das ein Fehler; switch und
+    checkout lehnen ab, solange sie gesperrt ist. amivcs-gui zeigt
+    die Meldung in der Statuszeile. Abhilfe: das Programm beenden
+    oder die Datei in .amivcsignore eintragen.
+
+"This directory is an AMIVCS repository, but it could not be read"
+    (amivcs-gui) .amivcs ist da, aber das Lesen schlug fehl; der
+    Grund steht in der Meldung.
+
 "working tree has uncommitted changes -- commit first"
     switch, checkout, merge und pull überschreiben keine
     ungesicherte Arbeit. "amivcs status" ansehen, committen, erneut
@@ -1330,6 +1349,17 @@ Programmversion 0.11 (19.11.2026)
   - log -n <Zahl> und log --all wirken jetzt auch in der normalen
     Ausgabe (vorher zeigte log immer den ganzen Verlauf).
   - Benötigt jetzt AmiSSL 5.27 oder neuer (nur für clone/push/pull).
+  - Eine von einem anderen Programm gesperrte Datei (z.B. ein Log in
+    RAM:) brach status, add und amivcs-gui still ab; amivcs-gui
+    meldete dann "kein Repository". Jetzt Warnung, die Datei wird
+    übersprungen bzw. gilt als unverändert; add stellt ihre Löschung
+    nicht mehr bereit.
+  - amivcs-gui: Fenster "Working..." mit Datei, Fortschritt und
+    Abbrechen beim Vormerken, Rescan und Commit mit -a. "Stage all"
+    und "Stage selected" sind deutlich schneller (der Index wird nur
+    noch einmal geschrieben, der Arbeitsbaum einmal gelesen).
+  - "add ." merkt alles vor wie add -A (vorher entstanden Pfade
+    "./name").
 
 Programmversion 0.10 (08.11.2026)
   - Remote-URL pro Repository wie bei git: clone/push/pull <url>,
